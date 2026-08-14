@@ -31,35 +31,57 @@ ECMWF IFS 0.25° 오픈데이터와 GFS 0.25°(NOMADS)를 원본 GRIB으로 직�
 | `city_forecast.csv` | 11개 도시 × 전체 리드타임 시계열 (기온, 전운량, 층별 운량, 일사). `rep=1`이 대표 5지점(서울·대전·대구·광주·부산). KST 유효시각 병기 |
 | `meteograms/` | 대표 5지점 ECMWF vs GFS 기온·전운량 비교 (태양광 피크 11~14 KST 음영) |
 
-## 설치
+## 설치 (Windows, 확정 절차)
 
-```bash
-pip install ecmwf-opendata cfgrib eccodes xarray pandas matplotlib requests cartopy
+```powershell
+py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 기록 참조)
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m cfgrib selfcheck    # "Your system is ready." 확인 후 진행
 ```
 
-- `cfgrib`는 eccodes 시스템 라이브러리가 필요하다. pip의 `eccodes` 패키지로 안 되면
-  `sudo apt install libeccodes0` (Ubuntu) 후 재시도.
-- `cartopy`가 설치 안 되거나 해안선 데이터(Natural Earth) 다운로드가 방화벽에 막히면
-  자동으로 해안선 없는 평면 지도로 대체된다. 폐쇄망이면 Natural Earth shapefile을
-  미리 받아 `~/.local/share/cartopy/`에 넣어두면 된다.
-- 그림의 한글 라벨은 나눔고딕 등 한글 폰트 필요: `sudo apt install fonts-nanum`
-  후 matplotlib 캐시 삭제(`rm -rf ~/.cache/matplotlib`).
+- 한글 폰트: Windows는 Malgun Gothic 기본 탑재라 추가 조치 불요.
+  GitHub Actions(Ubuntu) 이행 시 `apt install fonts-nanum` + matplotlib 캐시 삭제.
+- `.env` 파일에 `KMA_AUTH_KEY=...` 저장 (커밋 금지, .gitignore 등록됨).
+- cartopy 해안선(Natural Earth)은 첫 실행 시 자동 다운로드 확인됨(50m).
 
 ## 실행
 
-```bash
+```powershell
 # 수동 실행 (최신 런 자동 탐지)
-python3 fetch_ecmwf.py
-python3 fetch_gfs.py
-python3 plot_charts.py
+.venv\Scripts\python fetch_ecmwf.py
+.venv\Scripts\python fetch_gfs.py
+.venv\Scripts\python plot_charts.py
 
 # 런 지정
-python3 fetch_ecmwf.py --time 12          # 12UTC 런
-python3 fetch_gfs.py --run 20260813 00    # 특정 런
+.venv\Scripts\python fetch_ecmwf.py --time 12          # 12UTC 런
+.venv\Scripts\python fetch_gfs.py --run 20260813 00    # 특정 런
 
-# 일일 자동화 (crontab)
-10 6 * * * /경로/kpx-model-charts/run_daily.sh >> /경로/kpx-model-charts/cron.log 2>&1
+# 오답노트 (예측 vs ASOS 실황)
+.venv\Scripts\python verify.py archive                 # 당일 예측 적재
+.venv\Scripts\python verify.py score                   # 어제(KST) 채점 + 사례 태깅
+.venv\Scripts\python verify.py score --date 2026-08-13 # 특정일 채점
+.venv\Scripts\python verify.py report                  # ME/MAE 집계 + MAE 곡선
+
+# ASOS 단독 수신
+.venv\Scripts\python kma_asos.py --from 2026-08-10 --to 2026-08-12
 ```
+
+일일 자동화는 Windows 작업 스케줄러에 등록되어 있다 (`run_daily.ps1` 상단 참조):
+- `kpx-model-06` 06:10 KST — 대개 ECMWF 전일 12UTC + GFS 당일 18UTC(전일 기준) 런
+- `kpx-model-10` 10:30 KST — 당일 00UTC 런 (ECMWF 00Z는 09~10 KST 배포)
+
+## 오답노트 (verification/)
+
+| 경로 | 내용 |
+|---|---|
+| `forecast/YYYY-MM.csv` | 예측 원수치 적재 (run_utc 월별) |
+| `obs/YYYY-MM.csv` | ASOS 실황 (TA·CA_TOT·SS·SI 원값) |
+| `scores/YYYY-MM.csv` | 행 단위 fcst·obs·err — 원수치 보존, ME/MAE는 report 시 재계산 |
+| `cases/*.md` | 임계 초과일(기온 \|ME\|>3℃, 운량 >40%p) 자동 사례 파일. 원인 분석은 사람이 기입 |
+| `scores_summary.csv`, `mae_curve_*.png` | 도시×모델×리드타임 버킷 ME/MAE 집계 |
+
+원칙: 모델 간 발산은 평균·중재하지 않고 그대로 표시한다. 요약 옆에는 항상
+원수치를 남긴다. 수집 실패는 추정으로 채우지 않고 누락으로 명시한다.
 
 06:10 KST 실행 기준 ECMWF는 전일 12UTC 런, GFS는 당일 18UTC(전일 기준) 런이
 잡히는 경우가 많다. 1차 브리핑에 당일 00UTC 런을 쓰려면 ECMWF 오픈데이터
