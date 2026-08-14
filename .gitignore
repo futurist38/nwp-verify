@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+output/
+verification/obs/cache/
+cron.log
+*.grib2
+*.part

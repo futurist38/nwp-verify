@@ -1,0 +1,12 @@
+# Python 3.13 기준 (3.14는 eccodes Windows 휠 미제공 — 2026-08-14 실측)
+ecmwf-opendata
+cfgrib
+eccodes
+xarray
+pandas
+numpy
+matplotlib
+requests
+cartopy
+pyshp<3      # pyshp 3.x는 cartopy 해안선 렌더에서 GEOSException (2026-08-14 실측)
+truststore   # AVG 등 로컬 TLS 검사 대응 (sslfix.py)
