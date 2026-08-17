@@ -8,3 +8,4 @@ verification/obs/cache/
 cron.log
 *.grib2
 *.part
+summary_mail.html

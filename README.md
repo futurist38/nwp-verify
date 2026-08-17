@@ -64,7 +64,16 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 
 # ASOS 단독 수신
 .venv\Scripts\python kma_asos.py --from 2026-08-10 --to 2026-08-12
+
+# 일일 요약 메일 (②) — 첨부 없음, 본문 표·문구만
+.venv\Scripts\python send_summary.py --dry-run   # summary_mail.html 로 미리보기
+.venv\Scripts\python send_summary.py             # 실발송 (배치 마지막 단계에 포함)
 ```
+
+메일 인증: `.env`에 `GMAIL_ADDR`, `GMAIL_APP_PASSWORD`(앱 비밀번호 — 공백 포함 표시형식
+그대로 붙여넣어도 됨), 선택 `MAIL_TO`. 미설정이면 발송만 조용히 건너뛴다.
+이 PC의 AVG Mail Shield는 SMTP를 별도 'Untrusted Root'로 가로채므로, AVG 가로채기가
+확인된 경우에 한해 로컬 AV 구간을 비검증으로 연결한다 (send_summary.py `_smtp_connect` 참조).
 
 일일 자동화는 Windows 작업 스케줄러에 등록되어 있다 (`run_daily.ps1` 상단 참조):
 - `kpx-model-06` 06:10 KST — 대개 ECMWF 전일 12UTC + GFS 당일 18UTC(전일 기준) 런

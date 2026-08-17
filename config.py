@@ -75,6 +75,12 @@ CASE_THRESHOLDS = {
 # 리드타임 버킷 (ME/MAE 집계용, 시간)
 LEAD_BUCKETS = [(0, 24), (24, 48), (48, 72), (72, 120), (120, 240)]
 
+# 모델 발산 플래그 임계 (일일 요약 메일용) — 발산은 중재하지 않고 그대로 표시
+DIVERGENCE_THRESHOLDS = {
+    "t2m": 2.0,   # |T_EC - T_GFS| ≥ 2.0 ℃
+    "tcc": 30.0,  # |C_EC - C_GFS| ≥ 30 %p
+}
+
 # ── 출력 경로 ─────────────────────────────────────────────
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
