@@ -228,8 +228,8 @@ def render(target, val, models, runs, flags, yday, obs, yfc, ymodels,
 
     # ── HTML ──
     def table_fc(vi, nd, th_limit):
-        rows = ['<tr><th ' + TDH[6:] + '>지점/모델</th>'
-                + "".join(f"<th {TDH[6:]}>{h:02d}시</th>" for h in HOURS_KST) + "</tr>"]
+        rows = ['<tr><th ' + TDH + '>지점/모델</th>'
+                + "".join(f"<th {TDH}>{h:02d}시</th>" for h in HOURS_KST) + "</tr>"]
         for city in REP_CITIES:
             # 발산 셀 판정용 스프레드
             spread_h = {}
@@ -243,30 +243,30 @@ def render(target, val, models, runs, flags, yday, obs, yfc, ymodels,
                 for h in HOURS_KST:
                     v = val.get((city, mdl, h), (None, None))[vi]
                     style = TDD if spread_h[h] >= th_limit else TD
-                    tds += f"<td {style[6:]}>{_fmt(v, nd)}</td>"
-                rows.append(f"<tr><td {TDH[6:]}>{name}</td>{tds}</tr>")
+                    tds += f"<td {style}>{_fmt(v, nd)}</td>"
+                rows.append(f"<tr><td {TDH}>{name}</td>{tds}</tr>")
         return '<table style="border-collapse:collapse;font-size:13px">' + "".join(rows) + "</table>"
 
     def table_verif(var, nd):
-        rows = ['<tr><th ' + TDH[6:] + '>지점</th>'
-                + "".join(f"<th {TDH[6:]}>{h:02d}시</th>" for h in HOURS_KST) + "</tr>"]
+        rows = ['<tr><th ' + TDH + '>지점</th>'
+                + "".join(f"<th {TDH}>{h:02d}시</th>" for h in HOURS_KST) + "</tr>"]
         for city in REP_CITIES:
-            tds = "".join(f"<td {TD[6:]}><b>{_fmt(obs.get((var, city, h)), nd)}</b></td>"
+            tds = "".join(f"<td {TD}><b>{_fmt(obs.get((var, city, h)), nd)}</b></td>"
                           for h in HOURS_KST)
-            rows.append(f"<tr><td {TDH[6:]}>{city} 관측</td>{tds}</tr>")
+            rows.append(f"<tr><td {TDH}>{city} 관측</td>{tds}</tr>")
             for mdl in ymodels:
                 tds = ""
                 for h in HOURS_KST:
                     fe = yfc.get((var, city, mdl, h))
                     if fe is None:
-                        tds += f"<td {TD[6:]}>-</td>"
+                        tds += f"<td {TD}>-</td>"
                     elif pd.notna(fe[1]):
                         color = "#c00" if abs(fe[1]) >= (3 if var == "t2m" else 40) else "#555"
-                        tds += (f"<td {TD[6:]}>{_fmt(fe[0], nd)}"
+                        tds += (f"<td {TD}>{_fmt(fe[0], nd)}"
                                 f'<span style="color:{color};font-size:11px"> ({fe[1]:+.{nd}f})</span></td>')
                     else:
-                        tds += f"<td {TD[6:]}>{_fmt(fe[0], nd)} (-)</td>"
-                rows.append(f"<tr><td {TDH[6:]}>　{MODEL_SHORT.get(mdl, mdl)}</td>{tds}</tr>")
+                        tds += f"<td {TD}>{_fmt(fe[0], nd)} (-)</td>"
+                rows.append(f"<tr><td {TDH}>　{MODEL_SHORT.get(mdl, mdl)}</td>{tds}</tr>")
         return '<table style="border-collapse:collapse;font-size:13px">' + "".join(rows) + "</table>"
 
     h = [f"<h3>내일 {target:%m/%d}({yo}) 대표 5지점 — 행: 모델별 예측 (발산 셀 강조)</h3>",
