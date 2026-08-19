@@ -190,70 +190,73 @@ def hsl_composite(lcc, mcc, hcc):
 
 
 def plot_maps(model_name, data, out_dir):
+    """패널별 개별 PNG 저장 (2026-08-20 개편).
+    3패널 가로 합본(18인치 폭)은 셀룰러 태블릿에서 판독 불가(브리프 ③) →
+    변수별 1장씩 저장하고 웹 뷰어가 탭·슬라이더로 조합한다.
+    파일명: {model}_{runYYYYMMDDHH}_f{step:03d}_{panel}.png  (panel: t2m|tcc|cloud3)
+    """
     run = data["run"]
     os.makedirs(out_dir, exist_ok=True)
     has_layers = all(data.get(k) is not None for k in ("lcc", "mcc", "hcc"))
+    n_saved = 0
+
+    def _save(step_h, panel, draw):
+        nonlocal n_saved
+        fig = plt.figure(figsize=(6.4, 6.8))
+        ax = _make_ax(fig, (1, 1, 1))
+        draw(fig, ax)
+        vkst = _valid_kst(run, step_h)
+        ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
+                     f"유효 {vkst:%m-%d %H}KST", fontsize=11)
+        # tight_layout은 cartopy gridliner 경계를 깨뜨려 GEOSException (2026-08-14 실측)
+        fig.subplots_adjust(top=0.93, bottom=0.06, left=0.08, right=0.96)
+        fname = os.path.join(
+            out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}_{panel}.png")
+        fig.savefig(fname, dpi=100)
+        plt.close(fig)
+        n_saved += 1
 
     for step_h in MAP_STEPS:
         t2m = _sel_step(data["t2m"], step_h)
         if t2m is None:
             continue
-        tcc = _sel_step(data["tcc"], step_h) if data.get("tcc") is not None else None
-        vkst = _valid_kst(run, step_h)
-        n_panels = 2 + (1 if has_layers else 0)
-
-        fig = plt.figure(figsize=(6 * n_panels, 6.2))
         lon2d, lat2d = np.meshgrid(t2m.longitude, t2m.latitude)
 
-        # (1) 2m 기온
-        ax = _make_ax(fig, (1, n_panels, 1))
-        pm = ax.pcolormesh(lon2d, lat2d, t2m.values, cmap="RdYlBu_r",
-                           vmin=-15, vmax=38, shading="auto")
-        cs = ax.contour(lon2d, lat2d, t2m.values, levels=np.arange(-15, 40, 3),
-                        colors="k", linewidths=0.3)
-        ax.clabel(cs, fmt="%d", fontsize=6)
-        plt.colorbar(pm, ax=ax, shrink=0.75, label="°C")
-        ax.set_title(f"2m 기온")
+        def draw_t2m(fig, ax, _t=t2m, _lo=lon2d, _la=lat2d):
+            pm = ax.pcolormesh(_lo, _la, _t.values, cmap="RdYlBu_r",
+                               vmin=-15, vmax=38, shading="auto")
+            cs = ax.contour(_lo, _la, _t.values, levels=np.arange(-15, 40, 3),
+                            colors="k", linewidths=0.3)
+            ax.clabel(cs, fmt="%d", fontsize=6)
+            fig.colorbar(pm, ax=ax, shrink=0.8, label="2m 기온 (°C)")
+        _save(step_h, "t2m", draw_t2m)
 
-        # (2) 전운량
-        ax = _make_ax(fig, (1, n_panels, 2))
+        tcc = _sel_step(data["tcc"], step_h) if data.get("tcc") is not None else None
         if tcc is not None:
-            pm = ax.pcolormesh(lon2d, lat2d, tcc.values, cmap="Greys",
-                               vmin=0, vmax=100, shading="auto")
-            plt.colorbar(pm, ax=ax, shrink=0.75, label="%")
-            ax.set_title("전운량")
-        else:
-            ax.set_title("전운량 (자료 없음)")
+            def draw_tcc(fig, ax, _c=tcc, _lo=lon2d, _la=lat2d):
+                pm = ax.pcolormesh(_lo, _la, _c.values, cmap="Greys",
+                                   vmin=0, vmax=100, shading="auto")
+                fig.colorbar(pm, ax=ax, shrink=0.8, label="전운량 (%)")
+            _save(step_h, "tcc", draw_tcc)
 
-        # (3) 3층 운량 HSL 합성 (GFS)
         if has_layers:
             l = _sel_step(data["lcc"], step_h)
             m = _sel_step(data["mcc"], step_h)
             h = _sel_step(data["hcc"], step_h)
-            ax = _make_ax(fig, (1, n_panels, 3))
             if all(x is not None for x in (l, m, h)):
                 rgb = hsl_composite(l.values, m.values, h.values)
-                if HAS_CARTOPY:
-                    ax.imshow(rgb, origin="upper" if t2m.latitude[0] > t2m.latitude[-1] else "lower",
-                              extent=[LON_MIN, LON_MAX, LAT_MIN, LAT_MAX],
-                              transform=ccrs.PlateCarree())
-                else:
-                    ax.imshow(rgb, origin="upper" if t2m.latitude[0] > t2m.latitude[-1] else "lower",
-                              extent=[LON_MIN, LON_MAX, LAT_MIN, LAT_MAX])
-                ax.set_title("운량 3층 합성 (저:갈색 중:자홍 상:청록)")
-            else:
-                ax.set_title("운량 3층 합성 (해당 스텝 자료 없음)")
+                origin = "upper" if t2m.latitude[0] > t2m.latitude[-1] else "lower"
 
-        fig.suptitle(
-            f"{model_name}  런 {run:%Y-%m-%d %H}UTC  +{step_h:03d}h  "
-            f"유효 {vkst:%m-%d %H}KST", fontsize=13)
-        # tight_layout은 cartopy gridliner 경계를 깨뜨려 GEOSException을 낸다
-        # (2026-08-14 실측: "Points of LinearRing do not form a closed linestring")
-        fig.subplots_adjust(top=0.88, bottom=0.06, left=0.05, right=0.97, wspace=0.15)
-        fname = os.path.join(out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}.png")
-        fig.savefig(fname, dpi=110)
-        plt.close(fig)
-    print(f"[지도] {model_name} 지도 저장: {out_dir}")
+                def draw_c3(fig, ax, _rgb=rgb, _or=origin):
+                    kw = {"transform": ccrs.PlateCarree()} if HAS_CARTOPY else {}
+                    ax.imshow(_rgb, origin=_or,
+                              extent=[LON_MIN, LON_MAX, LAT_MIN, LAT_MAX], **kw)
+                    ax.text(0.01, 0.01, "저:갈색 중:자홍 상:청록", transform=ax.transAxes,
+                            fontsize=8, va="bottom",
+                            bbox=dict(fc="white", alpha=0.7, ec="none"))
+                _save(step_h, "cloud3", draw_c3)
+
+    print(f"[지도] {model_name} 패널 PNG {n_saved}장 저장: {out_dir}")
 
 
 # ══════════════════════════════════════════════════════════

@@ -1,0 +1,35 @@
+* { box-sizing: border-box; margin: 0; }
+body { font-family: "Malgun Gothic", "NanumGothic", sans-serif; background: #fafafa;
+       color: #222; max-width: 760px; margin: 0 auto; padding: 0 10px 40px; }
+header { padding: 14px 0 6px; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; margin: 18px 0 8px; }
+.sub { color: #888; font-size: 12px; margin: 2px 0 10px; }
+#tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+#tabs button { padding: 8px 14px; border: 1px solid #ccc; background: #fff;
+               border-radius: 6px; font-size: 14px; }
+#tabs button.on { background: #2a6fd6; color: #fff; border-color: #2a6fd6; }
+.tab { display: none; padding-top: 12px; }
+.tab.on { display: block; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+select { padding: 7px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btns button { padding: 7px 12px; border: 1px solid #ccc; background: #fff;
+               border-radius: 6px; font-size: 13px; }
+.btns button.on { background: #444; color: #fff; border-color: #444; }
+.slider-row { display: flex; gap: 8px; align-items: center; margin: 8px 0 2px; }
+.slider-row input[type=range] { flex: 1; }
+.slider-row button { padding: 6px 14px; font-size: 15px; border: 1px solid #ccc;
+                     background: #fff; border-radius: 6px; }
+.step-label { text-align: center; color: #555; font-size: 13px; margin-bottom: 6px; }
+.imgwrap { text-align: center; }
+.imgwrap img { max-width: 100%; height: auto; border: 1px solid #e0e0e0; border-radius: 6px;
+               background: #fff; }
+#meteoList img { max-width: 100%; height: auto; margin-bottom: 12px; border: 1px solid #e0e0e0;
+                 border-radius: 6px; background: #fff; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: center; }
+th { background: #f0f0f0; position: sticky; top: 0; }
+.note { color: #999; font-size: 11px; margin-top: 8px; }
+#caseList li { margin: 4px 0; font-size: 14px; }

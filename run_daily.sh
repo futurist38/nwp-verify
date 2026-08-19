@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KPX 모델 표출 일일 실행 스크립트
+# NWP 모델 표출 일일 실행 스크립트
 # 예: crontab -e 에 아래 한 줄 추가 (매일 06:10 KST — 00UTC 런 배포 완료 후)
 #   10 6 * * * /path/to/kpx-model-charts/run_daily.sh >> /path/to/kpx-model-charts/cron.log 2>&1
 set -e

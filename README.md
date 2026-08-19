@@ -1,4 +1,4 @@
-# KPX 모델 표출 파이프라인 (ECMWF Open Data + GFS NOMADS)
+# NWP 모델 표출·검증 파이프라인 (ECMWF Open Data + GFS NOMADS)
 
 ECMWF IFS 0.25° 오픈데이터와 GFS 0.25°(NOMADS)를 원본 GRIB으로 직접 받아
 한반도 운량·기온을 매일 정량 표출하고, ASOS 실황과 대조하는 오답노트를 쌓는다.

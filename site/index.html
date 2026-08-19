@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>NWP 모델 아카이브</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>NWP 모델 아카이브</h1>
+  <p class="sub">개인 연구 프로젝트 — 공공기관 공식 서비스가 아닙니다</p>
+  <nav id="tabs">
+    <button data-tab="charts" class="on">차트</button>
+    <button data-tab="meteo">미티오그램</button>
+    <button data-tab="table">도시표</button>
+    <button data-tab="verif">검증</button>
+    <button data-tab="about">소개</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-charts" class="tab on">
+    <div class="controls">
+      <select id="dateSel"></select>
+      <div id="modelBtns" class="btns"></div>
+      <div id="panelBtns" class="btns"></div>
+    </div>
+    <div class="slider-row">
+      <button id="stepPrev">◀</button>
+      <input type="range" id="stepSlider" min="0" max="0" value="0">
+      <button id="stepNext">▶</button>
+    </div>
+    <div id="stepLabel" class="step-label"></div>
+    <div class="imgwrap"><img id="chartImg" alt="차트" loading="lazy"></div>
+  </section>
+
+  <section id="tab-meteo" class="tab">
+    <div class="controls"><select id="dateSelM"></select></div>
+    <div id="meteoList"></div>
+  </section>
+
+  <section id="tab-table" class="tab">
+    <div class="controls">
+      <select id="dateSelT"></select>
+      <select id="citySel"></select>
+    </div>
+    <div id="cityTable" class="tablewrap"></div>
+    <p class="note">수치는 모델 원값(발산 중재·평균 없음). dswrf는 구간 평균값.</p>
+  </section>
+
+  <section id="tab-verif" class="tab">
+    <h2>리드타임별 MAE</h2>
+    <div class="imgwrap"><img src="verif/mae_curve_t2m.png" alt="기온 MAE" loading="lazy"></div>
+    <div class="imgwrap"><img src="verif/mae_curve_tcc.png" alt="운량 MAE" loading="lazy"></div>
+    <h2>도시×모델×리드타임 ME/MAE</h2>
+    <div id="verifTable" class="tablewrap"></div>
+    <h2>오답노트 사례</h2>
+    <ul id="caseList"></ul>
+  </section>
+
+  <section id="tab-about" class="tab">
+    <h2>소개</h2>
+    <p>수치예보모델(ECMWF·GFS)의 한반도 기온·운량 예측을 원본 GRIB에서 직접 추출해
+       정량 표출하고, ASOS 실황과 대조해 모델별 오차 특성을 누적하는 <b>개인 연구
+       프로젝트</b>입니다. 어떤 공공기관의 공식 서비스도 아닙니다.</p>
+    <p>원칙: 모델 간 발산은 평균·중재하지 않고 그대로 표시합니다. 요약 옆에는 항상
+       원수치를 남깁니다. 수집 실패는 추정으로 채우지 않고 누락으로 표시합니다.</p>
+    <h3>데이터 출처</h3>
+    <ul>
+      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료</li>
+      <li>NOAA GFS 0.25° (NOMADS)</li>
+      <li>기상청 API허브 ASOS 지상관측 (공공누리)</li>
+    </ul>
+    <p class="note" id="genInfo"></p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

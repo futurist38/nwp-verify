@@ -1,0 +1,82 @@
+name: daily-nwp
+
+on:
+  schedule:
+    - cron: "10 21 * * *"   # 06:10 KST (전일 12z 런 위주)
+    - cron: "40 1 * * *"    # 10:40 KST (당일 00z 런 — ECMWF 00z는 09~10 KST 배포)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-nwp
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Seoul            # 중요: 스크립트의 '오늘/어제/내일'이 전부 KST 기준
+  PYTHONIOENCODING: utf-8
+  KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+  GMAIL_ADDR: ${{ secrets.GMAIL_ADDR }}
+  GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 시스템 의존성 (한글 폰트)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-nanum
+          rm -rf ~/.cache/matplotlib
+
+      - name: Python 의존성
+        run: pip install -r requirements.txt
+
+      - name: 수신·표출·오답노트·메일
+        run: |
+          python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패 — 계속"
+          python fetch_gfs.py   || echo "::warning::GFS 수신 실패 — 계속"
+          python plot_charts.py
+          python verify.py archive || echo "::warning::archive 실패 — 계속"
+          python verify.py score   || echo "::warning::score 실패 — 계속"
+          python verify.py report  || echo "::warning::report 실패 — 계속"
+          python send_summary.py   || echo "::warning::메일 실패 — 계속"
+
+      - name: 검증 누적을 main에 커밋
+        run: |
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add verification/
+          if ! git diff --cached --quiet; then
+            git pull --rebase origin main
+            git commit -m "verification: $(date '+%Y-%m-%d %H:%M KST') [skip ci]"
+            git push origin main
+          fi
+
+      - name: 사이트 조립 (기존 아카이브 복원 → 오늘분 추가)
+        run: |
+          mkdir -p site_build
+          if git fetch origin site-data 2>/dev/null; then
+            git --work-tree=site_build checkout FETCH_HEAD -- . || true
+            git reset > /dev/null   # 인덱스 원복 (--work-tree checkout이 인덱스를 바꿈)
+          fi
+          python build_site.py --site-dir site_build
+
+      - name: site-data 브랜치 발행 (이력 없는 단일 커밋 — 저장소 비대 방지)
+        run: |
+          cd site_build
+          git init -q -b site-data
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "site $(date '+%Y-%m-%d %H:%M KST')"
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" site-data

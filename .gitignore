@@ -9,3 +9,4 @@ cron.log
 *.grib2
 *.part
 summary_mail.html
+site_build/
