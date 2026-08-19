@@ -81,6 +81,17 @@ DIVERGENCE_THRESHOLDS = {
     "tcc": 30.0,  # |C_EC - C_GFS| ≥ 30 %p
 }
 
+# 영향 번역 계수 — 발산 "폭"을 실무 단위(GW)로 환산하는 어림값.
+# 단일값 추천이 아니라 리스크 폭의 단위 번역이다 (판단은 사람 소유).
+# 출처: 공개 「일일 전력수급 동향」 보고서 역산 (수급요인분해 프로젝트, 2026-08).
+IMPACT_COEF = {
+    "pv_gw_per_util_pct": 0.283,     # 태양광 이용률 1%p ≈ 0.283GW (설비 28.3GW 기준, 공개 보고서 일치)
+    "util_pct_per_cloud_pct": 0.6,   # 운량 1%p → 이용률 약 0.6%p (개인 어림값 — 검증 누적 후 조정)
+    "demand_gw_per_degC": 1.47,      # 최고기온 1℃ ≈ 1.47GW (공개 보고서 역산 중앙값, 여름 냉방)
+}
+IMPACT_SOLAR_HOURS = [9, 12, 15]     # 태양광 창 (표 시각 기준)
+IMPACT_TEMP_HOURS = [12, 15, 18]     # 냉방 민감 오후
+
 # ── 출력 경로 ─────────────────────────────────────────────
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

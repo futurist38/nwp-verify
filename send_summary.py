@@ -33,7 +33,8 @@ from email.mime.text import MIMEText
 import pandas as pd
 
 import sslfix  # noqa: F401  (AVG Web/Mail Shield 는 SMTP TLS 도 가로챈다)
-from config import BASE_DIR, OUT_DIR, VERIF_DIR, DIVERGENCE_THRESHOLDS
+from config import (BASE_DIR, OUT_DIR, VERIF_DIR, DIVERGENCE_THRESHOLDS,
+                    IMPACT_COEF, IMPACT_SOLAR_HOURS, IMPACT_TEMP_HOURS)
 
 REP_CITIES = ["서울", "대전", "대구", "광주", "부산"]
 HOURS_KST = list(range(6, 22, 3))          # 06,09,12,15,18,21
@@ -112,6 +113,48 @@ def spread_flags(val: dict, models: list[str]) -> list[str]:
     return out
 
 
+def _spread(val, models, city, h, vi):
+    vv = [val[(city, m, h)][vi] for m in models
+          if (city, m, h) in val and pd.notna(val[(city, m, h)][vi])]
+    return (max(vv) - min(vv)) if len(vv) >= 2 else None
+
+
+def headline(val: dict, models: list[str], flags: list[str]):
+    """신호등 + 영향 번역 헤드라인.
+    발산 '폭'을 GW로 환산한 어림 — 단일값 추천이 아니다. 원수치는 본문 표에 보존."""
+    n = len(flags)
+    if n == 0:
+        signal = ("🟢", "합의일 — 모델 간 대체로 일치. 아래 표 확인만으로 충분.")
+    elif n <= 5:
+        signal = ("🟡", f"부분 분기 — 발산 {n}건. 해당 시간대만 리스크 점검.")
+    else:
+        signal = ("🔴", f"분기일 — 발산 {n}건. 시나리오 폭을 잡고 들어갈 것.")
+
+    lines = []
+    # 태양광: 피크창 운량 스프레드 → 이용률 폭 → GW 폭
+    cs = [s for city in REP_CITIES for h in IMPACT_SOLAR_HOURS
+          if (s := _spread(val, models, city, h, 1)) is not None]
+    if cs:
+        c_mean = sum(cs) / len(cs)
+        util = c_mean * IMPACT_COEF["util_pct_per_cloud_pct"]
+        gw = util * IMPACT_COEF["pv_gw_per_util_pct"]
+        lines.append(f"태양광: 피크창({IMPACT_SOLAR_HOURS[0]:02d}~{IMPACT_SOLAR_HOURS[-1]:02d}시) "
+                     f"운량 스프레드 평균 {c_mean:.0f}%p → 이용률 약 {util:.0f}%p ≈ {gw:.1f}GW 폭")
+    # 냉방: 오후 기온 스프레드 → GW 폭
+    ts = {(city, h): s for city in REP_CITIES for h in IMPACT_TEMP_HOURS
+          if (s := _spread(val, models, city, h, 0)) is not None}
+    if ts:
+        t_mean = sum(ts.values()) / len(ts)
+        (wc, wh), wmax = max(ts.items(), key=lambda kv: kv[1])
+        gw = t_mean * IMPACT_COEF["demand_gw_per_degC"]
+        lines.append(f"냉방: 오후({IMPACT_TEMP_HOURS[0]:02d}~{IMPACT_TEMP_HOURS[-1]:02d}시) "
+                     f"기온 스프레드 평균 {t_mean:.1f}℃(최대 {wc} {wh:02d}시 {wmax:.1f}℃) "
+                     f"≈ {gw:.1f}GW 폭")
+    note = ("환산은 공개 수급보고서 역산 계수(太0.283GW/%p·최고기온 1.47GW/℃)와 "
+            "운량→이용률 어림(0.6)을 쓴 리스크 폭이며 단일값 추천이 아님. 원수치는 아래 표.")
+    return signal, lines, note
+
+
 def yesterday_data(yday: dt.date):
     """전일 검증 표 재료: obs[(var,city,h)], fc[(var,city,model,h)]=(fcst,err), 모델 목록."""
     path = os.path.join(VERIF_DIR, "scores", f"{yday:%Y-%m}.csv")
@@ -167,10 +210,10 @@ def yesterday_summary_lines(yday: dt.date):
 # 렌더링 (텍스트 + HTML)
 # ══════════════════════════════════════════════════════════
 
-def render(target, val, models, runs, flags, yday, obs, yfc, ymodels,
-           verif_lines, cases):
+def render(target, val, models, runs, flags, signal, impact_lines, impact_note,
+           yday, obs, yfc, ymodels, verif_lines, cases):
     yo = "월화수목금토일"[target.weekday()]
-    subject = f"[모델요약] {target:%m/%d}({yo}) 발산 {len(flags)}건"
+    subject = f"{signal[0]}[모델요약] {target:%m/%d}({yo}) 발산 {len(flags)}건"
     if verif_lines:
         m = re.search(r"GFS ME ([+\-\d.]+)", verif_lines[0])
         if m:
@@ -193,7 +236,10 @@ def render(target, val, models, runs, flags, yday, obs, yfc, ymodels,
                 rows.append(label + cells)
         return rows
 
-    t = [f"■ 내일 {target:%m/%d}({yo}) 대표 5지점 — 행: 모델별 예측",
+    t = [f"■ {signal[0]} {signal[1]}"]
+    t += ["  · " + s for s in impact_lines]
+    t += [f"  ※ {impact_note}", "",
+          f"■ 내일 {target:%m/%d}({yo}) 대표 5지점 — 행: 모델별 예측",
          "  런: " + ", ".join(f"{m} {runs[m]}UTC" for m in models), "",
          "[기온 ℃]", hdr_txt, *fc_rows_txt(0, 1), "",
          "[전운량 %]", hdr_txt, *fc_rows_txt(1, 0), "",
@@ -269,7 +315,13 @@ def render(target, val, models, runs, flags, yday, obs, yfc, ymodels,
                 rows.append(f"<tr><td {TDH}>　{MODEL_SHORT.get(mdl, mdl)}</td>{tds}</tr>")
         return '<table style="border-collapse:collapse;font-size:13px">' + "".join(rows) + "</table>"
 
-    h = [f"<h3>내일 {target:%m/%d}({yo}) 대표 5지점 — 행: 모델별 예측 (발산 셀 강조)</h3>",
+    banner_bg = {"🟢": "#e8f5e9", "🟡": "#fff8e1", "🔴": "#ffebee"}[signal[0]]
+    h = [f'<div style="background:{banner_bg};border-radius:6px;padding:10px 14px;margin-bottom:8px">'
+         f'<b style="font-size:15px">{signal[0]} {signal[1]}</b>'
+         + ("<ul style='margin:6px 0 2px'>" + "".join(f"<li>{s}</li>" for s in impact_lines) + "</ul>"
+            if impact_lines else "")
+         + f'<div style="color:#888;font-size:11px">※ {impact_note}</div></div>',
+         f"<h3>내일 {target:%m/%d}({yo}) 대표 5지점 — 행: 모델별 예측 (발산 셀 강조)</h3>",
          '<p style="color:#666;font-size:12px">런: '
          + ", ".join(f"{m} {runs[m]}UTC" for m in models) + "</p>",
          "<b>기온 ℃</b>", table_fc(0, 1, DIVERGENCE_THRESHOLDS["t2m"]), "<br>",
@@ -330,9 +382,11 @@ def main():
     if not val:
         raise SystemExit(f"[메일] {target} 유효 예측이 없습니다")
     flags = spread_flags(val, models)
+    signal, impact_lines, impact_note = headline(val, models, flags)
     obs, yfc, ymodels = yesterday_data(yday)
     verif_lines, cases = yesterday_summary_lines(yday)
     subject, text, html = render(target, val, models, runs, flags,
+                                 signal, impact_lines, impact_note,
                                  yday, obs, yfc, ymodels, verif_lines, cases)
 
     if args.dry_run:
