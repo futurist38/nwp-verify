@@ -2,12 +2,11 @@
 """
 일일 요약 메일 (로드맵 ②, 푸시형) — 첨부 없이 본문 문구·표만.
 
-본문 구성 (2026-08-18 개편: 도시×모델 행 구조 — KIM 추가 시 행만 늘어남):
+본문 구성 (도시×모델 행 구조 — KIM 추가 시 행만 늘어남):
+  0. 신호등(🟢/🟡/🔴) + 발산 폭의 GW 환산 헤드라인 (config.IMPACT_COEF)
   1. 내일(KST D+1) 06~21시 대표 5지점 표 — 모델별 행으로 원수치 병기, 발산 셀 강조
   2. 모델 발산 플래그 (스프레드 최대-최소 기준, config.DIVERGENCE_THRESHOLDS)
-  3. 전일 검증 표 — 관측(ASOS) 행 + 모델별 "예측(오차)" 행. 요청 반영:
-     모델들과 관측을 한 표에서 대조 (관측은 과거에만 존재하므로 이 표에 들어간다)
-  4. 전일 요약 문장(모델별 ME/MAE·최대오차)과 신규 사례 알림
+  3. 웹 아카이브 링크 — 전일 검증표·사례·지도는 웹 검증 탭으로 이관(2026-08-20)
 
 원칙: 모델 간 발산은 평균·중재하지 않는다. 항상 모델별 원수치를 병기한다.
 
@@ -33,8 +32,8 @@ from email.mime.text import MIMEText
 import pandas as pd
 
 import sslfix  # noqa: F401  (AVG Web/Mail Shield 는 SMTP TLS 도 가로챈다)
-from config import (BASE_DIR, OUT_DIR, VERIF_DIR, DIVERGENCE_THRESHOLDS,
-                    IMPACT_COEF, IMPACT_SOLAR_HOURS, IMPACT_TEMP_HOURS)
+from config import (BASE_DIR, OUT_DIR, DIVERGENCE_THRESHOLDS,
+                    IMPACT_COEF, IMPACT_SOLAR_HOURS, IMPACT_TEMP_HOURS, SITE_URL)
 
 REP_CITIES = ["서울", "대전", "대구", "광주", "부산"]
 HOURS_KST = list(range(6, 22, 3))          # 06,09,12,15,18,21
@@ -155,74 +154,15 @@ def headline(val: dict, models: list[str], flags: list[str]):
     return signal, lines, note
 
 
-def yesterday_data(yday: dt.date):
-    """전일 검증 표 재료: obs[(var,city,h)], fc[(var,city,model,h)]=(fcst,err), 모델 목록."""
-    path = os.path.join(VERIF_DIR, "scores", f"{yday:%Y-%m}.csv")
-    if not os.path.exists(path):
-        return None, None, []
-    sc = pd.read_csv(path, parse_dates=["valid_kst", "run_utc"])
-    sc = sc[(sc["valid_kst"].dt.date == yday)
-            & (sc["city"].isin(REP_CITIES))
-            & (sc["valid_kst"].dt.hour.isin(HOURS_KST))
-            & (sc["var"].isin(["t2m", "tcc"]))]
-    if sc.empty:
-        return None, None, []
-    # 같은 유효시각에 여러 런이 채점돼 있으면 최단 리드(최신 런)만 표에 사용
-    sc = sc.sort_values("step_h").drop_duplicates(
-        subset=["valid_kst", "city", "model", "var"], keep="first")
-
-    obs, fc = {}, {}
-    for r in sc.itertuples():
-        h = r.valid_kst.hour
-        if pd.notna(r.obs):
-            obs[(r.var, r.city, h)] = r.obs
-        fc[(r.var, r.city, r.model, h)] = (r.fcst, r.err)
-    present = list(sc["model"].unique())
-    models = [m for m in MODEL_ORDER if m in present] + \
-             [m for m in present if m not in MODEL_ORDER]
-    return obs, fc, models
-
-
-def yesterday_summary_lines(yday: dt.date):
-    """모델별 ME/MAE·최대오차 문장 + 신규 사례 목록."""
-    path = os.path.join(VERIF_DIR, "scores", f"{yday:%Y-%m}.csv")
-    if not os.path.exists(path):
-        return [], []
-    sc = pd.read_csv(path, parse_dates=["valid_kst"])
-    sc = sc[sc["valid_kst"].dt.date == yday].dropna(subset=["err"])
-    lines = []
-    for var, unit, nd in [("t2m", "℃", 1), ("tcc", "%p", 0)]:
-        g = sc[sc["var"] == var]
-        if g.empty:
-            continue
-        parts = [f"{m} ME {gm['err'].mean():+.{nd}f}{unit} (MAE {gm['err'].abs().mean():.{nd}f})"
-                 for m, gm in g.groupby("model")]
-        w = g.loc[g["err"].abs().idxmax()]
-        lines.append(f"{'기온' if var == 't2m' else '운량'}: " + " / ".join(parts)
-                     + f" · 최대오차 {w['city']} {w['model']} {w['err']:+.{nd}f}{unit}"
-                       f" ({pd.Timestamp(w['valid_kst']):%H}시, 예측 {w['fcst']} vs 실황 {w['obs']})")
-    cases = sorted(os.path.basename(p) for p in
-                   glob.glob(os.path.join(VERIF_DIR, "cases", f"{yday:%Y%m%d}_*.md")))
-    return lines, cases
-
-
 # ══════════════════════════════════════════════════════════
 # 렌더링 (텍스트 + HTML)
 # ══════════════════════════════════════════════════════════
 
-def render(target, val, models, runs, flags, signal, impact_lines, impact_note,
-           yday, obs, yfc, ymodels, verif_lines, cases):
+def render(target, val, models, runs, flags, signal, impact_lines, impact_note):
     yo = "월화수목금토일"[target.weekday()]
     subject = f"{signal[0]}[모델요약] {target:%m/%d}({yo}) 발산 {len(flags)}건"
-    if verif_lines:
-        m = re.search(r"GFS ME ([+\-\d.]+)", verif_lines[0])
-        if m:
-            subject += f" · 어제 GFS 기온 {m.group(1)}℃"
 
-    def hdr_txt_w(w):
-        return "          " + "".join(f"{h:02d}시".rjust(w) for h in HOURS_KST)
-    hdr_txt = hdr_txt_w(8)
-    hdr_txt_wide = hdr_txt_w(12)
+    hdr_txt = "          " + "".join(f"{h:02d}시".rjust(8) for h in HOURS_KST)
 
     # ── 내일 표 (텍스트) ──
     def fc_rows_txt(vi, nd):
@@ -246,30 +186,9 @@ def render(target, val, models, runs, flags, signal, impact_lines, impact_note,
          f"■ 모델 발산 (스프레드 기온 ≥{DIVERGENCE_THRESHOLDS['t2m']:.0f}℃ · 운량 ≥{DIVERGENCE_THRESHOLDS['tcc']:.0f}%p)"]
     t += ["  · " + s for s in flags] if flags else ["  없음 — 모델 간 대체로 일치"]
 
-    # ── 전일 검증 표 (텍스트) ──
-    t += ["", f"■ 전일({yday:%m/%d}) 검증 — 관측과 모델별 예측(괄호: 오차)"]
-    if obs:
-        for var, name, nd in [("t2m", "기온 ℃", 1), ("tcc", "운량 %", 0)]:
-            t += [f"[{name}]", hdr_txt_wide]
-            for city in REP_CITIES:
-                cells = "".join(_fmt(obs.get((var, city, h)), nd).rjust(12) for h in HOURS_KST)
-                t.append(f"{city} 관측 " + cells)
-                for mdl in ymodels:
-                    cells = ""
-                    for h in HOURS_KST:
-                        fe = yfc.get((var, city, mdl, h))
-                        cells += ("-".rjust(12) if fe is None else
-                                  f"{_fmt(fe[0], nd)}({fe[1]:+.{nd}f})".rjust(12) if pd.notna(fe[1])
-                                  else f"{_fmt(fe[0], nd)}(-)".rjust(12))
-                    t.append(f"　　 {MODEL_SHORT.get(mdl, mdl):<4}" + cells)
-            t.append("")
-    else:
-        t.append("  채점 자료 없음 (배치 순서/PC 꺼짐 여부 확인)")
-    if verif_lines:
-        t += ["  · " + s for s in verif_lines]
-    if cases:
-        t.append(f"  · 신규 사례 파일 {len(cases)}건: " + ", ".join(cases))
-    t += ["", "― 개인 연구 프로젝트 · ECMWF Open Data(CC-BY 4.0, 0.25° 재격자)/NOAA GFS/KMA ASOS"]
+    # 전일 검증·사례는 웹 검증 탭으로 이관 (2026-08-20, 사용자 요청)
+    t += ["", f"■ 전일 검증·사례·지도 아카이브 → {SITE_URL} (검증 탭)",
+          "", "― 개인 연구 프로젝트 · ECMWF Open Data(CC-BY 4.0, 0.25° 재격자)/NOAA GFS/KMA ASOS"]
     text = "\n".join(t)
 
     # ── HTML ──
@@ -293,28 +212,6 @@ def render(target, val, models, runs, flags, signal, impact_lines, impact_note,
                 rows.append(f"<tr><td {TDH}>{name}</td>{tds}</tr>")
         return '<table style="border-collapse:collapse;font-size:13px">' + "".join(rows) + "</table>"
 
-    def table_verif(var, nd):
-        rows = ['<tr><th ' + TDH + '>지점</th>'
-                + "".join(f"<th {TDH}>{h:02d}시</th>" for h in HOURS_KST) + "</tr>"]
-        for city in REP_CITIES:
-            tds = "".join(f"<td {TD}><b>{_fmt(obs.get((var, city, h)), nd)}</b></td>"
-                          for h in HOURS_KST)
-            rows.append(f"<tr><td {TDH}>{city} 관측</td>{tds}</tr>")
-            for mdl in ymodels:
-                tds = ""
-                for h in HOURS_KST:
-                    fe = yfc.get((var, city, mdl, h))
-                    if fe is None:
-                        tds += f"<td {TD}>-</td>"
-                    elif pd.notna(fe[1]):
-                        color = "#c00" if abs(fe[1]) >= (3 if var == "t2m" else 40) else "#555"
-                        tds += (f"<td {TD}>{_fmt(fe[0], nd)}"
-                                f'<span style="color:{color};font-size:11px"> ({fe[1]:+.{nd}f})</span></td>')
-                    else:
-                        tds += f"<td {TD}>{_fmt(fe[0], nd)} (-)</td>"
-                rows.append(f"<tr><td {TDH}>　{MODEL_SHORT.get(mdl, mdl)}</td>{tds}</tr>")
-        return '<table style="border-collapse:collapse;font-size:13px">' + "".join(rows) + "</table>"
-
     banner_bg = {"🟢": "#e8f5e9", "🟡": "#fff8e1", "🔴": "#ffebee"}[signal[0]]
     h = [f'<div style="background:{banner_bg};border-radius:6px;padding:10px 14px;margin-bottom:8px">'
          f'<b style="font-size:15px">{signal[0]} {signal[1]}</b>'
@@ -329,17 +226,7 @@ def render(target, val, models, runs, flags, signal, impact_lines, impact_note,
          f"<h3>모델 발산 (스프레드 기온 ≥{DIVERGENCE_THRESHOLDS['t2m']:.0f}℃ · 운량 ≥{DIVERGENCE_THRESHOLDS['tcc']:.0f}%p)</h3>"]
     h.append("<ul>" + "".join(f"<li>{s}</li>" for s in flags) + "</ul>" if flags
              else "<p>없음 — 모델 간 대체로 일치</p>")
-    h.append(f"<h3>전일({yday:%m/%d}) 검증 — 관측 vs 모델별 예측(괄호: 오차)</h3>")
-    if obs:
-        h += ["<b>기온 ℃</b>", table_verif("t2m", 1), "<br>",
-              "<b>운량 %</b>", table_verif("tcc", 0)]
-    else:
-        h.append("<p>채점 자료 없음 (배치 순서/PC 꺼짐 여부 확인)</p>")
-    if verif_lines:
-        h.append("<ul>" + "".join(f"<li>{s}</li>" for s in verif_lines) + "</ul>")
-    if cases:
-        h.append(f'<p style="color:#c00;font-weight:bold">신규 사례 파일 {len(cases)}건: '
-                 + ", ".join(cases) + "</p>")
+    h.append(f'<p><b>전일 검증·사례·지도 아카이브 → <a href="{SITE_URL}">웹 아카이브</a> (검증 탭)</b></p>')
     h.append('<hr><p style="color:#999;font-size:11px">개인 연구 프로젝트 — 공공기관 공식 서비스 아님 · '
              'ECMWF Open Data(CC-BY 4.0, 0.25° 재격자) · NOAA GFS · KMA API허브 ASOS(공공누리)</p>')
     html = f'<div style="font-family:Malgun Gothic,sans-serif">{"".join(h)}</div>'
@@ -375,7 +262,6 @@ def main():
 
     target = (dt.date.fromisoformat(args.date) if args.date
               else dt.date.today() + dt.timedelta(days=1))
-    yday = dt.date.today() - dt.timedelta(days=1)
 
     df = load_latest_forecast()
     val, models, runs = tomorrow_data(df, target)
@@ -383,11 +269,8 @@ def main():
         raise SystemExit(f"[메일] {target} 유효 예측이 없습니다")
     flags = spread_flags(val, models)
     signal, impact_lines, impact_note = headline(val, models, flags)
-    obs, yfc, ymodels = yesterday_data(yday)
-    verif_lines, cases = yesterday_summary_lines(yday)
     subject, text, html = render(target, val, models, runs, flags,
-                                 signal, impact_lines, impact_note,
-                                 yday, obs, yfc, ymodels, verif_lines, cases)
+                                 signal, impact_lines, impact_note)
 
     if args.dry_run:
         out = os.path.join(BASE_DIR, "summary_mail.html")

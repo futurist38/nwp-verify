@@ -51,6 +51,13 @@
   </section>
 
   <section id="tab-verif" class="tab">
+    <h2>일별 검증 — 관측 vs 모델별 예측(괄호: 오차)</h2>
+    <div class="controls"><select id="dateSelV"></select></div>
+    <h3>기온 ℃</h3>
+    <div id="verifDailyT" class="tablewrap"></div>
+    <h3>운량 %</h3>
+    <div id="verifDailyC" class="tablewrap"></div>
+    <p class="note">같은 유효시각에 런이 여럿이면 최단 리드(최신 런) 값. 큰 오차(기온 ±3℃·운량 ±40%p)는 붉게 표시.</p>
     <h2>리드타임별 MAE</h2>
     <div class="imgwrap"><img src="verif/mae_curve_t2m.png" alt="기온 MAE" loading="lazy"></div>
     <div class="imgwrap"><img src="verif/mae_curve_tcc.png" alt="운량 MAE" loading="lazy"></div>

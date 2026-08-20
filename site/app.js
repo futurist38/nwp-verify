@@ -122,6 +122,41 @@ async function renderTable() {
   $("cityTable").innerHTML = html + "</table>";
 }
 
+// ── 검증 탭: 일별 검증표 ──
+const CITY_ORDER = ["서울", "대전", "대구", "광주", "부산",
+                    "인천", "수원", "전주", "강릉", "제주"];
+async function renderVerifDaily() {
+  const d = $("dateSelV").value;
+  const data = await (await fetch(`verif/daily/${d}.json`)).json();
+  for (const [vr, elId, nd, big] of [["t2m", "verifDailyT", 1, 3], ["tcc", "verifDailyC", 0, 40]]) {
+    const vd = data[vr];
+    if (!vd) { $(elId).innerHTML = "<p>자료 없음</p>"; continue; }
+    const hours = [...new Set(Object.values(vd).flatMap((c) =>
+      [...Object.keys(c.obs), ...Object.values(c.models).flatMap((m) => Object.keys(m))]
+    ))].map(Number).sort((a, b) => a - b);
+    const models = [...new Set(Object.values(vd).flatMap((c) => Object.keys(c.models)))].sort();
+    const fmt = (v) => v === null || v === undefined ? "-" : v.toFixed(nd);
+    let html = "<table><tr><th>지점</th>" +
+      hours.map((h) => `<th>${String(h).padStart(2, "0")}시</th>`).join("") + "</tr>";
+    for (const city of CITY_ORDER.filter((c) => vd[c])) {
+      const c = vd[city];
+      html += `<tr><th>${city} 관측</th>` + hours.map((h) =>
+        `<td><b>${fmt(c.obs[h])}</b></td>`).join("") + "</tr>";
+      for (const m of models.filter((m) => c.models[m])) {
+        html += `<tr><th>　${m}</th>` + hours.map((h) => {
+          const fe = c.models[m][h];
+          if (!fe) return "<td>-</td>";
+          const [f, e] = fe;
+          if (e === null) return `<td>${fmt(f)} (-)</td>`;
+          const col = Math.abs(e) >= big ? "#c00" : "#888";
+          return `<td>${fmt(f)}<span style="color:${col};font-size:11px"> (${e > 0 ? "+" : ""}${e.toFixed(nd)})</span></td>`;
+        }).join("") + "</tr>";
+      }
+    }
+    $(elId).innerHTML = html + "</table>";
+  }
+}
+
 // ── 검증 탭 ──
 async function renderVerif() {
   try {
@@ -148,10 +183,15 @@ async function renderVerif() {
   fillDateSel($("dateSelT"), renderTable);
   $("citySel").onchange = renderTable;
 
+  const vdates = (MF.verif_dates || []).slice().reverse();
+  $("dateSelV").innerHTML = vdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
+  $("dateSelV").onchange = renderVerifDaily;
+
   renderModelBtns();
   renderMeteo();
   renderTable();
   renderVerif();
+  if (vdates.length) renderVerifDaily();
   $("genInfo").textContent =
     `마지막 갱신(UTC): ${MF.generated_utc} · 지도 보존 ${MF.max_days}일`;
 })();

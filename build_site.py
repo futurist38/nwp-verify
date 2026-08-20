@@ -83,6 +83,36 @@ def copy_verif(site_dir: str):
                       f, ensure_ascii=False)
 
 
+def export_verif_daily(site_dir: str) -> list[str]:
+    """일별 검증표 JSON (관측 vs 모델별 예측·오차) — 메일에서 웹으로 이관(2026-08-20).
+    구조: {var: {city: {obs: {h: v}, models: {m: {h: [fcst, err, step]}}}}}
+    같은 유효시각에 여러 런이 있으면 최단 리드(최신 런)만."""
+    out_dir = os.path.join(site_dir, "verif", "daily")
+    os.makedirs(out_dir, exist_ok=True)
+    dates = set()
+    for f in glob.glob(os.path.join(VERIF_DIR, "scores", "*.csv")):
+        sc = pd.read_csv(f, parse_dates=["valid_kst"])
+        sc = sc[sc["var"].isin(["t2m", "tcc"])]
+        for day, g in sc.groupby(sc["valid_kst"].dt.date):
+            data = {}
+            for r in g.itertuples():
+                h = str(r.valid_kst.hour)
+                city = data.setdefault(r.var, {}).setdefault(
+                    r.city, {"obs": {}, "models": {}})
+                if pd.notna(r.obs):
+                    city["obs"][h] = float(r.obs)
+                mdl = city["models"].setdefault(r.model, {})
+                if h not in mdl or int(r.step_h) < mdl[h][2]:
+                    mdl[h] = [None if pd.isna(r.fcst) else float(r.fcst),
+                              None if pd.isna(r.err) else float(r.err),
+                              int(r.step_h)]
+            ymd = day.strftime("%Y%m%d")
+            with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as fp:
+                json.dump(data, fp, ensure_ascii=False)
+            dates.add(ymd)
+    return sorted(dates)
+
+
 def build_manifest(site_dir: str):
     """archive/ 를 스캔해 manifest.json 생성 — 파일명이 유일한 진실."""
     manifest = {"generated_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
@@ -117,6 +147,9 @@ def build_manifest(site_dir: str):
     manifest["cases"] = sorted(
         os.path.basename(p) for p in
         glob.glob(os.path.join(site_dir, "verif", "cases", "*.md")))
+    manifest["verif_dates"] = sorted(
+        os.path.basename(p)[:-5] for p in
+        glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
 
     with open(os.path.join(site_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False)
@@ -136,6 +169,7 @@ def main():
 
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
+    export_verif_daily(args.site_dir)
     build_manifest(args.site_dir)
     print(f"[site] 완료: {args.site_dir}")
 

@@ -92,6 +92,9 @@ IMPACT_COEF = {
 IMPACT_SOLAR_HOURS = [9, 12, 15]     # 태양광 창 (표 시각 기준)
 IMPACT_TEMP_HOURS = [12, 15, 18]     # 냉방 민감 오후
 
+# 정적 웹 아카이브 (③) — 전일 검증·사례·지도 아카이브는 여기서 열람
+SITE_URL = "https://futurist38.github.io/nwp-verify/"
+
 # ── 출력 경로 ─────────────────────────────────────────────
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
