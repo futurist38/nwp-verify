@@ -217,7 +217,8 @@ def plot_maps(model_name, data, out_dir):
         fig.subplots_adjust(top=0.93, bottom=0.06, left=0.08, right=0.96)
         fname = os.path.join(
             out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}_{panel}.png")
-        fig.savefig(fname, dpi=100)
+        # bbox_inches="tight": 그림 내부 흰 여백 제거 (웹 표시 공간 낭비 지적)
+        fig.savefig(fname, dpi=100, bbox_inches="tight", pad_inches=0.15)
         plt.close(fig)
         n_saved += 1
 

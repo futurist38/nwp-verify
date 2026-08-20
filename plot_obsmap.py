@@ -179,7 +179,8 @@ def draw_map(df_h: pd.DataFrame, var_key: str, day: dt.date, hour: int, out_dir:
                  fontsize=11)
     fig.subplots_adjust(top=0.94, bottom=0.04, left=0.06, right=0.98)
     os.makedirs(out_dir, exist_ok=True)
-    fig.savefig(os.path.join(out_dir, f"obs_{var_key}_{hour:02d}.png"), dpi=100)
+    fig.savefig(os.path.join(out_dir, f"obs_{var_key}_{hour:02d}.png"), dpi=100,
+                bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
     return True
 

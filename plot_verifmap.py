@@ -178,7 +178,7 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
                  f"큰 칩·굵은 테두리 = 기간 MAE 낮음(신뢰)", fontsize=11)
     fig.subplots_adjust(top=0.91, bottom=0.03, left=0.03, right=0.97)
     out = os.path.join(VERIF_DIR, f"verifmap_{var}_{wkey}.png")
-    fig.savefig(out, dpi=100)
+    fig.savefig(out, dpi=100, bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
     print(f"[오차지도] {out}")
     return True
@@ -216,7 +216,7 @@ def small_multiples(sc: pd.DataFrame, var: str, end_day: dt.date, days: int = 30
     fig.colorbar(sm, ax=fig.axes, shrink=0.65, label=f"ME ({unit})")
     fig.suptitle(f"{title} 관측오차 모델별 비교  {start:%m/%d}~{end_day:%m/%d}", fontsize=13)
     out = os.path.join(VERIF_DIR, f"verifmap_sm_{var}.png")
-    fig.savefig(out, dpi=100)
+    fig.savefig(out, dpi=100, bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
     print(f"[오차지도] {out}")
     return True
