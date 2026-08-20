@@ -49,6 +49,8 @@ jobs:
           python verify.py archive || echo "::warning::archive 실패 — 계속"
           python verify.py score   || echo "::warning::score 실패 — 계속"
           python verify.py report  || echo "::warning::report 실패 — 계속"
+          python plot_obsmap.py    || echo "::warning::관측지도 실패 — 계속"
+          python plot_verifmap.py  || echo "::warning::오차지도 실패 — 계속"
           python send_summary.py   || echo "::warning::메일 실패 — 계속"
 
       - name: 검증 누적을 main에 커밋

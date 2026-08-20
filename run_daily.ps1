@@ -42,6 +42,8 @@ Step '표출'         @('plot_charts.py')
 Step '예측 적재'    @('verify.py', 'archive')
 Step '채점(어제)'   @('verify.py', 'score')
 Step '집계'         @('verify.py', 'report')
+Step '관측 지도'    @('plot_obsmap.py')
+Step '오차 지도'    @('plot_verifmap.py')
 Step '메일 발송'    @('send_summary.py')   # GMAIL_* 미설정 시 자동 건너뜀
 
 # 30일 지난 GRIB 정리

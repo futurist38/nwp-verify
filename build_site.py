@@ -30,6 +30,7 @@ MAX_DAYS = 90          # 지도 PNG 보존 일수 (셀룰러·저장소 용량 �
 SITE_SRC = os.path.join(BASE_DIR, "site")
 
 PNG_RE = re.compile(r"^(?P<model>[a-z]+)_(?P<run>\d{10})_f(?P<step>\d{3})_(?P<panel>\w+)\.png$")
+OBS_RE = re.compile(r"^obs_(?P<var>\w+)_(?P<hour>\d{2})\.png$")
 
 
 def copy_outputs(site_dir: str):
@@ -43,7 +44,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "meteograms"):
+        for sub in ("maps_ecmwf", "maps_gfs", "meteograms", "obsmaps"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 target = os.path.join(dst, os.path.basename(png))
                 if not os.path.exists(target) or os.path.getmtime(png) > os.path.getmtime(target):
@@ -70,8 +71,9 @@ def copy_outputs(site_dir: str):
 def copy_verif(site_dir: str):
     vd = os.path.join(site_dir, "verif")
     os.makedirs(os.path.join(vd, "cases"), exist_ok=True)
-    for png in glob.glob(os.path.join(VERIF_DIR, "mae_curve_*.png")):
-        shutil.copy2(png, vd)
+    for pat in ("mae_curve_*.png", "verifmap_*.png"):
+        for png in glob.glob(os.path.join(VERIF_DIR, pat)):
+            shutil.copy2(png, vd)
     for md in glob.glob(os.path.join(VERIF_DIR, "cases", "*.md")):
         shutil.copy2(md, os.path.join(vd, "cases"))
     summ = os.path.join(VERIF_DIR, "scores_summary.csv")
@@ -119,8 +121,12 @@ def build_manifest(site_dir: str):
                 "max_days": MAX_DAYS, "dates": {}}
     for d in sorted(glob.glob(os.path.join(site_dir, "archive", "????????"))):
         ymd = os.path.basename(d)
-        entry = {"models": {}, "meteograms": [], "daily_json": None}
+        entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
         for fn in sorted(os.listdir(d)):
+            mo = OBS_RE.match(fn)
+            if mo:
+                entry["obs"].setdefault(mo["var"], []).append(int(mo["hour"]))
+                continue
             m = PNG_RE.match(fn)
             if m:
                 mdl = m["model"].upper()
@@ -141,7 +147,7 @@ def build_manifest(site_dir: str):
             e["steps"].sort()
         if os.path.exists(os.path.join(site_dir, "daily", f"{ymd}.json")):
             entry["daily_json"] = f"daily/{ymd}.json"
-        if entry["models"] or entry["meteograms"]:
+        if entry["models"] or entry["meteograms"] or entry["obs"]:
             manifest["dates"][ymd] = entry
 
     manifest["cases"] = sorted(

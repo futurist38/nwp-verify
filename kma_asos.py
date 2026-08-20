@@ -45,7 +45,9 @@ MISSING_TOKENS = {"-", "-9", "-9.0", "-9.00", "-99", "-99.0",
                   "-999", "-999.0", "-99.00"}
 
 # 시간자료 46필드 중 사용 필드 (0-base 인덱스)
-H_IDX = {"TM": 0, "STN": 1, "TA": 11, "CA_TOT": 25, "SS": 33, "SI": 34}
+# WS(3)·HM(13)은 WW(24) 앞이라 토큰 수와 무관하게 항상 안전 (KmaApi.ps1 실측)
+H_IDX = {"TM": 0, "STN": 1, "WS": 3, "TA": 11, "HM": 13,
+         "CA_TOT": 25, "SS": 33, "SI": 34}
 
 _last_req = 0.0
 
@@ -142,6 +144,8 @@ def _parse_hourly(text: str) -> list[dict]:
             "TM": tm,
             "STN": int(f[H_IDX["STN"]]),
             "TA": _num(f[H_IDX["TA"]]),
+            "WS": _num(f[H_IDX["WS"]]),
+            "HM": _num(f[H_IDX["HM"]]),
             "CA_TOT": _num(f[H_IDX["CA_TOT"]]) if tail else None,
             "SS": _num(f[H_IDX["SS"]]) if tail else None,
             "SI": _num(f[H_IDX["SI"]]) if tail else None,
@@ -160,6 +164,9 @@ def get_hourly(stations: list[int], t_from: dt.datetime, t_to: dt.datetime,
     stations = sorted(stations)
     stn_param = ":".join(map(str, stations))
     stn_tag = "-".join(map(str, stations))
+    if len(stn_tag) > 60:  # 전 지점 등 긴 목록은 해시 축약 (Windows 경로 한계)
+        import hashlib
+        stn_tag = f"n{len(stations)}_{hashlib.md5(stn_tag.encode()).hexdigest()[:8]}"
     all_rows = []
 
     chunk_start = t_from
@@ -219,16 +226,25 @@ def default_stations() -> list[int]:
     return sorted(s for s in CITY_OBS_STN.values() if s is not None)
 
 
+def all_stations() -> list[int]:
+    """전 ASOS 지점 (관측 실황 지도 보간용). stations.csv 없으면 검증 지점으로 폴백."""
+    path = os.path.join(OBS_DIR, "stations.csv")
+    if os.path.exists(path):
+        return sorted(pd.read_csv(path)["STN"].astype(int))
+    return default_stations()
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--stations", nargs="+", type=int, default=None,
                    help="지점번호 목록. 생략 시 config의 도시 매핑 전체")
+    p.add_argument("--all", action="store_true", help="전 ASOS 지점 (stations.csv)")
     p.add_argument("--from", dest="t_from", required=True, help="YYYY-MM-DD")
     p.add_argument("--to", dest="t_to", required=True, help="YYYY-MM-DD")
     p.add_argument("--no-cache", action="store_true")
     args = p.parse_args()
 
-    stations = args.stations or default_stations()
+    stations = args.stations or (all_stations() if args.all else default_stations())
     t_from = dt.datetime.strptime(args.t_from, "%Y-%m-%d")
     t_to = dt.datetime.strptime(args.t_to, "%Y-%m-%d")
 

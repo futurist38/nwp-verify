@@ -103,7 +103,8 @@ def cmd_score(date_str: str | None = None, fetch_obs: bool = True):
     # 1) 실황 확보 (dswrf 구간 평균용으로 전일 18시부터)
     if fetch_obs:
         import kma_asos
-        stations = kma_asos.default_stations()
+        # 전 지점 수신 — 검증(10지점)과 관측 실황 지도(전 지점 보간)를 한 번에 충당
+        stations = kma_asos.all_stations()
         obs_new = kma_asos.get_hourly(stations, day0 - dt.timedelta(hours=6), day1)
         kma_asos.save_monthly(obs_new)
 

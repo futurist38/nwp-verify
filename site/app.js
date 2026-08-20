@@ -43,6 +43,13 @@ function modelEntry() { return entry().models[state.model]; }
 
 function renderModelBtns() {
   const models = Object.keys(entry().models);
+  if (!models.length) {  // 관측 지도만 있는 날짜 (예: PC 꺼진 날 백필)
+    $("modelBtns").innerHTML = "";
+    $("panelBtns").innerHTML = "";
+    $("chartImg").removeAttribute("src");
+    $("stepLabel").textContent = "이 날짜엔 모델 차트 없음 (관측 탭 참조)";
+    return;
+  }
   if (!models.includes(state.model)) state.model = models[0];
   $("modelBtns").innerHTML = models.map((m) =>
     `<button data-m="${m}" class="${m === state.model ? "on" : ""}">${m}</button>`).join("");
@@ -86,6 +93,70 @@ $("stepPrev").onclick = () => { if (state.stepIdx > 0) { state.stepIdx--; render
 $("stepNext").onclick = () => {
   if (state.stepIdx < modelEntry().steps.length - 1) { state.stepIdx++; renderChart(); }
 };
+
+// ── 관측 탭 ──
+const OBS_LABEL = { ta: "기온", si: "일사", feel: "체감온도" };
+let obsState = { date: null, v: null, idx: 0 };
+
+function obsEntry() { return MF.dates[obsState.date].obs || {}; }
+function renderObsVarBtns() {
+  const vars = Object.keys(obsEntry());
+  if (!vars.length) {
+    $("obsVarBtns").innerHTML = "";
+    $("obsImg").removeAttribute("src");
+    $("obsLabel").textContent = "이 날짜엔 관측 지도 없음";
+    return;
+  }
+  if (!vars.includes(obsState.v)) obsState.v = vars.includes("ta") ? "ta" : vars[0];
+  $("obsVarBtns").innerHTML = vars.map((v) =>
+    `<button data-v="${v}" class="${v === obsState.v ? "on" : ""}">${OBS_LABEL[v] || v}</button>`).join("");
+  $("obsVarBtns").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => { obsState.v = b.dataset.v; renderObsVarBtns(); };
+  });
+  const hours = obsEntry()[obsState.v];
+  $("obsSlider").max = hours.length - 1;
+  if (obsState.idx > hours.length - 1) obsState.idx = hours.length - 1;
+  renderObs();
+}
+function obsPath(i) {
+  const h = String(obsEntry()[obsState.v][i]).padStart(2, "0");
+  return `archive/${obsState.date}/obs_${obsState.v}_${h}.png`;
+}
+function renderObs() {
+  const hours = obsEntry()[obsState.v];
+  $("obsSlider").value = obsState.idx;
+  $("obsLabel").textContent =
+    `${fmtDate(obsState.date)} ${String(hours[obsState.idx]).padStart(2, "0")}시 KST 실황`;
+  $("obsImg").src = obsPath(obsState.idx);
+  [obsState.idx - 1, obsState.idx + 1].forEach((i) => {
+    if (i >= 0 && i < hours.length) new Image().src = obsPath(i);
+  });
+}
+$("obsSlider").oninput = (ev) => { obsState.idx = +ev.target.value; renderObs(); };
+$("obsPrev").onclick = () => { if (obsState.idx > 0) { obsState.idx--; renderObs(); } };
+$("obsNext").onclick = () => {
+  if (obsState.idx < obsEntry()[obsState.v].length - 1) { obsState.idx++; renderObs(); }
+};
+
+// ── 검증 탭: 오차 지도 ──
+let vmState = { v: "t2m", w: "d" };
+function renderVm() {
+  $("vmImg").src = vmState.w === "sm"
+    ? `verif/verifmap_sm_${vmState.v}.png`
+    : `verif/verifmap_${vmState.v}_${vmState.w}.png`;
+}
+document.querySelectorAll("#vmVarBtns button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("#vmVarBtns button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on"); vmState.v = b.dataset.v; renderVm();
+  };
+});
+document.querySelectorAll("#vmWinBtns button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("#vmWinBtns button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on"); vmState.w = b.dataset.w; renderVm();
+  };
+});
 
 // ── 미티오그램 탭 ──
 function renderMeteo() {
@@ -182,6 +253,11 @@ async function renderVerif() {
   fillDateSel($("dateSelM"), renderMeteo);
   fillDateSel($("dateSelT"), renderTable);
   $("citySel").onchange = renderTable;
+
+  obsState.date = dates[0];
+  fillDateSel($("dateSelO"), (ev) => { obsState.date = ev.target.value; renderObsVarBtns(); });
+  renderObsVarBtns();
+  renderVm();
 
   const vdates = (MF.verif_dates || []).slice().reverse();
   $("dateSelV").innerHTML = vdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
