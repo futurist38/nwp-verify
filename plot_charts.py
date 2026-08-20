@@ -147,15 +147,16 @@ def _valid_kst(run, step_h):
 # 지도 표출
 # ══════════════════════════════════════════════════════════
 
-def _make_ax(fig, pos):
+def _make_ax(fig, pos, line_color="black"):
+    """line_color: 해안선·경계선 색 — 전운량(어두운 배경)은 노란색 사용."""
     if HAS_CARTOPY:
         ax = fig.add_subplot(*pos, projection=ccrs.PlateCarree())
         try:
-            ax.coastlines(resolution="50m", linewidth=0.6)
-            ax.add_feature(cfeature.BORDERS, linewidth=0.4)
+            ax.coastlines(resolution="50m", linewidth=0.7, color=line_color)
+            ax.add_feature(cfeature.BORDERS, linewidth=0.4, edgecolor=line_color)
             ax.add_feature(cfeature.NaturalEarthFeature(
                 "cultural", "admin_1_states_provinces_lines", "10m",
-                facecolor="none"), edgecolor="#888", linewidth=0.3)
+                facecolor="none"), edgecolor=line_color, linewidth=0.35, alpha=0.7)
         except Exception:
             pass  # 해안선 데이터 다운로드 불가 환경
         ax.set_extent([LON_MIN, LON_MAX, LAT_MIN, LAT_MAX])
@@ -206,7 +207,8 @@ def plot_maps(model_name, data, out_dir):
     def _save(step_h, panel, draw):
         nonlocal n_saved
         fig = plt.figure(figsize=(6.4, 6.8))
-        ax = _make_ax(fig, (1, 1, 1))
+        # 전운량은 위성영상풍(어두운 배경)이라 경계선을 노란색으로
+        ax = _make_ax(fig, (1, 1, 1), line_color="gold" if panel == "tcc" else "black")
         draw(fig, ax)
         vkst = _valid_kst(run, step_h)
         ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
@@ -230,14 +232,15 @@ def plot_maps(model_name, data, out_dir):
                                vmin=-15, vmax=38, shading="auto")
             cs = ax.contour(_lo, _la, _t.values, levels=np.arange(-15, 40, 3),
                             colors="k", linewidths=0.3)
-            ax.clabel(cs, fmt="%d", fontsize=6)
+            ax.clabel(cs, fmt="%d", fontsize=10)
             fig.colorbar(pm, ax=ax, shrink=0.8, label="2m 기온 (°C)")
         _save(step_h, "t2m", draw_t2m)
 
         tcc = _sel_step(data["tcc"], step_h) if data.get("tcc") is not None else None
         if tcc is not None:
             def draw_tcc(fig, ax, _c=tcc, _lo=lon2d, _la=lat2d):
-                pm = ax.pcolormesh(_lo, _la, _c.values, cmap="Greys",
+                # 위성영상풍: 0%=어두움, 100%=밝음(구름=흰색)
+                pm = ax.pcolormesh(_lo, _la, _c.values, cmap="gray",
                                    vmin=0, vmax=100, shading="auto")
                 fig.colorbar(pm, ax=ax, shrink=0.8, label="전운량 (%)")
             _save(step_h, "tcc", draw_tcc)

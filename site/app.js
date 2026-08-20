@@ -77,7 +77,8 @@ function renderModelBtns() {
 function renderPanelBtns() {
   const compare = state.model === CMP;
   const panels = compare
-    ? [...new Set(cmpModels().flatMap((m) => entry().models[m].panels))]
+    // 3층운량(cloud3)은 GFS 전용이라 모델비교에서 제외 (ECMWF 오픈데이터에 층별운량 없음)
+    ? [...new Set(cmpModels().flatMap((m) => entry().models[m].panels))].filter((p) => p !== "cloud3")
     : modelEntry().panels;
   if (!panels.includes(state.panel)) state.panel = panels[0];
   $("panelBtns").innerHTML = panels.map((p) =>
@@ -108,7 +109,8 @@ function renderChart() {
       const e = entry().models[m];
       const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
       if (!e.steps.includes(stepH) || !e.panels.includes(state.panel)) return "";
-      return `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy">`;
+      return `<div class="cmp-name">${m} <span>(런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC +${stepH}h)</span></div>`
+           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy">`;
     }).join("");
     return;
   }
@@ -197,39 +199,17 @@ document.querySelectorAll("#vmWinBtns button").forEach((b) => {
   };
 });
 
-// ── 미티오그램 탭 ──
+// ── Meteogram 탭 ──
+const METEO_ORDER = ["서울", "대전", "대구", "광주", "부산"];  // 사용자 지정 순서
 function renderMeteo() {
   const d = $("dateSelM").value;
-  $("meteoList").innerHTML = (MF.dates[d].meteograms || []).map((fn) =>
+  const files = (MF.dates[d].meteograms || []).slice().sort((a, b) => {
+    const ia = METEO_ORDER.findIndex((c) => a.includes(c));
+    const ib = METEO_ORDER.findIndex((c) => b.includes(c));
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  $("meteoList").innerHTML = files.map((fn) =>
     `<img src="archive/${d}/${fn}" alt="${fn}" loading="lazy">`).join("");
-}
-
-// ── 도시표 탭 ──
-async function renderTable() {
-  const d = $("dateSelT").value;
-  const info = MF.dates[d];
-  if (!info.daily_json) { $("cityTable").innerHTML = "<p>수치 자료 없음</p>"; return; }
-  const data = await (await fetch(info.daily_json)).json();
-  const col = Object.fromEntries(data.columns.map((c, i) => [c, i]));
-  const cities = [...new Set(data.rows.map((r) => r[col.city]))];
-  const citySel = $("citySel");
-  if (!citySel.options.length || citySel.dataset.date !== d) {
-    const cur = citySel.value;
-    citySel.innerHTML = cities.map((c) => `<option>${c}</option>`).join("");
-    citySel.dataset.date = d;
-    if (cities.includes(cur)) citySel.value = cur;
-  }
-  const city = citySel.value;
-  const rows = data.rows.filter((r) => r[col.city] === city);
-  const cols = ["model", "valid_kst", "step_h", "t2m_C", "tcc_pct",
-                "lcc_pct", "mcc_pct", "hcc_pct", "dswrf_avg_Wm2"];
-  const head = ["모델", "유효(KST)", "+h", "기온℃", "전운%", "하층", "중층", "상층", "일사W/㎡"];
-  let html = "<table><tr>" + head.map((h) => `<th>${h}</th>`).join("") + "</tr>";
-  for (const r of rows) {
-    html += "<tr>" + cols.map((c) =>
-      `<td>${r[col[c]] === null || r[col[c]] === undefined ? "-" : r[col[c]]}</td>`).join("") + "</tr>";
-  }
-  $("cityTable").innerHTML = html + "</table>";
 }
 
 // ── 검증 탭: 일별 검증표 ──
@@ -258,8 +238,13 @@ async function renderVerifDaily() {
           if (!fe) return "<td>-</td>";
           const [f, e] = fe;
           if (e === null) return `<td>${fmt(f)} (-)</td>`;
-          const col = Math.abs(e) >= big ? "#c00" : "#888";
-          return `<td>${fmt(f)}<span style="color:${col};font-size:11px"> (${e > 0 ? "+" : ""}${e.toFixed(nd)})</span></td>`;
+          // 배경 진하기 = |오차| (임계값에서 포화), 색상 = 부호(+빨강 과대 / −초록 저평가)
+          const frac = Math.min(Math.abs(e) / big, 1);
+          const bg = e > 0 ? `rgba(200,30,30,${(frac * 0.9).toFixed(2)})`
+                           : `rgba(20,130,60,${(frac * 0.9).toFixed(2)})`;
+          const fg = frac >= 0.55 ? "#fff" : "#111";
+          return `<td style="background:${bg};color:${fg}">${fmt(f)}` +
+                 `<span style="font-size:11px;color:${fg};opacity:.85"> (${e > 0 ? "+" : ""}${e.toFixed(nd)})</span></td>`;
         }).join("") + "</tr>";
       }
     }
@@ -290,8 +275,6 @@ async function renderVerif() {
 
   fillDateSel($("dateSel"), (ev) => { state.date = ev.target.value; renderModelBtns(); });
   fillDateSel($("dateSelM"), renderMeteo);
-  fillDateSel($("dateSelT"), renderTable);
-  $("citySel").onchange = renderTable;
 
   obsState.date = dates[0];
   fillDateSel($("dateSelO"), (ev) => { obsState.date = ev.target.value; renderObsVarBtns(); });
@@ -304,7 +287,6 @@ async function renderVerif() {
 
   renderModelBtns();
   renderMeteo();
-  renderTable();
   renderVerif();
   if (vdates.length) renderVerifDaily();
   $("genInfo").textContent =

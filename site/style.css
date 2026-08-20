@@ -32,4 +32,6 @@ table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
 th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: center; }
 th { background: #f0f0f0; position: sticky; top: 0; }
 .note { color: #999; font-size: 11px; margin-top: 8px; }
+.cmp-name { font-size: 16px; font-weight: bold; margin: 14px 0 4px; text-align: center; }
+.cmp-name span { font-size: 12px; font-weight: normal; color: #888; }
 #caseList li { margin: 4px 0; font-size: 14px; }

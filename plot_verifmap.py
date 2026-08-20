@@ -196,9 +196,10 @@ def small_multiples(sc: pd.DataFrame, var: str, end_day: dt.date, days: int = 30
     cmap = plt.get_cmap("RdBu_r")
     norm = Normalize(-lim, lim)
 
-    fig = plt.figure(figsize=(5.6 * len(models), 6.4))
+    # 세로 적층 — 가로 병렬은 태블릿에서 패널당 폭이 절반 이하로 줄어 판독성 저하
+    fig = plt.figure(figsize=(6.8, 7.0 * len(models)))
     for i, m in enumerate(models, 1):
-        ax = _base_ax(fig, (1, len(models), i))
+        ax = _base_ax(fig, (len(models), 1, i))
         for city, (lon, lat) in CITY_POS.items():
             if (city, m) not in stat.index:
                 continue
