@@ -46,9 +46,10 @@ def copy_outputs(site_dir: str):
         os.makedirs(dst, exist_ok=True)
         for sub in ("maps_ecmwf", "maps_gfs", "meteograms", "obsmaps"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
-                target = os.path.join(dst, os.path.basename(png))
-                if not os.path.exists(target) or os.path.getmtime(png) > os.path.getmtime(target):
-                    shutil.copy2(png, target)
+                # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
+                # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
+                # 같은 파일명의 개선판 이미지가 배포에서 누락됨)
+                shutil.copy2(png, os.path.join(dst, os.path.basename(png)))
         csv = os.path.join(day_dir, "city_forecast.csv")
         if os.path.exists(csv):
             df = pd.read_csv(csv)
