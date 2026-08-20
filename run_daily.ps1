@@ -38,6 +38,7 @@ function Step([string]$name, [string[]]$cmdArgs) {
 
 Step 'ECMWF 수신'   @('fetch_ecmwf.py')
 Step 'GFS 수신'     @('fetch_gfs.py')
+Step 'KIM 수신'     @('fetch_kim.py')
 Step '표출'         @('plot_charts.py')
 Step '예측 적재'    @('verify.py', 'archive')
 Step '채점(어제)'   @('verify.py', 'score')

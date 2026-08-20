@@ -1,0 +1,62 @@
+name: obs-hourly
+
+# 관측 실황 지도만 시간별로 갱신 (2026-08-21 사용자 요청 — "8시인데 6시 관측만 보임").
+# ASOS 시간자료는 정시 후 10~15분께 확정 → 매시 20분 실행, 지연 약 20~80분.
+# 전체 파이프라인(daily.yml)과 site-data 발행이 겹치지 않게 concurrency 그룹 공유.
+
+on:
+  schedule:
+    - cron: "20 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nwp-site-publish
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Seoul
+  PYTHONIOENCODING: utf-8
+  KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+
+jobs:
+  obs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 시스템 의존성 (한글 폰트)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-nanum
+          rm -rf ~/.cache/matplotlib
+
+      - name: Python 의존성
+        run: pip install -r requirements.txt
+
+      - name: 관측 수신·지도 생성 (어제+오늘)
+        run: python plot_obsmap.py
+
+      - name: 사이트 조립·발행 (관측 지도만 추가)
+        run: |
+          mkdir -p site_build
+          git fetch origin site-data
+          git --work-tree=site_build checkout FETCH_HEAD -- .
+          git reset > /dev/null
+          python build_site.py --site-dir site_build
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          export GIT_INDEX_FILE="$(pwd)/.git/site-index"
+          git --work-tree=site_build add -A
+          TREE=$(git write-tree)
+          unset GIT_INDEX_FILE
+          COMMIT=$(git commit-tree "$TREE" -m "obs $(date '+%Y-%m-%d %H:%M KST')")
+          git push --force origin "$COMMIT:refs/heads/site-data"

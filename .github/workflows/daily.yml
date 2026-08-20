@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: daily-nwp
+  group: nwp-site-publish   # obs-hourly와 공유 — site-data 발행 경합 방지
   cancel-in-progress: false
 
 env:
@@ -45,6 +45,7 @@ jobs:
         run: |
           python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패 — 계속"
           python fetch_gfs.py   || echo "::warning::GFS 수신 실패 — 계속"
+          python fetch_kim.py   || echo "::warning::KIM 수신 실패 — 계속"
           python plot_charts.py
           python verify.py archive || echo "::warning::archive 실패 — 계속"
           python verify.py score   || echo "::warning::score 실패 — 계속"

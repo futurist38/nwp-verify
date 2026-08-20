@@ -111,10 +111,15 @@ function renderRunSel() {
 function renderPanelBtns() {
   const compare = state.model === CMP;
   renderRunSel();
-  const panels = compare
-    // 3층운량(cloud3)은 GFS 전용이라 모델비교에서 제외 (ECMWF 오픈데이터에 층별운량 없음)
-    ? [...new Set(cmpModels().flatMap((m) => runEntry(m).panels))].filter((p) => p !== "cloud3")
-    : runEntry(state.model).panels;
+  let panels;
+  if (compare) {
+    // 2개 이상 모델이 가진 패널만 비교 대상 (KIM 합류로 3층운량도 GFS+KIM 비교 가능)
+    const cnt = {};
+    cmpModels().forEach((m) => runEntry(m).panels.forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; }));
+    panels = ["t2m", "tcc", "cloud3"].filter((p) => cnt[p] >= 2);
+  } else {
+    panels = runEntry(state.model).panels;
+  }
   if (!panels.includes(state.panel)) state.panel = panels[0];
   $("panelBtns").innerHTML = panels.map((p) =>
     `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`).join("");

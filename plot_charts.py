@@ -134,6 +134,28 @@ def load_gfs(path):
     return out
 
 
+def load_kim(path):
+    """KIM(k512, fetch_kim.py로 변수 추출된 파일): t2m(°C), tcc/lcc/mcc/hcc(%), dswrf.
+    실측(2026-08-21): 층별 운량 typeOfLevel은 'unknown'이라 shortName으로만 필터.
+    일사는 avg_sdswrf(구간 평균) — GFS와 동일하게 dswrf 키에 담는다."""
+    out = {"tcc": None, "lcc": None, "mcc": None, "hcc": None, "dswrf": None}
+    ds_t = _subset(_open(path, {"shortName": "2t"}))
+    out["t2m"] = ds_t["t2m"] - 273.15
+    out["run"] = pd.Timestamp(ds_t.time.values).to_pydatetime()
+    for sn, key in [("tcc", "tcc"), ("lcc", "lcc"), ("mcc", "mcc"),
+                    ("hcc", "hcc"), ("avg_sdswrf", "dswrf")]:
+        try:
+            ds = _subset(_open(path, {"shortName": sn}))
+            da = ds[list(ds.data_vars)[0]]
+            # 실측 함정(2026-08-21): KIM 운량은 units='%'로 찍혀 있지만 실값은 0~1 비율
+            if key in ("tcc", "lcc", "mcc", "hcc") and float(da.max()) <= 1.5:
+                da = da * 100.0
+            out[key] = da
+        except Exception:
+            print(f"[판독] KIM {sn} 없음")
+    return out
+
+
 def _steps_h(da):
     """step 좌표를 시간(정수 h) 배열로."""
     return (da.step.values / np.timedelta64(1, "h")).astype(int)
@@ -336,7 +358,8 @@ def plot_meteograms(df, out_dir, days=3):
         if sub.empty:
             continue
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 6.5), sharex=True)
-        colors = {"ECMWF": "tab:red", "GFS": "tab:blue"}
+        # 모델 색은 오차 칩 지도와 통일: EC=빨강, GFS=초록, KIM=파랑
+        colors = {"ECMWF": "tab:red", "GFS": "tab:green", "KIM": "tab:blue"}
         for model, g in sub.groupby("model"):
             g = g.sort_values("valid_kst")
             ax1.plot(g["valid_kst"], g["t2m_C"], "-o", ms=3,
@@ -368,15 +391,18 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ecmwf", default=None, help="ECMWF GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--gfs", default=None, help="GFS GRIB 경로 (생략 시 data/ 최신)")
+    p.add_argument("--kim", default=None, help="KIM GRIB 경로 (생략 시 data/ 최신)")
     args = p.parse_args()
 
     def latest(pattern):
-        files = sorted(glob.glob(os.path.join(DATA_DIR, pattern)))
+        files = sorted(f for f in glob.glob(os.path.join(DATA_DIR, pattern))
+                       if not f.endswith("_trial.grib2"))
         return files[-1] if files else None
 
     ec_path = args.ecmwf or latest("ecmwf_*.grib2")
     gfs_path = args.gfs or latest("gfs_*.grib2")
-    if not ec_path and not gfs_path:
+    kim_path = args.kim or latest("kim_*.grib2")
+    if not ec_path and not gfs_path and not kim_path:
         raise SystemExit("판독할 GRIB이 없습니다. fetch_ecmwf.py / fetch_gfs.py 먼저 실행")
 
     today = dt.date.today().strftime("%Y%m%d")
@@ -394,6 +420,11 @@ def main():
         gf = load_gfs(gfs_path)
         plot_maps("GFS", gf, os.path.join(out_dir, "maps_gfs"))
         frames.append(city_series("GFS", gf))
+    if kim_path:
+        print(f"[판독] KIM: {kim_path}")
+        km = load_kim(kim_path)
+        plot_maps("KIM", km, os.path.join(out_dir, "maps_kim"))
+        frames.append(city_series("KIM", km))
 
     df = pd.concat(frames, ignore_index=True)
     csv_path = os.path.join(out_dir, "city_forecast.csv")
