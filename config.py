@@ -32,7 +32,8 @@ ECMWF_STEPS = list(range(0, 145, 3)) + list(range(150, 241, 6))
 GFS_STEPS = list(range(0, 121, 3))
 
 # 지도 그림을 그릴 리드타임(시간). CSV/미티오그램은 전체 스텝 사용.
-MAP_STEPS = list(range(0, 73, 6))
+# 2026-08-21 사용자 확정: 3시간 간격, 120시간까지 (기존 6h/72h)
+MAP_STEPS = list(range(0, 121, 3))
 
 # KST = UTC + 9
 KST_OFFSET_H = 9

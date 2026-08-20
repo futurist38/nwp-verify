@@ -22,6 +22,8 @@ select { padding: 7px 10px; font-size: 14px; border: 1px solid #ccc; border-radi
 .slider-row button { padding: 6px 14px; font-size: 15px; border: 1px solid #ccc;
                      background: #fff; border-radius: 6px; }
 .step-label { text-align: center; color: #555; font-size: 13px; margin-bottom: 6px; }
+.run-label { font-size: 13px; color: #555; display: inline-flex; align-items: center; gap: 4px; }
+.run-label select { padding: 5px 8px; font-size: 13px; }
 .imgwrap { text-align: center; }
 .imgwrap img { max-width: 100%; height: auto; border: 1px solid #e0e0e0; border-radius: 6px;
                background: #fff; display: block; margin: 0 auto 10px; }

@@ -138,21 +138,20 @@ def build_manifest(site_dir: str):
             m = PNG_RE.match(fn)
             if m:
                 mdl = m["model"].upper()
-                e = entry["models"].setdefault(
-                    mdl, {"run": m["run"], "steps": [], "panels": []})
-                # 최신 런만 남긴다 (하루 2회 배치로 런이 갱신될 수 있음)
-                if m["run"] > e["run"]:
-                    e.update({"run": m["run"], "steps": [], "panels": []})
-                if m["run"] == e["run"]:
-                    s = int(m["step"])
-                    if s not in e["steps"]:
-                        e["steps"].append(s)
-                    if m["panel"] not in e["panels"]:
-                        e["panels"].append(m["panel"])
+                e = entry["models"].setdefault(mdl, {"runs": {}, "latest": None})
+                # 런별로 전부 보존 (2026-08-21 런 선택 기능 — 하루 2회 배치가 축적)
+                r = e["runs"].setdefault(m["run"], {"steps": [], "panels": []})
+                s = int(m["step"])
+                if s not in r["steps"]:
+                    r["steps"].append(s)
+                if m["panel"] not in r["panels"]:
+                    r["panels"].append(m["panel"])
             elif fn.startswith("meteogram_"):
                 entry["meteograms"].append(fn)
         for e in entry["models"].values():
-            e["steps"].sort()
+            for r in e["runs"].values():
+                r["steps"].sort()
+            e["latest"] = max(e["runs"])
         if os.path.exists(os.path.join(site_dir, "daily", f"{ymd}.json")):
             entry["daily_json"] = f"daily/{ymd}.json"
         if entry["models"] or entry["meteograms"] or entry["obs"]:

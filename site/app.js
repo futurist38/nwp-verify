@@ -4,7 +4,7 @@
 
 const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량" };
 let MF = null;
-let state = { date: null, model: null, panel: null, stepIdx: 0 };
+let state = { date: null, model: null, panel: null, stepIdx: 0, runs: {} };
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,14 +39,21 @@ function fillDateSel(sel, onchange) {
 
 // ── 차트 탭 ──
 function entry() { return MF.dates[state.date]; }
-function modelEntry() { return entry().models[state.model]; }
 
 const CMP = "모델비교";
+let firstChart = true;   // 첫 진입 시 현재 시각에 가장 가까운 스텝으로
 function cmpModels() { return Object.keys(entry().models); }
+function runOf(m) {
+  // 선택된 런(드롭다운) 우선, 없거나 그 날짜에 없는 런이면 최신
+  const e = entry().models[m];
+  const r = state.runs[m];
+  return (r && e.runs[r]) ? r : e.latest;
+}
+function runEntry(m) { const e = entry().models[m]; const r = runOf(m); return { run: r, ...e.runs[r] }; }
 function cmpSteps() {
   // 모델 공통 유효시각(KST epoch) — 런이 달라도 같은 시각끼리 비교
   const sets = cmpModels().map((m) => {
-    const e = entry().models[m];
+    const e = runEntry(m);
     return new Set(e.steps.map((s) => validEpoch(e.run, s)));
   });
   return [...sets[0]].filter((t) => sets.every((st) => st.has(t))).sort((a, b) => a - b);
@@ -54,6 +61,16 @@ function cmpSteps() {
 function validEpoch(run10, stepH) {
   return Date.UTC(+run10.slice(0, 4), +run10.slice(4, 6) - 1, +run10.slice(6, 8),
                   +run10.slice(8, 10)) + stepH * 3600e3;
+}
+function fmtRun(run10) { return `${run10.slice(4, 6)}-${run10.slice(6, 8)} ${run10.slice(8)}z`; }
+function relNow(epochUTC) {
+  // 현재 시각 기준 상대 표시 — 순수 클라이언트 계산(부하 없음)
+  const dh = (epochUTC - Date.now()) / 3600e3;
+  if (Math.abs(dh) < 0.75) return "지금";
+  const h = Math.round(Math.abs(dh));
+  const d = Math.floor(h / 24);
+  const s = d >= 1 ? `${d}일 ${h - d * 24}시간` : `${h}시간`;
+  return dh > 0 ? `${s} 후` : `${s} 전`;
 }
 
 function renderModelBtns() {
@@ -74,26 +91,52 @@ function renderModelBtns() {
   });
   renderPanelBtns();
 }
+function renderRunSel() {
+  const compare = state.model === CMP;
+  const models = compare ? cmpModels() : [state.model];
+  $("runSel").innerHTML = models.map((m) => {
+    const e = entry().models[m];
+    const runs = Object.keys(e.runs).sort().reverse();
+    if (runs.length < 2 && !compare) return "";
+    const cur = runOf(m);
+    return `<label class="run-label">${compare ? m + " 런" : "런"}
+      <select data-m="${m}">` + runs.map((r) =>
+        `<option value="${r}" ${r === cur ? "selected" : ""}>${fmtRun(r)}</option>`).join("")
+      + `</select></label>`;
+  }).join("");
+  $("runSel").querySelectorAll("select").forEach((s) => {
+    s.onchange = () => { state.runs[s.dataset.m] = s.value; renderPanelBtns(); };
+  });
+}
 function renderPanelBtns() {
   const compare = state.model === CMP;
+  renderRunSel();
   const panels = compare
     // 3층운량(cloud3)은 GFS 전용이라 모델비교에서 제외 (ECMWF 오픈데이터에 층별운량 없음)
-    ? [...new Set(cmpModels().flatMap((m) => entry().models[m].panels))].filter((p) => p !== "cloud3")
-    : modelEntry().panels;
+    ? [...new Set(cmpModels().flatMap((m) => runEntry(m).panels))].filter((p) => p !== "cloud3")
+    : runEntry(state.model).panels;
   if (!panels.includes(state.panel)) state.panel = panels[0];
   $("panelBtns").innerHTML = panels.map((p) =>
     `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`).join("");
   $("panelBtns").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { state.panel = b.dataset.p; renderPanelBtns(); };
   });
-  const n = compare ? cmpSteps().length : modelEntry().steps.length;
-  $("stepSlider").max = Math.max(0, n - 1);
-  if (state.stepIdx > n - 1) state.stepIdx = 0;
+  const epochs = compare ? cmpSteps()
+    : runEntry(state.model).steps.map((s) => validEpoch(runEntry(state.model).run, s));
+  $("stepSlider").max = Math.max(0, epochs.length - 1);
+  if (firstChart && epochs.length) {
+    // 첫 진입: 현재 시각에 가장 가까운 유효시각으로
+    const now = Date.now();
+    state.stepIdx = epochs.reduce((bi, t, i) =>
+      Math.abs(t - now) < Math.abs(epochs[bi] - now) ? i : bi, 0);
+    firstChart = false;
+  }
+  if (state.stepIdx > epochs.length - 1) state.stepIdx = 0;
   renderChart();
 }
 function imgPathFor(model, stepH) {
-  const e = entry().models[model];
-  return `archive/${state.date}/${model.toLowerCase()}_${e.run}_f${String(stepH).padStart(3, "0")}_${state.panel}.png`;
+  const run = runOf(model);
+  return `archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.png`;
 }
 function renderChart() {
   $("stepSlider").value = state.stepIdx;
@@ -104,28 +147,29 @@ function renderChart() {
     const d = new Date(t + 9 * 3600e3);
     const p = (n) => String(n).padStart(2, "0");
     $("stepLabel").textContent =
-      `유효 ${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시 KST — 전 모델 동시 표시`;
+      `유효 ${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시 KST (${relNow(t)}) — 전 모델 동시 표시`;
     $("chartStack").innerHTML = cmpModels().map((m) => {
-      const e = entry().models[m];
+      const e = runEntry(m);
       const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
       if (!e.steps.includes(stepH) || !e.panels.includes(state.panel)) return "";
       return `<div class="cmp-item">`
-           + `<div class="cmp-name">${m} <span>(런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC +${stepH}h)</span></div>`
+           + `<div class="cmp-name">${m} <span>(런 ${fmtRun(e.run)} +${stepH}h)</span></div>`
            + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy"></div>`;
     }).join("");
     return;
   }
-  const e = modelEntry();
+  const e = runEntry(state.model);
   const step = e.steps[state.stepIdx];
+  const t = validEpoch(e.run, step);
   $("stepLabel").textContent =
-    `+${step}h → 유효 ${validKST(e.run, step)} (런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC)`;
+    `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
   $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트">`;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
     if (i >= 0 && i < e.steps.length) new Image().src = imgPathFor(state.model, e.steps[i]);
   });
 }
 function maxStepIdx() {
-  return (state.model === CMP ? cmpSteps().length : modelEntry().steps.length) - 1;
+  return (state.model === CMP ? cmpSteps().length : runEntry(state.model).steps.length) - 1;
 }
 $("stepSlider").oninput = (ev) => { state.stepIdx = +ev.target.value; renderChart(); };
 $("stepPrev").onclick = () => { if (state.stepIdx > 0) { state.stepIdx--; renderChart(); } };
@@ -136,6 +180,10 @@ $("stepNext").onclick = () => {
 // ── 관측 탭 ──
 const OBS_LABEL = { ta: "기온", feel: "체감온도", si: "일사" };
 const OBS_ORDER = ["ta", "feel", "si"];   // 탭 순서 (사용자 지정)
+let firstObs = true;
+function obsEpoch(ymd, hour) {  // 관측일(KST)+시 → UTC epoch
+  return Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), hour) - 9 * 3600e3;
+}
 let obsState = { date: null, v: null, idx: 0 };
 
 function obsEntry() { return MF.dates[obsState.date].obs || {}; }
@@ -157,6 +205,14 @@ function renderObsVarBtns() {
   });
   const hours = obsEntry()[obsState.v];
   $("obsSlider").max = hours.length - 1;
+  if (firstObs && hours.length) {
+    // 첫 진입: 현재 시각에 가장 가까운 관측 시각으로
+    const now = Date.now();
+    obsState.idx = hours.reduce((bi, h, i) =>
+      Math.abs(obsEpoch(obsState.date, h) - now) <
+      Math.abs(obsEpoch(obsState.date, hours[bi]) - now) ? i : bi, 0);
+    firstObs = false;
+  }
   if (obsState.idx > hours.length - 1) obsState.idx = hours.length - 1;
   renderObs();
 }
@@ -167,8 +223,9 @@ function obsPath(i) {
 function renderObs() {
   const hours = obsEntry()[obsState.v];
   $("obsSlider").value = obsState.idx;
+  const h = hours[obsState.idx];
   $("obsLabel").textContent =
-    `${fmtDate(obsState.date)} ${String(hours[obsState.idx]).padStart(2, "0")}시 KST 실황`;
+    `${fmtDate(obsState.date)} ${String(h).padStart(2, "0")}시 KST 실황 (${relNow(obsEpoch(obsState.date, h))})`;
   $("obsImg").src = obsPath(obsState.idx);
   [obsState.idx - 1, obsState.idx + 1].forEach((i) => {
     if (i >= 0 && i < hours.length) new Image().src = obsPath(i);
