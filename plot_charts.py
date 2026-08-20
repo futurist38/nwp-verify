@@ -206,19 +206,20 @@ def plot_maps(model_name, data, out_dir):
 
     def _save(step_h, panel, draw):
         nonlocal n_saved
-        fig = plt.figure(figsize=(6.4, 6.8))
+        # 그림 크기를 지도 종횡비(경도15°×위도13°)+콜로바에 맞춰 여백 최소화.
+        # 주의: bbox_inches="tight"는 gridliner(경위선 라벨)와 충돌해 지도가 잘려나감
+        # (2026-08-20 실측: 105px 폭 PNG). tight_layout도 금지(GEOSException) — 수동 여백만.
+        fig = plt.figure(figsize=(7.4, 5.9))
         # 전운량은 위성영상풍(어두운 배경)이라 경계선을 노란색으로
         ax = _make_ax(fig, (1, 1, 1), line_color="gold" if panel == "tcc" else "black")
         draw(fig, ax)
         vkst = _valid_kst(run, step_h)
         ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
                      f"유효 {vkst:%m-%d %H}KST", fontsize=11)
-        # tight_layout은 cartopy gridliner 경계를 깨뜨려 GEOSException (2026-08-14 실측)
-        fig.subplots_adjust(top=0.93, bottom=0.06, left=0.08, right=0.96)
+        fig.subplots_adjust(top=0.92, bottom=0.08, left=0.07, right=0.97)
         fname = os.path.join(
             out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}_{panel}.png")
-        # bbox_inches="tight": 그림 내부 흰 여백 제거 (웹 표시 공간 낭비 지적)
-        fig.savefig(fname, dpi=100, bbox_inches="tight", pad_inches=0.15)
+        fig.savefig(fname, dpi=100)
         plt.close(fig)
         n_saved += 1
 
