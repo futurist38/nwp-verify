@@ -26,7 +26,8 @@ import pandas as pd
 
 from config import BASE_DIR, OUT_DIR, VERIF_DIR
 
-MAX_DAYS = 90          # 지도 PNG 보존 일수 (셀룰러·저장소 용량 고려)
+MAX_DAYS = 90          # 모델 지도 PNG 보존 일수
+OBS_MAX_DAYS = 30      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
 
 PNG_RE = re.compile(r"^(?P<model>[a-z]+)_(?P<run>\d{10})_f(?P<step>\d{3})_(?P<panel>\w+)\.png$")
@@ -60,13 +61,19 @@ def copy_outputs(site_dir: str):
 
     # 보존 기한 초과 정리 (지도만 — daily JSON·검증 자료는 전 기간 유지)
     cutoff = (dt.date.today() - dt.timedelta(days=MAX_DAYS)).strftime("%Y%m%d")
-    removed = 0
+    cutoff_obs = (dt.date.today() - dt.timedelta(days=OBS_MAX_DAYS)).strftime("%Y%m%d")
+    removed = n_obs = 0
     for d in glob.glob(os.path.join(arch, "????????")):
-        if os.path.basename(d) < cutoff:
+        ymd = os.path.basename(d)
+        if ymd < cutoff:
             shutil.rmtree(d)
             removed += 1
-    if removed:
-        print(f"[site] 보존기한({MAX_DAYS}일) 초과 {removed}일치 지도 삭제")
+        elif ymd < cutoff_obs:
+            for f in glob.glob(os.path.join(d, "obs_*.png")):
+                os.remove(f)
+                n_obs += 1
+    if removed or n_obs:
+        print(f"[site] 보존기한 정리: 지도 {removed}일치, 관측 PNG {n_obs}장 삭제")
 
 
 def copy_verif(site_dir: str):

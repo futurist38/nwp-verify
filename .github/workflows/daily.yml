@@ -73,12 +73,14 @@ jobs:
           fi
           python build_site.py --site-dir site_build
 
-      - name: site-data 브랜치 발행 (이력 없는 단일 커밋 — 저장소 비대 방지)
+      - name: site-data 브랜치 발행 (단일 커밋, 변경 블롭만 전송)
+        # 새 git init 방식은 매일 사이트 전체를 재전송한다(아카이브 커지면 수백 MB).
+        # 본 저장소의 객체 DB(site-data fetch 완료 상태)를 공유하는 commit-tree로
+        # 변경된 파일만 팩에 담긴다.
         run: |
-          cd site_build
-          git init -q -b site-data
-          git config user.name "nwp-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          git commit -q -m "site $(date '+%Y-%m-%d %H:%M KST')"
-          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" site-data
+          export GIT_INDEX_FILE="$(pwd)/.git/site-index"
+          git --work-tree=site_build add -A
+          TREE=$(git write-tree)
+          unset GIT_INDEX_FILE
+          COMMIT=$(git commit-tree "$TREE" -m "site $(date '+%Y-%m-%d %H:%M KST')")
+          git push --force origin "$COMMIT:refs/heads/site-data"
