@@ -51,6 +51,15 @@ EXT = [124.8, 130.2, 33.0, 38.9]
 MODEL_ORDER = ["ECMWF", "GFS", "KIM"]
 MODEL_SHORT = {"ECMWF": "EC", "GFS": "GFS", "KIM": "KIM"}
 
+# 모델 고유색 (사용자 지정 2026-08-20): EC=빨강, GFS=주황, KIM=파랑.
+# 색상=모델 식별, 진하기=|ME| 크기. 부호는 칩 안 수치(±)로 읽는다.
+MODEL_CMAP = {"ECMWF": "Reds", "GFS": "Oranges", "KIM": "Blues"}
+
+# 한국 표준 람베르트 정각원추 — PlateCarree는 위도 36°에서 가로 1.24배 왜곡(실측 지적)
+def _proj():
+    return ccrs.LambertConformal(central_longitude=127.5,
+                                 standard_parallels=(30, 60))
+
 # 표출 지점 (사용자 지정) — config.CITIES에서 좌표 참조
 CHIP_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉"]
 CITY_POS = {c[0]: (c[2], c[1]) for c in CITIES}  # name → (lon, lat)
@@ -80,8 +89,8 @@ def load_scores(days: int = 40) -> pd.DataFrame:
 
 def _base_ax(fig, pos=(1, 1, 1)):
     if HAS_CARTOPY:
-        ax = fig.add_subplot(*pos, projection=ccrs.PlateCarree())
-        ax.set_extent(EXT)
+        ax = fig.add_subplot(*pos, projection=_proj())
+        ax.set_extent(EXT, crs=ccrs.PlateCarree())
         ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="#f7f5f0")
         ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="#eef1f5")
         ax.coastlines(resolution="50m", linewidth=0.5)
@@ -90,6 +99,13 @@ def _base_ax(fig, pos=(1, 1, 1)):
         ax.set_xlim(EXT[0], EXT[1]); ax.set_ylim(EXT[2], EXT[3])
         ax.set_aspect(1.0 / np.cos(np.deg2rad(36)))
     return ax
+
+
+def _xy(ax, lon, lat):
+    """경위도 → 그리기 좌표 (LCC 미터 / 폴백 시 도)."""
+    if HAS_CARTOPY:
+        return ax.projection.transform_point(lon, lat, ccrs.PlateCarree())
+    return lon, lat
 
 
 def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
@@ -102,55 +118,64 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
         ME="mean", MAE=lambda e: e.abs().mean(), n="count")
 
     models = [m for m in MODEL_ORDER if m in g["model"].unique()]
-    cmap = plt.get_cmap("RdBu_r")
-    norm = Normalize(-lim, lim)
 
     fig = plt.figure(figsize=(6.8, 7.4))
     ax = _base_ax(fig)
+
+    # 정사각형 칩 크기 (LCC 미터 / 폴백 도)
+    base = 42_000 if HAS_CARTOPY else 0.42
+    gap = base * 0.18
+    lab_off = base * 0.55
 
     for city in CHIP_CITIES:
         if city not in CITY_POS:
             continue
         lon0, lat0 = CITY_POS[city]
         dx, dy = CHIP_OFFSET.get(city, (0, 0))
-        lon, lat = lon0 + dx, lat0 + dy
+        x0, y0 = _xy(ax, lon0, lat0)
+        x, y = _xy(ax, lon0 + dx, lat0 + dy)
         rows = {m: stat.loc[(city, m)] for m in models if (city, m) in stat.index}
         if not rows:
             continue
         best = min(rows, key=lambda m: rows[m]["MAE"])  # 신뢰도(낮은 MAE) 모델
-        ax.plot(lon0, lat0, "o", ms=3, color="#333", zorder=4)
+        ax.plot(x0, y0, "o", ms=3, color="#333", zorder=4)
         if (dx, dy) != (0, 0):
-            ax.plot([lon0, lon], [lat0, lat], "-", color="#888",
-                    linewidth=0.7, zorder=3)
-        ax.text(lon, lat + 0.10, city, ha="center", fontsize=10,
+            ax.plot([x0, x], [y0, y], "-", color="#888", linewidth=0.7, zorder=3)
+        ax.text(x, y + lab_off, city, ha="center", fontsize=10,
                 weight="bold", zorder=5,
                 path_effects=[pe.withStroke(linewidth=2.5, foreground="white")])
-        y = lat - 0.10
-        for m in models:
-            if m not in rows:
-                continue
-            me, mae = rows[m]["ME"], rows[m]["MAE"]
-            scale = 1.25 if m == best else 0.8   # 신뢰 모델 칩을 크게
-            w, hgt = CHIP_W * scale, CHIP_H * scale
-            y -= hgt + 0.04
-            face = cmap(norm(me))
-            ax.add_patch(mpatches.Rectangle(
-                (lon - w / 2, y), w, hgt, facecolor=face,
-                edgecolor="#333", linewidth=1.4 if m == best else 0.6, zorder=4))
-            lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-            ax.text(lon, y + hgt / 2,
-                    f"{MODEL_SHORT[m]} {me:+.1f}",
-                    ha="center", va="center", fontsize=8.5 * (1.1 if m == best else 0.9),
-                    color="white" if lum < 0.55 else "black", zorder=5)
 
-    sm = ScalarMappable(norm=norm, cmap=cmap)
-    fig.colorbar(sm, ax=ax, shrink=0.7,
-                 label=f"ME 평균오차 ({unit}) — 파랑: 저평가 / 빨강: 과대")
+        # 정사각형 칩 가로 배치 — 색=모델, 진하기=|ME|, 큰 칩=기간 MAE 낮음(신뢰)
+        present = [m for m in models if m in rows]
+        sizes = {m: base * (1.25 if m == best else 0.85) for m in present}
+        total_w = sum(sizes.values()) + gap * (len(present) - 1)
+        cx = x - total_w / 2
+        for m in present:
+            me = rows[m]["ME"]
+            s = sizes[m]
+            frac = min(abs(me) / lim, 1.0)
+            face = plt.get_cmap(MODEL_CMAP[m])(0.20 + 0.65 * frac)
+            ax.add_patch(mpatches.Rectangle(
+                (cx, y - s / 2 - lab_off), s, s, facecolor=face,
+                edgecolor="#333", linewidth=1.5 if m == best else 0.6, zorder=4))
+            lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
+            ax.text(cx + s / 2, y - lab_off, f"{me:+.1f}",
+                    ha="center", va="center",
+                    fontsize=9.5 if m == best else 8,
+                    color="white" if lum < 0.55 else "black", zorder=5)
+            cx += s + gap
+
+    # 레전드: 색=모델 (진하기=|ME| 크기 안내 포함)
+    handles = [mpatches.Patch(facecolor=plt.get_cmap(MODEL_CMAP[m])(0.6),
+                              edgecolor="#333", label=m) for m in models]
+    ax.legend(handles=handles, loc="upper left", fontsize=9, framealpha=0.9,
+              title=f"진할수록 |오차| 큼 (±{lim:g}{unit} 포화)", title_fontsize=8)
+
     period = (f"{end_day:%m/%d}" if wkey == "d"
               else f"{start:%m/%d}~{end_day:%m/%d} ({WINDOWS[wkey]}일)")
-    ax.set_title(f"{title} 관측오차 (예측-실황)  {period}\n"
+    ax.set_title(f"{title} 관측오차 ME (예측-실황, {unit})  {period}\n"
                  f"큰 칩·굵은 테두리 = 기간 MAE 낮음(신뢰)", fontsize=11)
-    fig.subplots_adjust(top=0.91, bottom=0.03, left=0.05, right=0.98)
+    fig.subplots_adjust(top=0.91, bottom=0.03, left=0.03, right=0.97)
     out = os.path.join(VERIF_DIR, f"verifmap_{var}_{wkey}.png")
     fig.savefig(out, dpi=100)
     plt.close(fig)
@@ -177,9 +202,11 @@ def small_multiples(sc: pd.DataFrame, var: str, end_day: dt.date, days: int = 30
             if (city, m) not in stat.index:
                 continue
             me = stat.loc[(city, m)]
-            ax.scatter(lon, lat, s=260, c=[cmap(norm(me))],
+            x, y = _xy(ax, lon, lat)
+            off = 22_000 if HAS_CARTOPY else 0.22
+            ax.scatter(x, y, s=260, c=[cmap(norm(me))],
                        edgecolors="#333", linewidths=0.7, zorder=4)
-            ax.text(lon, lat - 0.22, f"{city}\n{me:+.1f}", ha="center", va="top",
+            ax.text(x, y - off, f"{city}\n{me:+.1f}", ha="center", va="top",
                     fontsize=8, zorder=5,
                     path_effects=[pe.withStroke(linewidth=2, foreground="white")])
         ax.set_title(m, fontsize=12)

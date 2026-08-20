@@ -95,12 +95,15 @@ $("stepNext").onclick = () => {
 };
 
 // ── 관측 탭 ──
-const OBS_LABEL = { ta: "기온", si: "일사", feel: "체감온도" };
+const OBS_LABEL = { ta: "기온", feel: "체감온도", si: "일사" };
+const OBS_ORDER = ["ta", "feel", "si"];   // 탭 순서 (사용자 지정)
 let obsState = { date: null, v: null, idx: 0 };
 
 function obsEntry() { return MF.dates[obsState.date].obs || {}; }
 function renderObsVarBtns() {
-  const vars = Object.keys(obsEntry());
+  const present = Object.keys(obsEntry());
+  const vars = OBS_ORDER.filter((v) => present.includes(v))
+    .concat(present.filter((v) => !OBS_ORDER.includes(v)));
   if (!vars.length) {
     $("obsVarBtns").innerHTML = "";
     $("obsImg").removeAttribute("src");

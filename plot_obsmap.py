@@ -51,18 +51,25 @@ except Exception:
 # 남한 관측 영역 (모델 지도보다 좁게)
 EXT = [125.0, 130.0, 33.0, 38.8]
 GRID_RES = 0.05
-HOURS = list(range(0, 24, 3))
+HOURS = list(range(24))   # 1시간 단위 (2026-08-20 사용자 요청)
 
 # 표출 지점 (사용자 지정, 2026-08-20)
 LABEL_CITIES = [("서울", 108), ("대전", 133), ("대구", 143),
                 ("부산", 159), ("광주", 156), ("강릉", 105)]
 
+# 색축은 절대 고정 (사용자 원칙: 오늘의 20℃와 내일의 20℃는 같은 색이어야 한다.
+# 계절·일교차와 무관하게 값→색 매핑 불변). 좁은 구간 대비는 다색 turbo로 확보.
 VARS = {
     # key: (컬럼계산, cmap, vmin, vmax, 제목, 단위)
-    "ta":   ("TA",   "RdYlBu_r", -15, 38, "기온", "℃"),
-    "si":   ("SI",   "YlOrRd",     0,  4, "일사", "MJ/㎡·h"),
-    "feel": ("FEEL", "RdYlBu_r", -15, 38, "체감온도", "℃"),
+    "ta":   ("TA",   "turbo", -15, 40, "기온", "℃"),
+    "feel": ("FEEL", "turbo", -15, 40, "체감온도", "℃"),
+    "si":   ("SI",   "YlOrRd",   0,  4, "일사", "MJ/㎡·h"),
 }
+
+# 한국 표준 람베르트 정각원추 — PlateCarree는 위도 36°에서 가로 1.24배 왜곡
+def _proj():
+    return ccrs.LambertConformal(central_longitude=127.5,
+                                 standard_parallels=(30, 60))
 
 
 def feel_temp(ta, hm, ws):
@@ -120,29 +127,35 @@ def draw_map(df_h: pd.DataFrame, var_key: str, day: dt.date, hour: int, out_dir:
 
     fig = plt.figure(figsize=(6.4, 7.2))
     if HAS_CARTOPY:
-        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-        ax.set_extent(EXT)
+        ax = fig.add_subplot(1, 1, 1, projection=_proj())
+        ax.set_extent(EXT, crs=ccrs.PlateCarree())
+        tf = {"transform": ccrs.PlateCarree()}
     else:
         ax = fig.add_subplot(1, 1, 1)
         ax.set_xlim(EXT[0], EXT[1]); ax.set_ylim(EXT[2], EXT[3])
         ax.set_aspect(1.0 / np.cos(np.deg2rad(36)))
+        tf = {}
 
-    pm = ax.pcolormesh(gx, gy, gz, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto")
+    pm = ax.pcolormesh(gx, gy, gz, cmap=cmap, vmin=vmin, vmax=vmax,
+                       shading="auto", **tf)
     if HAS_CARTOPY:
         ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="#eef1f5", zorder=2)
         ax.coastlines(resolution="50m", linewidth=0.6, zorder=3)
     fig.colorbar(pm, ax=ax, shrink=0.8, label=f"{title} ({unit})")
 
     # 주요 도시 라벨 (실측 원값)
+    import matplotlib.patheffects as pe
     stn_val = pts.set_index("STN")[col]
     for name, stn in LABEL_CITIES:
         if stn in stn_val.index:
             row = pts[pts["STN"] == stn].iloc[0]
-            ax.plot(row["lon"], row["lat"], "o", ms=4, mfc="white", mec="black", zorder=4)
-            ax.annotate(f"{name}\n{stn_val[stn]:.1f}", (row["lon"], row["lat"]),
-                        textcoords="offset points", xytext=(5, -12),
-                        fontsize=8, zorder=4,
-                        path_effects=None)
+            ax.plot(row["lon"], row["lat"], "o", ms=4, mfc="white", mec="black",
+                    zorder=4, **tf)
+            ax.text(row["lon"] + 0.05, row["lat"] - 0.08,
+                    f"{name}\n{stn_val[stn]:.1f}",
+                    fontsize=8, va="top", zorder=4,
+                    path_effects=[pe.withStroke(linewidth=2, foreground="white")],
+                    **tf)
 
     ax.set_title(f"ASOS {title} 실황  {day:%m-%d} {hour:02d}시 KST  (지점 {len(pts)}개 보간)",
                  fontsize=11)
@@ -159,23 +172,13 @@ def make_day(day: dt.date) -> int:
         print(f"[관측지도] {day}: 실황 없음 — 생략")
         return 0
     out_dir = os.path.join(OUT_DIR, f"{day:%Y%m%d}", "obsmaps")
-
-    # 기온·체감은 당일 실측 범위로 색축 고정 (하루 안에서는 동일 → 시간 간 비교 가능,
-    # 8월에 -15~38 고정축을 쓰면 대비가 사라지는 문제 회피)
-    df_feel = df.assign(FEEL=feel_temp(df["TA"], df["HM"], df["WS"]))
-    vranges = {}
-    for key, col in [("ta", "TA"), ("feel", "FEEL")]:
-        s = df_feel[col].dropna()
-        if len(s):
-            vranges[key] = (float(np.floor(s.min() - 1)), float(np.ceil(s.max() + 1)))
-
     n = 0
     for hour in HOURS:
         df_h = df[df["TM"].dt.hour == hour]
         if df_h.empty:
             continue
         for var_key in VARS:
-            if draw_map(df_h, var_key, day, hour, out_dir, vranges.get(var_key)):
+            if draw_map(df_h, var_key, day, hour, out_dir):
                 n += 1
     print(f"[관측지도] {day}: {n}장 저장 → {out_dir}")
     return n
