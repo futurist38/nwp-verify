@@ -196,10 +196,10 @@ def small_multiples(sc: pd.DataFrame, var: str, end_day: dt.date, days: int = 30
     cmap = plt.get_cmap("RdBu_r")
     norm = Normalize(-lim, lim)
 
-    # 세로 적층 — 가로 병렬은 태블릿에서 패널당 폭이 절반 이하로 줄어 판독성 저하
-    fig = plt.figure(figsize=(6.8, 7.0 * len(models)))
+    # 가로 병렬 (사용자 지정 — 페이지 폭 확대와 함께 적용)
+    fig = plt.figure(figsize=(6.8 * len(models), 7.2))
     for i, m in enumerate(models, 1):
-        ax = _base_ax(fig, (len(models), 1, i))
+        ax = _base_ax(fig, (1, len(models), i))
         for city, (lon, lat) in CITY_POS.items():
             if (city, m) not in stat.index:
                 continue

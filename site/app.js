@@ -109,8 +109,9 @@ function renderChart() {
       const e = entry().models[m];
       const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
       if (!e.steps.includes(stepH) || !e.panels.includes(state.panel)) return "";
-      return `<div class="cmp-name">${m} <span>(런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC +${stepH}h)</span></div>`
-           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy">`;
+      return `<div class="cmp-item">`
+           + `<div class="cmp-name">${m} <span>(런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC +${stepH}h)</span></div>`
+           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy"></div>`;
     }).join("");
     return;
   }
@@ -230,7 +231,7 @@ async function renderVerifDaily() {
       hours.map((h) => `<th>${String(h).padStart(2, "0")}시</th>`).join("") + "</tr>";
     for (const city of CITY_ORDER.filter((c) => vd[c])) {
       const c = vd[city];
-      html += `<tr><th>${city} 관측</th>` + hours.map((h) =>
+      html += `<tr class="city-sep"><th>${city} 관측</th>` + hours.map((h) =>
         `<td><b>${fmt(c.obs[h])}</b></td>`).join("") + "</tr>";
       for (const m of models.filter((m) => c.models[m])) {
         html += `<tr><th>　${m}</th>` + hours.map((h) => {

@@ -238,10 +238,17 @@ def plot_maps(model_name, data, out_dir):
 
         tcc = _sel_step(data["tcc"], step_h) if data.get("tcc") is not None else None
         if tcc is not None:
-            def draw_tcc(fig, ax, _c=tcc, _lo=lon2d, _la=lat2d):
-                # 위성영상풍: 0%=어두움, 100%=밝음(구름=흰색)
-                pm = ax.pcolormesh(_lo, _la, _c.values, cmap="gray",
-                                   vmin=0, vmax=100, shading="auto")
+            def draw_tcc(fig, ax, _c=tcc):
+                # 위성영상풍: 0%=어두움, 100%=밝음(구름=흰색).
+                # 원자료 0.25°의 픽셀 블록은 bilinear 표시 보간으로 매끈하게
+                # (해상도 자체는 오픈데이터 한계 — 시각 보간일 뿐임을 명시)
+                origin = "upper" if _c.latitude[0] > _c.latitude[-1] else "lower"
+                kw = {"transform": ccrs.PlateCarree()} if HAS_CARTOPY else {}
+                pm = ax.imshow(_c.values, origin=origin, cmap="gray",
+                               vmin=0, vmax=100, interpolation="bilinear",
+                               extent=[float(_c.longitude.min()), float(_c.longitude.max()),
+                                       float(_c.latitude.min()), float(_c.latitude.max())],
+                               **kw)
                 fig.colorbar(pm, ax=ax, shrink=0.8, label="전운량 (%)")
             _save(step_h, "tcc", draw_tcc)
 

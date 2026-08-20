@@ -1,6 +1,6 @@
 * { box-sizing: border-box; margin: 0; }
 body { font-family: "Malgun Gothic", "NanumGothic", sans-serif; background: #fafafa;
-       color: #222; max-width: 760px; margin: 0 auto; padding: 0 10px 40px; }
+       color: #222; max-width: 1240px; margin: 0 auto; padding: 0 10px 40px; }
 header { padding: 14px 0 6px; }
 h1 { font-size: 20px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
@@ -34,4 +34,11 @@ th { background: #f0f0f0; position: sticky; top: 0; }
 .note { color: #999; font-size: 11px; margin-top: 8px; }
 .cmp-name { font-size: 16px; font-weight: bold; margin: 14px 0 4px; text-align: center; }
 .cmp-name span { font-size: 12px; font-weight: normal; color: #888; }
+/* 모델비교: 화면이 넓으면 가로 병렬, 좁으면 자동 줄바꿈(태블릿 세로) */
+#chartStack { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+#chartStack > img { flex: 0 1 auto; }
+.cmp-item { flex: 0 1 auto; max-width: 100%; }
+.cmp-item img { max-width: 100%; }
+/* 검증표: 지점 블록 구분 두꺼운 테두리 */
+tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
 #caseList li { margin: 4px 0; font-size: 14px; }
