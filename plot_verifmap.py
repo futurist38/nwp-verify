@@ -30,6 +30,7 @@ import matplotlib.patheffects as pe
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 
+import sslfix  # noqa: F401  (cartopy Natural Earth 다운로드 — AVG TLS 대응)
 from config import CITIES, VERIF_DIR
 
 from matplotlib import font_manager as _fm
@@ -51,9 +52,10 @@ EXT = [124.8, 130.2, 33.0, 38.9]
 MODEL_ORDER = ["ECMWF", "GFS", "KIM"]
 MODEL_SHORT = {"ECMWF": "EC", "GFS": "GFS", "KIM": "KIM"}
 
-# 모델 고유색 (사용자 지정 2026-08-20): EC=빨강, GFS=주황, KIM=파랑.
-# 색상=모델 식별, 진하기=|ME| 크기. 부호는 칩 안 수치(±)로 읽는다.
-MODEL_CMAP = {"ECMWF": "Reds", "GFS": "Oranges", "KIM": "Blues"}
+# 모델 고유색: EC=빨강, GFS=초록, KIM=파랑 (2026-08-20 2차 — 주황은 빨강과
+# 혼동되어 교체). 색상=모델 식별, 진하기=|ME| 크기. 부호는 칩 안 수치(±).
+# 좌→우 순서도 EC→GFS→KIM 고정이라 색약에도 위치로 구분 가능.
+MODEL_CMAP = {"ECMWF": "Reds", "GFS": "Greens", "KIM": "Blues"}
 
 # 한국 표준 람베르트 정각원추 — PlateCarree는 위도 36°에서 가로 1.24배 왜곡(실측 지적)
 def _proj():
@@ -71,8 +73,9 @@ VAR_CFG = {  # var: (색축 절대범위, 단위, 제목)
 WINDOWS = {"d": 1, "7": 7, "30": 30}
 CHIP_W, CHIP_H = 0.95, 0.30   # 경도·위도 단위 기본 칩 크기
 
-# 칩 스택이 겹치는 지점의 수동 오프셋 (경도, 위도) — 실좌표에는 점+지시선
-CHIP_OFFSET = {"부산": (0.75, -0.55), "대구": (-0.15, 0.05)}
+# 칩이 겹치는 지점의 수동 오프셋 (경도, 위도) — 지점명 라벨 제거로 대부분 불필요.
+# 대구·부산 칩 행의 수평 겹침만 소폭 분리 (2026-08-20 2차: 부산은 제 위치 유지)
+CHIP_OFFSET = {"대구": (-0.12, 0.12), "부산": (0.12, -0.12)}
 
 
 def load_scores(days: int = 40) -> pd.DataFrame:
@@ -94,6 +97,9 @@ def _base_ax(fig, pos=(1, 1, 1)):
         ax.add_feature(cfeature.LAND.with_scale("50m"), facecolor="#f7f5f0")
         ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="#eef1f5")
         ax.coastlines(resolution="50m", linewidth=0.5)
+        ax.add_feature(cfeature.NaturalEarthFeature(
+            "cultural", "admin_1_states_provinces_lines", "10m",
+            facecolor="none"), edgecolor="#999", linewidth=0.5)
     else:
         ax = fig.add_subplot(*pos)
         ax.set_xlim(EXT[0], EXT[1]); ax.set_ylim(EXT[2], EXT[3])
@@ -125,7 +131,6 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
     # 정사각형 칩 크기 (LCC 미터 / 폴백 도)
     base = 42_000 if HAS_CARTOPY else 0.42
     gap = base * 0.18
-    lab_off = base * 0.55
 
     for city in CHIP_CITIES:
         if city not in CITY_POS:
@@ -138,12 +143,8 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
         if not rows:
             continue
         best = min(rows, key=lambda m: rows[m]["MAE"])  # 신뢰도(낮은 MAE) 모델
-        ax.plot(x0, y0, "o", ms=3, color="#333", zorder=4)
-        if (dx, dy) != (0, 0):
-            ax.plot([x0, x], [y0, y], "-", color="#888", linewidth=0.7, zorder=3)
-        ax.text(x, y + lab_off, city, ha="center", fontsize=10,
-                weight="bold", zorder=5,
-                path_effects=[pe.withStroke(linewidth=2.5, foreground="white")])
+        ax.plot(x0, y0, "o", ms=4, color="#333", zorder=4)
+        # 지점명 라벨 제거(2026-08-20 2차) — 행정구역 경계선으로 위치 식별
 
         # 정사각형 칩 가로 배치 — 색=모델, 진하기=|ME|, 큰 칩=기간 MAE 낮음(신뢰)
         present = [m for m in models if m in rows]
@@ -156,12 +157,12 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
             frac = min(abs(me) / lim, 1.0)
             face = plt.get_cmap(MODEL_CMAP[m])(0.20 + 0.65 * frac)
             ax.add_patch(mpatches.Rectangle(
-                (cx, y - s / 2 - lab_off), s, s, facecolor=face,
+                (cx, y - s / 2), s, s, facecolor=face,
                 edgecolor="#333", linewidth=1.5 if m == best else 0.6, zorder=4))
             lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-            ax.text(cx + s / 2, y - lab_off, f"{me:+.1f}",
+            ax.text(cx + s / 2, y, f"{me:+.1f}",
                     ha="center", va="center",
-                    fontsize=9.5 if m == best else 8,
+                    fontsize=10 if m == best else 8.5,
                     color="white" if lum < 0.55 else "black", zorder=5)
             cx += s + gap
 

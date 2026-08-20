@@ -30,6 +30,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 
+import sslfix  # noqa: F401  (cartopy Natural Earth 다운로드 — AVG TLS 대응)
 from config import BASE_DIR, OUT_DIR, VERIF_DIR
 
 # 한글 폰트 (plot_charts와 동일 규칙)
@@ -70,6 +71,12 @@ VARS = {
 def _proj():
     return ccrs.LambertConformal(central_longitude=127.5,
                                  standard_parallels=(30, 60))
+
+
+# 행정구역(시·도) 경계 — Natural Earth admin-1
+if HAS_CARTOPY:
+    ADMIN1 = cfeature.NaturalEarthFeature(
+        "cultural", "admin_1_states_provinces_lines", "10m", facecolor="none")
 
 
 def feel_temp(ta, hm, ws):
@@ -123,7 +130,16 @@ def draw_map(df_h: pd.DataFrame, var_key: str, day: dt.date, hour: int, out_dir:
 
     gx, gy = np.meshgrid(np.arange(EXT[0], EXT[1], GRID_RES),
                          np.arange(EXT[2], EXT[3], GRID_RES))
+    # linear 보간 + 볼록껍질 밖(연안 육지)은 최근접값으로 채움 — 부산 등 해안
+    # 미채색 문제 해결. 단, 지점에서 먼 곳(북한 등)까지 채우면 근거 없는 추정이
+    # 되므로 최근접 지점 거리 > 0.55°(~55km) 격자는 그리지 않는다.
+    from scipy.spatial import cKDTree
     gz = griddata((pts["lon"], pts["lat"]), pts[col], (gx, gy), method="linear")
+    gz_near = griddata((pts["lon"], pts["lat"]), pts[col], (gx, gy), method="nearest")
+    gz = np.where(np.isnan(gz), gz_near, gz)
+    dist, _ = cKDTree(np.c_[pts["lon"], pts["lat"]]).query(
+        np.c_[gx.ravel(), gy.ravel()])
+    gz = np.where(dist.reshape(gx.shape) > 0.55, np.nan, gz)
 
     fig = plt.figure(figsize=(6.4, 7.2))
     if HAS_CARTOPY:
@@ -139,8 +155,10 @@ def draw_map(df_h: pd.DataFrame, var_key: str, day: dt.date, hour: int, out_dir:
     pm = ax.pcolormesh(gx, gy, gz, cmap=cmap, vmin=vmin, vmax=vmax,
                        shading="auto", **tf)
     if HAS_CARTOPY:
-        ax.add_feature(cfeature.OCEAN.with_scale("50m"), facecolor="#eef1f5", zorder=2)
-        ax.coastlines(resolution="50m", linewidth=0.6, zorder=3)
+        # 10m 고해상 마스크 — 50m은 부산 등 복잡 해안에서 육지를 침범(미채색 원인)
+        ax.add_feature(cfeature.OCEAN.with_scale("10m"), facecolor="#eef1f5", zorder=2)
+        ax.coastlines(resolution="10m", linewidth=0.6, zorder=3)
+        ax.add_feature(ADMIN1, edgecolor="#777", linewidth=0.5, zorder=3)
     fig.colorbar(pm, ax=ax, shrink=0.8, label=f"{title} ({unit})")
 
     # 주요 도시 라벨 (실측 원값)
@@ -149,12 +167,12 @@ def draw_map(df_h: pd.DataFrame, var_key: str, day: dt.date, hour: int, out_dir:
     for name, stn in LABEL_CITIES:
         if stn in stn_val.index:
             row = pts[pts["STN"] == stn].iloc[0]
-            ax.plot(row["lon"], row["lat"], "o", ms=4, mfc="white", mec="black",
+            ax.plot(row["lon"], row["lat"], "o", ms=5, mfc="white", mec="black",
                     zorder=4, **tf)
-            ax.text(row["lon"] + 0.05, row["lat"] - 0.08,
-                    f"{name}\n{stn_val[stn]:.1f}",
-                    fontsize=8, va="top", zorder=4,
-                    path_effects=[pe.withStroke(linewidth=2, foreground="white")],
+            ax.text(row["lon"] + 0.06, row["lat"] - 0.06,
+                    f"{name} {stn_val[stn]:.1f}",
+                    fontsize=12, weight="bold", va="top", zorder=4,
+                    path_effects=[pe.withStroke(linewidth=3, foreground="white")],
                     **tf)
 
     ax.set_title(f"ASOS {title} 실황  {day:%m-%d} {hour:02d}시 KST  (지점 {len(pts)}개 보간)",

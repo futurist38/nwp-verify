@@ -41,17 +41,33 @@ function fillDateSel(sel, onchange) {
 function entry() { return MF.dates[state.date]; }
 function modelEntry() { return entry().models[state.model]; }
 
+const CMP = "모델비교";
+function cmpModels() { return Object.keys(entry().models); }
+function cmpSteps() {
+  // 모델 공통 유효시각(KST epoch) — 런이 달라도 같은 시각끼리 비교
+  const sets = cmpModels().map((m) => {
+    const e = entry().models[m];
+    return new Set(e.steps.map((s) => validEpoch(e.run, s)));
+  });
+  return [...sets[0]].filter((t) => sets.every((st) => st.has(t))).sort((a, b) => a - b);
+}
+function validEpoch(run10, stepH) {
+  return Date.UTC(+run10.slice(0, 4), +run10.slice(4, 6) - 1, +run10.slice(6, 8),
+                  +run10.slice(8, 10)) + stepH * 3600e3;
+}
+
 function renderModelBtns() {
   const models = Object.keys(entry().models);
   if (!models.length) {  // 관측 지도만 있는 날짜 (예: PC 꺼진 날 백필)
     $("modelBtns").innerHTML = "";
     $("panelBtns").innerHTML = "";
-    $("chartImg").removeAttribute("src");
+    $("chartStack").innerHTML = "";
     $("stepLabel").textContent = "이 날짜엔 모델 차트 없음 (관측 탭 참조)";
     return;
   }
-  if (!models.includes(state.model)) state.model = models[0];
-  $("modelBtns").innerHTML = models.map((m) =>
+  const opts = models.length > 1 ? [CMP, ...models] : models;
+  if (!opts.includes(state.model)) state.model = opts[0];
+  $("modelBtns").innerHTML = opts.map((m) =>
     `<button data-m="${m}" class="${m === state.model ? "on" : ""}">${m}</button>`).join("");
   $("modelBtns").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { state.model = b.dataset.m; renderModelBtns(); };
@@ -59,39 +75,59 @@ function renderModelBtns() {
   renderPanelBtns();
 }
 function renderPanelBtns() {
-  const panels = modelEntry().panels;
+  const compare = state.model === CMP;
+  const panels = compare
+    ? [...new Set(cmpModels().flatMap((m) => entry().models[m].panels))]
+    : modelEntry().panels;
   if (!panels.includes(state.panel)) state.panel = panels[0];
   $("panelBtns").innerHTML = panels.map((p) =>
     `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`).join("");
   $("panelBtns").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { state.panel = b.dataset.p; renderPanelBtns(); };
   });
-  const steps = modelEntry().steps;
-  $("stepSlider").max = steps.length - 1;
-  if (state.stepIdx > steps.length - 1) state.stepIdx = 0;
+  const n = compare ? cmpSteps().length : modelEntry().steps.length;
+  $("stepSlider").max = Math.max(0, n - 1);
+  if (state.stepIdx > n - 1) state.stepIdx = 0;
   renderChart();
 }
-function imgPath(stepIdx) {
-  const e = modelEntry();
-  const s = String(e.steps[stepIdx]).padStart(3, "0");
-  return `archive/${state.date}/${state.model.toLowerCase()}_${e.run}_f${s}_${state.panel}.png`;
+function imgPathFor(model, stepH) {
+  const e = entry().models[model];
+  return `archive/${state.date}/${model.toLowerCase()}_${e.run}_f${String(stepH).padStart(3, "0")}_${state.panel}.png`;
 }
 function renderChart() {
+  $("stepSlider").value = state.stepIdx;
+  if (state.model === CMP) {
+    const ts = cmpSteps();
+    if (!ts.length) { $("stepLabel").textContent = "공통 유효시각 없음"; return; }
+    const t = ts[state.stepIdx];
+    const d = new Date(t + 9 * 3600e3);
+    const p = (n) => String(n).padStart(2, "0");
+    $("stepLabel").textContent =
+      `유효 ${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시 KST — 전 모델 동시 표시`;
+    $("chartStack").innerHTML = cmpModels().map((m) => {
+      const e = entry().models[m];
+      const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
+      if (!e.steps.includes(stepH) || !e.panels.includes(state.panel)) return "";
+      return `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy">`;
+    }).join("");
+    return;
+  }
   const e = modelEntry();
   const step = e.steps[state.stepIdx];
-  $("stepSlider").value = state.stepIdx;
   $("stepLabel").textContent =
     `+${step}h → 유효 ${validKST(e.run, step)} (런 ${e.run.slice(4, 8)} ${e.run.slice(8)}UTC)`;
-  $("chartImg").src = imgPath(state.stepIdx);
-  // 인접 스텝 프리로드 (±1)
+  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트">`;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
-    if (i >= 0 && i < e.steps.length) new Image().src = imgPath(i);
+    if (i >= 0 && i < e.steps.length) new Image().src = imgPathFor(state.model, e.steps[i]);
   });
+}
+function maxStepIdx() {
+  return (state.model === CMP ? cmpSteps().length : modelEntry().steps.length) - 1;
 }
 $("stepSlider").oninput = (ev) => { state.stepIdx = +ev.target.value; renderChart(); };
 $("stepPrev").onclick = () => { if (state.stepIdx > 0) { state.stepIdx--; renderChart(); } };
 $("stepNext").onclick = () => {
-  if (state.stepIdx < modelEntry().steps.length - 1) { state.stepIdx++; renderChart(); }
+  if (state.stepIdx < maxStepIdx()) { state.stepIdx++; renderChart(); }
 };
 
 // ── 관측 탭 ──

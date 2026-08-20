@@ -153,6 +153,9 @@ def _make_ax(fig, pos):
         try:
             ax.coastlines(resolution="50m", linewidth=0.6)
             ax.add_feature(cfeature.BORDERS, linewidth=0.4)
+            ax.add_feature(cfeature.NaturalEarthFeature(
+                "cultural", "admin_1_states_provinces_lines", "10m",
+                facecolor="none"), edgecolor="#888", linewidth=0.3)
         except Exception:
             pass  # 해안선 데이터 다운로드 불가 환경
         ax.set_extent([LON_MIN, LON_MAX, LAT_MIN, LAT_MAX])

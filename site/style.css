@@ -24,7 +24,7 @@ select { padding: 7px 10px; font-size: 14px; border: 1px solid #ccc; border-radi
 .step-label { text-align: center; color: #555; font-size: 13px; margin-bottom: 6px; }
 .imgwrap { text-align: center; }
 .imgwrap img { max-width: 100%; height: auto; border: 1px solid #e0e0e0; border-radius: 6px;
-               background: #fff; }
+               background: #fff; display: block; margin: 0 auto 10px; }
 #meteoList img { max-width: 100%; height: auto; margin-bottom: 12px; border: 1px solid #e0e0e0;
                  border-radius: 6px; background: #fff; }
 .tablewrap { overflow-x: auto; }
