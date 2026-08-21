@@ -45,6 +45,9 @@ jobs:
       - name: 관측 수신·지도 생성 (어제+오늘)
         run: python plot_obsmap.py
 
+      - name: 단기예보 vs 실측 시계열
+        run: python plot_kmafcst.py --no-fetch || echo "::warning::단기예보 비교 실패 — 계속"
+
       - name: 사이트 조립·발행 (관측 지도만 추가)
         run: |
           mkdir -p site_build

@@ -11,7 +11,7 @@
   · 최신 발표 예보 — 당일 갱신분
 
 사용: python plot_kmafcst.py [--no-fetch]
-산출: output/YYYYMMDD/kmafcst_vs_obs.png (build_site 복사 대상 아님 — 로컬 전용)
+산출: output/YYYYMMDD/kmafcst/kmafcst_vs_obs.png (사이트 '예보-관측' 탭 게시, 2026-08-21)
 """
 import argparse
 import datetime as dt
@@ -140,11 +140,12 @@ def main():
 
     for ax in axes.flat:
         ax.tick_params(labelsize=9)
-    fig.suptitle(f"기상청 단기예보 vs ASOS 실측 — 기온(℃)  {today}  "
-                 f"(세로선: 현재 {now:%H:%M})", fontsize=14)
+    fig.suptitle(f"기상청 단기예보(동네예보 TMP·1시간) vs ASOS 지상관측 — 기온(℃)  {today}\n"
+                 f"검정=실측 · 파랑=전일 23시 발표 · 빨강=최신 발표  (세로선: 생성 {now:%H:%M})",
+                 fontsize=13)
     fig.autofmt_xdate()
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    out_dir = os.path.join(OUT_DIR, f"{today:%Y%m%d}")
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    out_dir = os.path.join(OUT_DIR, f"{today:%Y%m%d}", "kmafcst")
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, "kmafcst_vs_obs.png")
     fig.savefig(out, dpi=110)

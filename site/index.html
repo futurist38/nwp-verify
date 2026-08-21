@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header>
@@ -15,6 +15,7 @@
     <button data-tab="charts" class="on">NWP</button>
     <button data-tab="obs">관측</button>
     <button data-tab="meteo">Meteogram</button>
+    <button data-tab="kmaf">예보-관측</button>
     <button data-tab="verif">NWP-관측 검증</button>
     <button data-tab="about">소개</button>
   </nav>
@@ -56,6 +57,16 @@
   <section id="tab-meteo" class="tab">
     <div class="controls"><select id="dateSelM"></select></div>
     <div id="meteoList"></div>
+  </section>
+
+  <section id="tab-kmaf" class="tab">
+    <p class="note" style="font-size:13px;color:#444">
+      <b>기상청 단기예보(동네예보) vs ASOS 지상관측 실측 — 기온, 1시간 간격.</b><br>
+      검정 실선=ASOS 실측(생성 시점까지) · 파랑 파선=<b>전일 23시 발표</b> 단기예보(오늘 하루의 기준선) ·
+      빨강 점선=<b>당일 최신 발표</b> 단기예보(기준선과 다르면 그만큼 기상청이 수정한 것).
+      수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
+    <div class="controls"><select id="dateSelK"></select></div>
+    <div class="imgwrap"><img id="kmafImg" alt="단기예보 vs 실측" loading="lazy"></div>
   </section>
 
   <section id="tab-verif" class="tab">
@@ -110,6 +121,6 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

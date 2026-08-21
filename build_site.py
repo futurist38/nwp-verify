@@ -45,7 +45,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "meteograms", "obsmaps"):
+        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "meteograms", "obsmaps", "kmafcst"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
@@ -148,6 +148,8 @@ def build_manifest(site_dir: str):
                     r["panels"].append(m["panel"])
             elif fn.startswith("meteogram_"):
                 entry["meteograms"].append(fn)
+            elif fn == "kmafcst_vs_obs.png":
+                entry["kmafcst"] = True
         for e in entry["models"].values():
             for r in e["runs"].values():
                 r["steps"].sort()

@@ -344,6 +344,15 @@ async function renderVerif() {
   renderObsVarBtns();
   renderVm();
 
+  // 예보-관측 탭 (kmafcst 있는 날짜만)
+  const kdates = Object.keys(MF.dates).filter((d) => MF.dates[d].kmafcst).sort().reverse();
+  if (kdates.length) {
+    $("dateSelK").innerHTML = kdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
+    const renderK = () => { $("kmafImg").src = `archive/${$("dateSelK").value}/kmafcst_vs_obs.png?${Date.now()}`; };
+    $("dateSelK").onchange = renderK;
+    renderK();
+  }
+
   const vdates = (MF.verif_dates || []).slice().reverse();
   $("dateSelV").innerHTML = vdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
   $("dateSelV").onchange = renderVerifDaily;
