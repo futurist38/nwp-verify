@@ -344,12 +344,23 @@ async function renderVerif() {
   renderObsVarBtns();
   renderVm();
 
-  // 예보-관측 탭 (kmafcst 있는 날짜만)
-  const kdates = Object.keys(MF.dates).filter((d) => MF.dates[d].kmafcst).sort().reverse();
+  // 예보-관측 탭 — 날짜 + 발표시각 선택
+  const kdates = Object.keys(MF.dates).filter((d) =>
+    (MF.dates[d].kmafcst || []).length).sort().reverse();
   if (kdates.length) {
     $("dateSelK").innerHTML = kdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
-    const renderK = () => { $("kmafImg").src = `archive/${$("dateSelK").value}/kmafcst_vs_obs.png?${Date.now()}`; };
-    $("dateSelK").onchange = renderK;
+    const fillIssues = () => {
+      const iss = (MF.dates[$("dateSelK").value].kmafcst || []).slice().sort().reverse();
+      $("issueSelK").innerHTML = iss.map((b) =>
+        `<option value="${b}">${b.slice(4, 6)}-${b.slice(6, 8)} ${b.slice(8)}시 발표</option>`).join("");
+    };
+    const renderK = () => {
+      $("kmafImg").src =
+        `archive/${$("dateSelK").value}/kmafcst_${$("issueSelK").value}.png?${Date.now()}`;
+    };
+    $("dateSelK").onchange = () => { fillIssues(); renderK(); };
+    $("issueSelK").onchange = renderK;
+    fillIssues();
     renderK();
   }
 

@@ -148,8 +148,10 @@ def build_manifest(site_dir: str):
                     r["panels"].append(m["panel"])
             elif fn.startswith("meteogram_"):
                 entry["meteograms"].append(fn)
-            elif fn == "kmafcst_vs_obs.png":
-                entry["kmafcst"] = True
+            elif fn.startswith("kmafcst_"):
+                mk = re.match(r"^kmafcst_(\d{10})\.png$", fn)
+                if mk:
+                    entry.setdefault("kmafcst", []).append(mk.group(1))
         for e in entry["models"].values():
             for r in e["runs"].values():
                 r["steps"].sort()
