@@ -1,0 +1,48 @@
+* { box-sizing: border-box; margin: 0; }
+body { font-family: "Malgun Gothic", "NanumGothic", sans-serif; background: #fafafa;
+       color: #222; max-width: 1240px; margin: 0 auto; padding: 0 10px 40px; }
+header { padding: 14px 0 6px; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; margin: 18px 0 8px; }
+.sub { color: #888; font-size: 12px; margin: 2px 0 10px; }
+#tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+#tabs button { padding: 8px 14px; border: 1px solid #ccc; background: #fff;
+               border-radius: 6px; font-size: 14px; }
+#tabs button.on { background: #2a6fd6; color: #fff; border-color: #2a6fd6; }
+.tab { display: none; padding-top: 12px; }
+.tab.on { display: block; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+select { padding: 7px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btns button { padding: 7px 12px; border: 1px solid #ccc; background: #fff;
+               border-radius: 6px; font-size: 13px; }
+.btns button.on { background: #444; color: #fff; border-color: #444; }
+.slider-row { display: flex; gap: 8px; align-items: center; margin: 8px 0 2px; }
+.slider-row input[type=range] { flex: 1; }
+.slider-row button { padding: 6px 14px; font-size: 15px; border: 1px solid #ccc;
+                     background: #fff; border-radius: 6px; }
+.step-label { text-align: center; color: #555; font-size: 13px; margin-bottom: 6px; }
+.run-label { font-size: 13px; color: #555; display: inline-flex; align-items: center; gap: 4px; }
+.run-label select { padding: 5px 8px; font-size: 13px; }
+.imgwrap { text-align: center; }
+.imgwrap img { max-width: 100%; height: auto; border: 1px solid #e0e0e0; border-radius: 6px;
+               background: #fff; display: block; margin: 0 auto 10px; }
+#meteoList img { max-width: 100%; height: auto; margin-bottom: 12px; border: 1px solid #e0e0e0;
+                 border-radius: 6px; background: #fff; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; white-space: nowrap; min-width: 60%; }
+th, td { border: 1px solid #ddd; padding: 6px 12px; text-align: center; }
+th { background: #f0f0f0; position: sticky; top: 0; }
+.note { color: #999; font-size: 11px; margin-top: 8px; }
+.cmp-name { font-size: 16px; font-weight: bold; margin: 14px 0 4px; text-align: center; }
+.cmp-name span { font-size: 12px; font-weight: normal; color: #888; }
+/* 모델비교: CSS Grid auto-fit — 넓으면 다단 가로 배치, 좁으면(폰·태블릿 세로) 자동 1단.
+   이미지는 칸 폭에 맞춰 축소(width:100%)해야 두 장이 한 줄에 들어간다. */
+#chartStack { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
+              gap: 6px 14px; justify-items: center; align-items: start; }
+#chartStack > img { width: 100%; max-width: 820px; }   /* 단일 모델 보기 */
+.cmp-item { width: 100%; max-width: 820px; }
+.cmp-item img { width: 100%; }
+/* 검증표: 지점 블록 구분 두꺼운 테두리 */
+tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
+#caseList li { margin: 4px 0; font-size: 14px; }

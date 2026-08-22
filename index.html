@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>NWP 모델 아카이브</title>
+<link rel="stylesheet" href="style.css?v=9">
+</head>
+<body>
+<header>
+  <h1>NWP 모델 아카이브</h1>
+  <p class="sub">개인 연구 프로젝트 — 공공기관 공식 서비스가 아닙니다</p>
+  <nav id="tabs">
+    <button data-tab="charts" class="on">NWP</button>
+    <button data-tab="obs">관측</button>
+    <button data-tab="meteo">Meteogram</button>
+    <button data-tab="kmaf">예보-관측</button>
+    <button data-tab="verif">NWP-관측 검증</button>
+    <button data-tab="about">소개</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-charts" class="tab on">
+    <div class="controls">
+      <select id="dateSel"></select>
+      <div id="modelBtns" class="btns"></div>
+      <div id="panelBtns" class="btns"></div>
+      <div id="runSel" class="btns"></div>
+    </div>
+    <div class="slider-row">
+      <button id="stepPrev">◀</button>
+      <input type="range" id="stepSlider" min="0" max="0" value="0">
+      <button id="stepNext">▶</button>
+    </div>
+    <div id="stepLabel" class="step-label"></div>
+    <div class="imgwrap" id="chartStack"><img id="chartImg" alt="차트" loading="lazy"></div>
+  </section>
+
+  <section id="tab-obs" class="tab">
+    <div class="controls">
+      <select id="dateSelO"></select>
+      <div id="obsVarBtns" class="btns"></div>
+    </div>
+    <div class="slider-row">
+      <button id="obsPrev">◀</button>
+      <input type="range" id="obsSlider" min="0" max="0" value="0">
+      <button id="obsNext">▶</button>
+    </div>
+    <div id="obsLabel" class="step-label"></div>
+    <div class="imgwrap"><img id="obsImg" alt="관측 실황" loading="lazy"></div>
+    <p class="note">ASOS 전 지점(~97개) 보간 실황, 1시간 간격. 북한 지역은 지점이 없어 공백(추정으로 채우지 않음).
+       색축은 절대 고정 — 오늘의 20℃와 내일의 20℃는 항상 같은 색.</p>
+  </section>
+
+  <section id="tab-meteo" class="tab">
+    <div class="controls"><select id="dateSelM"></select></div>
+    <div id="meteoList"></div>
+  </section>
+
+  <section id="tab-kmaf" class="tab">
+    <p class="note" style="font-size:13px;color:#444">
+      <b>기상청 단기예보(동네예보) vs ASOS 지상관측 실측 — 기온, 1시간 간격.</b><br>
+      검정 실선=ASOS 실측(생성 시점까지) · 파랑 파선=<b>선택한 발표시각</b>의 단기예보.
+      발표시각을 바꿔가며 "언제 발표된 예보가 오늘을 잘 맞혔나"를 비교할 수 있습니다
+      (전일 17·20·23시 + 당일 발표분, 단기예보는 3시간 간격·하루 8회 발표).
+      수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
+    <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
+    <div class="imgwrap"><img id="kmafImg" alt="단기예보 vs 실측" loading="lazy"></div>
+  </section>
+
+  <section id="tab-verif" class="tab">
+    <h2>오차 지도 — 지점별 모델 비교</h2>
+    <div class="controls">
+      <div id="vmVarBtns" class="btns">
+        <button data-v="t2m" class="on">기온</button>
+        <button data-v="tcc">운량</button>
+      </div>
+      <div id="vmWinBtns" class="btns">
+        <button data-w="d" class="on">어제</button>
+        <button data-w="7">7일</button>
+        <button data-w="30">30일</button>
+        <button data-w="sm">모델별 지도</button>
+      </div>
+    </div>
+    <div class="imgwrap"><img id="vmImg" alt="오차 지도" loading="lazy"></div>
+    <p class="note">칩 색=모델(빨강 ECMWF · 초록 GFS · 파랑 KIM), 진할수록 |평균오차| 큼(부호는 칩 안 숫자),
+       큰 칩·굵은 테두리=기간 MAE 낮음(신뢰).</p>
+
+    <h2>일별 검증 — 관측 vs 모델별 예측(괄호: 오차)</h2>
+    <div class="controls"><select id="dateSelV"></select></div>
+    <h3>기온 ℃</h3>
+    <div id="verifDailyT" class="tablewrap"></div>
+    <h3>운량 %</h3>
+    <div id="verifDailyC" class="tablewrap"></div>
+    <p class="note">같은 유효시각에 런이 여럿이면 최단 리드(최신 런) 값.
+       셀 배경: <b style="color:#c22">과대(+)=빨강</b> · <b style="color:#1a7a3c">저평가(−)=초록</b>,
+       진할수록 |오차| 큼 (기온 ±3℃ · 운량 ±40%p에서 포화).</p>
+    <h2>리드타임별 MAE</h2>
+    <div class="imgwrap"><img src="verif/mae_curve_t2m.png" alt="기온 MAE" loading="lazy"></div>
+    <div class="imgwrap"><img src="verif/mae_curve_tcc.png" alt="운량 MAE" loading="lazy"></div>
+    <h2>도시×모델×리드타임 ME/MAE</h2>
+    <div id="verifTable" class="tablewrap"></div>
+    <h2>오답노트 사례</h2>
+    <ul id="caseList"></ul>
+  </section>
+
+  <section id="tab-about" class="tab">
+    <h2>소개</h2>
+    <p>수치예보모델(ECMWF·GFS·KIM)의 한반도 기온·운량 예측을 원본 GRIB에서 직접 추출해
+       정량 표출하고, ASOS 실황과 대조해 모델별 오차 특성을 누적하는 <b>개인 연구
+       프로젝트</b>입니다. 어떤 공공기관의 공식 서비스도 아닙니다.</p>
+    <p>원칙: 모델 간 발산은 평균·중재하지 않고 그대로 표시합니다. 요약 옆에는 항상
+       원수치를 남깁니다. 수집 실패는 추정으로 채우지 않고 누락으로 표시합니다.</p>
+    <h3>데이터 출처</h3>
+    <ul>
+      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료</li>
+      <li>NOAA GFS 0.25° (NOMADS)</li>
+      <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), ASOS 지상관측</li>
+    </ul>
+    <p class="note" id="genInfo"></p>
+  </section>
+</main>
+<script src="app.js?v=9"></script>
+</body>
+</html>
