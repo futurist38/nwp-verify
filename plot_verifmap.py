@@ -128,9 +128,15 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
     fig = plt.figure(figsize=(6.8, 7.4))
     ax = _base_ax(fig)
 
-    # 정사각형 칩 크기 (LCC 미터 / 폴백 도)
-    base = 42_000 if HAS_CARTOPY else 0.42
-    gap = base * 0.18
+    # 정사각형 칩 — 클러스터 배치 (2026-08-22 사용자 지정):
+    #   MAE 1위(신뢰) = 상단 크게, 2위 = 왼쪽 아래, 3위 = 오른쪽 아래 가장 작게
+    # 크기 기준은 표시값(ME)이 아니라 기간 MAE(절대오차 평균 = 꾸준함).
+    # 표본 부족 모델(창 최다 표본의 50% 미만, 예: 갓 합류한 KIM)은 순위에서
+    # 제외하고 점선 테두리로 표시 — 8표본 vs 268표본을 같은 잣대로 재지 않는다.
+    base = 30_000 if HAS_CARTOPY else 0.30
+    gap = base * 0.15
+    RANK_SCALE = [1.0, 0.74, 0.54]
+    RANK_FS = [8.5, 7.2, 6.2]
 
     for city in CHIP_CITIES:
         if city not in CITY_POS:
@@ -142,40 +148,47 @@ def chip_map(sc: pd.DataFrame, var: str, wkey: str, end_day: dt.date):
         rows = {m: stat.loc[(city, m)] for m in models if (city, m) in stat.index}
         if not rows:
             continue
-        best = min(rows, key=lambda m: rows[m]["MAE"])  # 신뢰도(낮은 MAE) 모델
+        n_max = max(r["n"] for r in rows.values())
+        qual = {m: rows[m]["n"] >= 0.5 * n_max for m in rows}
+        ranked = sorted(rows, key=lambda m: (not qual[m], rows[m]["MAE"]))
         ax.plot(x0, y0, "o", ms=4, color="#333", zorder=4)
-        # 지점명 라벨 제거(2026-08-20 2차) — 행정구역 경계선으로 위치 식별
+        if (dx, dy) != (0, 0):
+            ax.plot([x0, x], [y0, y], "-", color="#888", linewidth=0.7, zorder=3)
 
-        # 정사각형 칩 가로 배치 — 색=모델, 진하기=|ME|, 큰 칩=기간 MAE 낮음(신뢰)
-        present = [m for m in models if m in rows]
-        sizes = {m: base * (1.25 if m == best else 0.85) for m in present}
-        total_w = sum(sizes.values()) + gap * (len(present) - 1)
-        cx = x - total_w / 2
-        for m in present:
+        sizes = [base * RANK_SCALE[min(i, 2)] for i in range(len(ranked))]
+        # 클러스터 중심 = (x, y): 1위 위 중앙 / 2위 좌하 / 3위 우하
+        pos = [(x, y + gap / 2 + sizes[0] / 2)]
+        if len(ranked) > 1:
+            pos.append((x - gap / 2 - sizes[1] / 2, y - gap / 2 - sizes[1] / 2))
+        if len(ranked) > 2:
+            pos.append((x + gap / 2 + sizes[2] / 2, y - gap / 2 - sizes[2] / 2))
+
+        for i, m in enumerate(ranked):
             me = rows[m]["ME"]
-            s = sizes[m]
+            s, (cx, cy) = sizes[i], pos[i]
             frac = min(abs(me) / lim, 1.0)
             face = plt.get_cmap(MODEL_CMAP[m])(0.20 + 0.65 * frac)
             ax.add_patch(mpatches.Rectangle(
-                (cx, y - s / 2), s, s, facecolor=face,
-                edgecolor="#333", linewidth=1.5 if m == best else 0.6, zorder=4))
+                (cx - s / 2, cy - s / 2), s, s, facecolor=face,
+                edgecolor="#333",
+                linewidth=1.4 if i == 0 and qual[m] else 0.6,
+                linestyle=":" if not qual[m] else "-", zorder=4))
             lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-            ax.text(cx + s / 2, y, f"{me:+.1f}",
-                    ha="center", va="center",
-                    fontsize=10 if m == best else 8.5,
+            ax.text(cx, cy, f"{me:+.1f}", ha="center", va="center",
+                    fontsize=RANK_FS[min(i, 2)],
                     color="white" if lum < 0.55 else "black", zorder=5)
-            cx += s + gap
 
-    # 레전드: 색=모델 (진하기=|ME| 크기 안내 포함)
+    # 레전드: 색=모델
     handles = [mpatches.Patch(facecolor=plt.get_cmap(MODEL_CMAP[m])(0.6),
                               edgecolor="#333", label=m) for m in models]
     ax.legend(handles=handles, loc="upper left", fontsize=9, framealpha=0.9,
-              title=f"진할수록 |오차| 큼 (±{lim:g}{unit} 포화)", title_fontsize=8)
+              title=f"진할수록 |ME| 큼 (±{lim:g}{unit} 포화)", title_fontsize=8)
 
     period = (f"{end_day:%m/%d}" if wkey == "d"
               else f"{start:%m/%d}~{end_day:%m/%d} ({WINDOWS[wkey]}일)")
     ax.set_title(f"{title} 관측오차 ME (예측-실황, {unit})  {period}\n"
-                 f"큰 칩·굵은 테두리 = 기간 MAE 낮음(신뢰)", fontsize=11)
+                 f"위·큰 칩=기간 MAE 1위(신뢰) → 좌하 2위 → 우하 3위 · 점선=표본 부족(순위 제외)",
+                 fontsize=10.5)
     fig.subplots_adjust(top=0.91, bottom=0.03, left=0.03, right=0.97)
     out = os.path.join(VERIF_DIR, f"verifmap_{var}_{wkey}.png")
     fig.savefig(out, dpi=100, bbox_inches="tight", pad_inches=0.15)
