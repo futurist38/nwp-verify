@@ -22,6 +22,8 @@ ECMWF IFS 0.25° 오픈데이터와 GFS 0.25°(NOMADS)를 원본 GRIB으로 직�
 | + | Python | 3.14는 eccodes Windows 휠 미제공(cp313까지) → **3.13 venv** 사용 |
 | + | SSL | 이 PC는 AVG 안티바이러스가 전 HTTPS를 가로챔 → certifi 실패. `sslfix.py`(truststore)로 OS 인증서 저장소 사용 |
 | + | KMA API | 호스트는 `apihub-pub.kma.go.kr`(일반키 기준). 시간자료 31일 초과 요청은 조용한 절단 → 30일 청크+검증 (kma_asos.py) |
+| + | GK2A (2026-08-23) | typ05 REST(`/api/typ05/api/GK2A/LE2/{산출물}/{영역}/data·dataList`)도 apihub-pub만 일반키 허용. CLA/KO: 2분 간격·지연 ~8분·0.8MB, 900×900 2km LCC(30/60, 원점 38N/126E, UL=(-899,+899)km). **CA(cloud amount)는 units 빈값이지만 raw×0.01=0~1 비율(×100 필요)** — KIM 운량과 같은 함정. CT(운형)는 야간 미산출. netCDF4 C 라이브러리는 한글 경로 불가 → h5netcdf 엔진 |
+| + | KIM pres | sub=pres에 u/v 전층(850·700 포함) 존재하나 스텝당 302MB — 스티어링 바람은 GFS NOMADS 서브셋(fetch_gfs_wind.py, 스텝당 ~0.1MB) 사용 |
 
 ## 산출물 (output/YYYYMMDD/)
 

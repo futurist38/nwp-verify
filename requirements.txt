@@ -11,3 +11,9 @@ cartopy
 pyshp<3      # pyshp 3.x는 cartopy 해안선 렌더에서 GEOSException (2026-08-14 실측)
 truststore   # AVG 등 로컬 TLS 검사 대응 (sslfix.py)
 scipy
+# ── 위성 나우캐스트 벤치마크 (2026-08-23) ──
+netcdf4      # 주의: C 라이브러리가 한글 경로 불가 → 판독은 h5netcdf 사용
+h5netcdf
+h5py
+pyproj
+opencv-python  # DIS 광류 (pysteps는 cp313 휠 부재로 미사용 — 동일 계열 자체 구현)
