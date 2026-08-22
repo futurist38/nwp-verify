@@ -74,15 +74,18 @@ def fetch_one(prod: str, area: str, stamp: str, out_dir: str) -> bool:
 
 
 def fetch_range(prod: str, area: str, t0: dt.datetime, t1: dt.datetime,
-                step_min: int):
-    """기간 수신 (UTC 기준). 실패 시각은 누락으로 목록화 (추정 보충 금지)."""
+                step_min: int, minutes: list[str] | None = None):
+    """기간 수신 (UTC 기준). 실패 시각은 누락으로 목록화 (추정 보충 금지).
+    minutes 지정 시(예: ['00','30','50']) 해당 분의 스탬프만 수집 —
+    매시 발령 벤치마크에는 t-10(:50)·t(:00)·반시간 리드(:30)만 필요."""
     out_dir = os.path.join(GK2A_DIR, f"{prod.lower()}_{area.lower()}")
     os.makedirs(out_dir, exist_ok=True)
     want = []
     t = t0
     while t <= t1:
-        want.append(t.strftime("%Y%m%d%H%M"))
-        t += dt.timedelta(minutes=step_min)
+        if minutes is None or t.strftime("%M") in minutes:
+            want.append(t.strftime("%Y%m%d%H%M"))
+        t += dt.timedelta(minutes=step_min if minutes is None else 2)
 
     # 실제 제공 목록과 교차 (2분 제품에서 10분 샘플 등)
     avail = set()
@@ -134,6 +137,8 @@ def main():
     p.add_argument("--prod", default="CLA")
     p.add_argument("--area", default="KO")
     p.add_argument("--step", type=int, default=10, help="샘플 간격(분)")
+    p.add_argument("--minutes", default=None,
+                   help="수집할 분 목록 (예: 00,30,50) — 벤치마크 절약 모드")
     args = p.parse_args()
 
     if args.probe:
@@ -142,7 +147,8 @@ def main():
     # KST 일자 경계 → UTC
     t0 = dt.datetime.fromisoformat(args.t0) - dt.timedelta(hours=9)
     t1 = dt.datetime.fromisoformat(args.t1) + dt.timedelta(hours=24 - 9, minutes=-args.step)
-    fetch_range(args.prod, args.area, t0, t1, args.step)
+    minutes = args.minutes.split(",") if args.minutes else None
+    fetch_range(args.prod, args.area, t0, t1, args.step, minutes)
 
 
 if __name__ == "__main__":

@@ -51,7 +51,7 @@ WIND_DIR = os.path.join(DATA_DIR, "gfs_wind")
 OUT_DIR = os.path.join(VERIF_DIR, "nowcast_bench")
 
 STEP_MIN = 10                    # 위성장 시간 간격
-LEADS_MIN = [30, 60, 120, 180]   # 채점 리드
+LEADS_MIN = [30, 60, 120, 180, 240, 300, 360]   # 채점 리드 (목표 +6h, 2026-08-23 확장)
 DOWN = 2                         # 2배 축소(4km) — 속도·잡음 완화
 
 # ── GK2A KO LCC 격자 (실측 상수) ──
@@ -208,10 +208,14 @@ def load_asos_ca(days: list[dt.date]) -> pd.DataFrame:
 
 # ── 벤치마크 본체 ──
 
-def run_bench(issues_per_day: int):
+def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = ""):
     os.makedirs(OUT_DIR, exist_ok=True)
     stamps = sorted(os.path.basename(p)[:-3]
                     for p in glob.glob(os.path.join(CLA_DIR, "????????????.nc")))
+    if t0f:
+        stamps = [s for s in stamps if s >= t0f]
+    if t1f:
+        stamps = [s for s in stamps if s <= t1f]
     if not stamps:
         raise SystemExit("CLA 자료 없음 — fetch_gk2a.py 먼저")
     have = set(stamps)
@@ -286,16 +290,18 @@ def run_bench(issues_per_day: int):
             print(f"[bench] {n}/{len(issues)}")
 
     sc = pd.DataFrame(rows)
-    sc.to_csv(os.path.join(OUT_DIR, "scores.csv"), index=False, encoding="utf-8-sig")
-    pd.DataFrame(arows).to_csv(os.path.join(OUT_DIR, "scores_asos.csv"),
+    suf = f"_{tag}" if tag else ""
+    sc.to_csv(os.path.join(OUT_DIR, f"scores{suf}.csv"), index=False, encoding="utf-8-sig")
+    pd.DataFrame(arows).to_csv(os.path.join(OUT_DIR, f"scores_asos{suf}.csv"),
                                index=False, encoding="utf-8-sig")
-    report(sc, pd.DataFrame(arows))
+    report(sc, pd.DataFrame(arows), tag)
 
 
-def report(sc: pd.DataFrame, asos: pd.DataFrame):
+def report(sc: pd.DataFrame, asos: pd.DataFrame, tag: str = ""):
     piv = sc.pivot_table(index="lead_min", columns="method", values="mae", aggfunc="mean")
     skill = 1 - piv.div(piv["M0"], axis=0)
-    lines = ["# 구름 나우캐스트 벤치마크 리포트", "",
+    suf = f"_{tag}" if tag else ""
+    lines = [f"# 구름 나우캐스트 벤치마크 리포트 {tag}", "",
              f"- 표본: 발령 {sc['issue_utc'].nunique()}건 × 리드 {sorted(sc['lead_min'].unique())}",
              f"- 격자 채점(위성 self-verification), MAE 단위 %운량", "",
              "## 리드별 MAE (%)", piv.round(2).to_markdown(), "",
@@ -306,7 +312,7 @@ def report(sc: pd.DataFrame, asos: pd.DataFrame):
         ap = a.pivot_table(index="lead_min", columns="method", values="err",
                            aggfunc=lambda e: e.abs().mean())
         lines += ["## ASOS 지점 보조 채점 MAE (%)", ap.round(1).to_markdown(), ""]
-    with open(os.path.join(OUT_DIR, "bench_report.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, f"bench_report{suf}.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -320,9 +326,9 @@ def report(sc: pd.DataFrame, asos: pd.DataFrame):
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "skill_curve.png"), dpi=110)
+    fig.savefig(os.path.join(OUT_DIR, f"skill_curve{suf}.png"), dpi=110)
     plt.close(fig)
-    print(f"[bench] 리포트: {os.path.join(OUT_DIR, 'bench_report.md')}")
+    print(f"[bench] 리포트: {os.path.join(OUT_DIR, f'bench_report{suf}.md')}")
     print(piv.round(2).to_string())
     print("skill(%):")
     print((skill.drop(columns=['M0']) * 100).round(1).to_string())
@@ -331,8 +337,11 @@ def report(sc: pd.DataFrame, asos: pd.DataFrame):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--issues-per-day", type=int, default=24)
+    p.add_argument("--tag", default="")
+    p.add_argument("--t0", default="", help="YYYYMMDDHHMM 필터 시작")
+    p.add_argument("--t1", default="", help="YYYYMMDDHHMM 필터 끝")
     args = p.parse_args()
-    run_bench(args.issues_per_day)
+    run_bench(args.issues_per_day, args.tag, args.t0, args.t1)
 
 
 if __name__ == "__main__":
