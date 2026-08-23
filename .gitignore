@@ -11,4 +11,5 @@ cron.log
 summary_mail.html
 site_build/
 site_build*/
-dl/
+dl/*
+!dl/finetune_cloudcast_gk2a.ipynb

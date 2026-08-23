@@ -5,6 +5,7 @@
 방법 4종을 동일 조건에서 채점:
   M0 persistence     마지막 관측장 유지 (기준선)
   M1 영상 CMV 이류    OpenCV DIS 광류(dense) + 후방 세미라그랑주 + 리드 비례 평활
+  M4 DL(--dl 옵션)    FMI CloudCast U-Net을 GK2A 12월로 파인튜닝 — 겨울 게이트용
                      (pysteps는 cp313 휠 부재로 동일 계열 자체 구현 — 문헌상 광류
                       선택은 부차적, Pulkkinen 2019: 기법 간 차이 <2%)
   M2 NWP 바람 이류    GFS 850·700hPa 평균풍을 픽셀 변위로 변환해 동일 외삽
@@ -208,8 +209,13 @@ def load_asos_ca(days: list[dt.date]) -> pd.DataFrame:
 
 # ── 벤치마크 본체 ──
 
-def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = ""):
+def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = "",
+              use_dl: bool = False):
     os.makedirs(OUT_DIR, exist_ok=True)
+    dl = None
+    if use_dl:
+        from dl_infer import DLNowcaster   # TF 지연 임포트 — 가중치 없으면 즉시 실패
+        dl = DLNowcaster()
     stamps = sorted(os.path.basename(p)[:-3]
                     for p in glob.glob(os.path.join(CLA_DIR, "????????????.nc")))
     if t0f:
@@ -254,6 +260,7 @@ def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = ""):
             continue
         vx1, vy1 = flow_dis(f_prev, f_now)
         w = wind_field(issue.replace(tzinfo=None))
+        m4 = dl.predict(issue, LEADS_MIN) if dl else None
         for lead in LEADS_MIN:
             actual = load_ca((issue + dt.timedelta(minutes=lead)).strftime("%Y%m%d%H%M"))
             if actual is None:
@@ -262,6 +269,8 @@ def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = ""):
             preds = {"M0": f_now}
             m1 = lead_smooth(backward_sl(f_now, vx1, vy1, nst), lead)
             preds["M1"] = m1
+            if m4 is not None and lead in m4:
+                preds["M4"] = m4[lead]
             if w is not None:
                 m2 = lead_smooth(backward_sl(f_now, w[0], w[1], nst), lead)
                 preds["M2"] = m2
@@ -340,8 +349,10 @@ def main():
     p.add_argument("--tag", default="")
     p.add_argument("--t0", default="", help="YYYYMMDDHHMM 필터 시작")
     p.add_argument("--t1", default="", help="YYYYMMDDHHMM 필터 끝")
+    p.add_argument("--dl", action="store_true",
+                   help="M4(파인튜닝 CloudCast) 포함 — dl/gk2a_finetuned 필요")
     args = p.parse_args()
-    run_bench(args.issues_per_day, args.tag, args.t0, args.t1)
+    run_bench(args.issues_per_day, args.tag, args.t0, args.t1, args.dl)
 
 
 if __name__ == "__main__":
