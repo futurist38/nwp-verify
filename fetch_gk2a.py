@@ -44,11 +44,17 @@ def _key() -> str:
 
 
 def data_list(prod: str, area: str, s: dt.datetime, e: dt.datetime) -> list[str]:
-    r = requests.get(f"{HOST}/LE2/{prod}/{area}/dataList",
-                     params={"sDate": s.strftime("%Y%m%d%H%M"),
-                             "eDate": e.strftime("%Y%m%d%H%M"),
-                             "format": "json", "authKey": _key()}, timeout=120)
-    return sorted(i["item"] for i in r.json().get("list", []))
+    for attempt in range(3):   # 타임아웃 1회로 전체 수집이 죽지 않도록 재시도
+        try:
+            r = requests.get(f"{HOST}/LE2/{prod}/{area}/dataList",
+                             params={"sDate": s.strftime("%Y%m%d%H%M"),
+                                     "eDate": e.strftime("%Y%m%d%H%M"),
+                                     "format": "json", "authKey": _key()}, timeout=120)
+            return sorted(i["item"] for i in r.json().get("list", []))
+        except Exception as ex:
+            print(f"[GK2A] dataList 실패({attempt + 1}/3): {ex}")
+            time.sleep(5 * (attempt + 1))
+    raise RuntimeError("dataList 3회 실패")
 
 
 def fetch_one(prod: str, area: str, stamp: str, out_dir: str) -> bool:
