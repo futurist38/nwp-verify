@@ -44,14 +44,61 @@ def _sun(t: dt.datetime) -> np.ndarray:
     return el.astype(np.float32)
 
 
+def _build_unet_f32(tf_keras):
+    """FMI model.py의 U-Net을 float32로 재구축 — mixed_float16 저장본은 CPU에서
+    에뮬레이션으로 매우 느림(230s/발령 실측). 동일 구조라 h5 가중치가 순서 이식됨."""
+    L = tf_keras.layers
+    inputs = L.Input((SIZE, SIZE, 6))
+
+    def conv_block(inp, n):
+        x = L.Conv2D(n, 3, padding="same")(inp)
+        x = L.BatchNormalization()(x)
+        x = L.Activation("relu")(x)
+        x = L.Conv2D(n, 3, padding="same")(x)
+        x = L.BatchNormalization()(x)
+        return L.Activation("relu")(x)
+
+    def enc(inp, n):
+        x = conv_block(inp, n)
+        return x, L.MaxPooling2D((2, 2))(x)
+
+    def dec(inp, skip, n):
+        x = L.Conv2DTranspose(n, (2, 2), strides=2, padding="same")(inp)
+        x = L.Concatenate()([x, skip])
+        return conv_block(x, n)
+
+    s1, p1 = enc(inputs, 64)
+    s2, p2 = enc(p1, 128)
+    s3, p3 = enc(p2, 256)
+    s4, p4 = enc(p3, 512)
+    b1 = conv_block(p4, 1024)
+    d1 = dec(b1, s4, 512)
+    d2 = dec(d1, s3, 256)
+    d3 = dec(d2, s2, 128)
+    d4 = dec(d3, s1, 64)
+    outputs = L.Conv2D(1, 1, padding="same", activation="sigmoid")(d4)
+    return tf_keras.Model(inputs, outputs)
+
+
 class DLNowcaster:
     def __init__(self):
         import tf_keras  # 지연 임포트 (--dl 시에만) — Keras 2 호환 로더
-        self.model = tf_keras.models.load_model(MODEL_H5, compile=False)
-        n_ch = int(self.model.inputs[0].shape[-1])
-        assert n_ch == 6, f"6채널([hist4|k/12|sun]) 아님: {n_ch}"
+        # TF 파일IO는 한글 경로 불가(netCDF4와 동일 함정) → ASCII 임시경로로 복사 후 로드
+        import shutil
+        import tempfile
+        path = os.path.abspath(MODEL_H5)
+        try:
+            path.encode("ascii")
+        except UnicodeEncodeError:
+            cache = os.path.join(tempfile.gettempdir(), "gk2a_finetuned.h5")
+            if (not os.path.exists(cache)
+                    or os.path.getsize(cache) != os.path.getsize(path)):
+                shutil.copy2(path, cache)
+            path = cache
+        self.model = _build_unet_f32(tf_keras)
+        self.model.load_weights(path)   # 전체 h5에서 순서 기반 이식
         self.n_lc = N_LC
-        print(f"[M4] 모델 로드: {MODEL_H5} (채널 {n_ch}, lc {self.n_lc})")
+        print(f"[M4] 모델 로드(f32 재구축): {MODEL_H5} (lc {self.n_lc})")
 
     def _frame(self, stamp: str) -> np.ndarray | None:
         path = os.path.join(CLA_DIR, f"{stamp}.nc")
@@ -63,12 +110,16 @@ class DLNowcaster:
         small = cv2.resize(ca, (SIZE, SIZE), interpolation=cv2.INTER_AREA)
         return np.nan_to_num(small, nan=50.0).astype(np.float32) / 100.0
 
-    def _step(self, hist: list[np.ndarray], base_t: dt.datetime, k: int) -> np.ndarray:
-        tgt = base_t + dt.timedelta(minutes=STEP * (k + 1))
-        lt = np.full((SIZE, SIZE), k / self.n_lc, np.float32)
-        x = np.stack(hist + [lt, _sun(tgt)], -1)
-        y = self.model.predict(x[None], verbose=0)[0, ..., 0]
-        return np.clip(y.astype(np.float32), 0, 1)
+    def _steps(self, hist: list[np.ndarray], base_t: dt.datetime,
+               ks: list[int]) -> dict[int, np.ndarray]:
+        """같은 hist에서 여러 k를 배치 1회로 예측."""
+        xs = []
+        for k in ks:
+            tgt = base_t + dt.timedelta(minutes=STEP * (k + 1))
+            lt = np.full((SIZE, SIZE), k / self.n_lc, np.float32)
+            xs.append(np.stack(hist + [lt, _sun(tgt)], -1))
+        y = self.model.predict(np.stack(xs), verbose=0)[..., 0]
+        return {k: np.clip(y[i].astype(np.float32), 0, 1) for i, k in enumerate(ks)}
 
     def predict(self, issue: dt.datetime, leads_min: list[int]) -> dict[int, np.ndarray] | None:
         """발령시각(UTC naive) → {lead: 벤치격자 %장}. hist 결측 시 None."""
@@ -79,20 +130,22 @@ class DLNowcaster:
                 return None
             hist.append(f)
 
-        span = STEP * self.n_lc if self.n_lc else 120  # 창 하나가 커버하는 리드(분)
+        span = STEP * self.n_lc                      # 창 하나가 커버하는 리드(분)
         out: dict[int, np.ndarray] = {}
         base_t, base_off = issue, 0
         while base_off < max(leads_min):
             in_win = [m for m in leads_min if base_off < m <= base_off + span]
+            advance = base_off + span < max(leads_min)
+            ks = {(m - base_off) // STEP - 1 for m in in_win}
+            if advance:                              # 창 전진용 마지막 4스텝도 같은 배치에
+                ks |= set(range(self.n_lc - 4, self.n_lc))
+            res = self._steps(hist, base_t, sorted(ks))
             for m in in_win:
-                k = (m - base_off) // STEP - 1
-                out[m] = self._step(hist, base_t, k)
-            if base_off + span < max(leads_min):     # 창 전진: 마지막 4스텝 예측이 새 hist
-                hist = [self._step(hist, base_t, k)
-                        for k in range(self.n_lc - 4, self.n_lc)]
-                base_t += dt.timedelta(minutes=span)
-                base_off += span
-            else:
+                out[m] = res[(m - base_off) // STEP - 1]
+            if not advance:
                 break
+            hist = [res[k] for k in range(self.n_lc - 4, self.n_lc)]
+            base_t += dt.timedelta(minutes=span)
+            base_off += span
         return {m: cv2.resize(f * 100.0, (N_PIX, N_PIX), interpolation=cv2.INTER_AREA)
                 for m, f in out.items()}
