@@ -107,37 +107,65 @@ def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
     return cache
 
 
-def load_obs_day(day: dt.date) -> pd.DataFrame:
-    path = os.path.join(VERIF_DIR, "obs", f"{day:%Y-%m}.csv")
-    df = pd.read_csv(path, parse_dates=["TM"])
-    return df[df["TM"].dt.date == day]
+def load_obs_range(t0: dt.datetime, t1: dt.datetime) -> pd.DataFrame:
+    """창이 자정을 넘으므로 걸치는 월 CSV를 모두 읽어 기간 필터."""
+    months, m = [], t0.date().replace(day=1)
+    while m <= t1.date():
+        months.append(f"{m:%Y-%m}")
+        m = (m + dt.timedelta(days=32)).replace(day=1)
+    frames = []
+    for mm in months:
+        path = os.path.join(VERIF_DIR, "obs", f"{mm}.csv")
+        if os.path.exists(path):
+            frames.append(pd.read_csv(path, parse_dates=["TM"]))
+    df = pd.concat(frames, ignore_index=True)
+    return df[(df["TM"] >= t0) & (df["TM"] <= t1)]
 
 
-def render(day: dt.date, bdt: str, fc: dict, obs: pd.DataFrame,
-           now: dt.datetime, out_dir: str):
-    x0 = dt.datetime.combine(day, dt.time(0))
-    x1 = x0 + dt.timedelta(hours=24)
-    fig, axes = plt.subplots(3, 2, figsize=(13, 11), sharex=True)
+def render(bdt: str, fc: dict, obs: pd.DataFrame, now: dt.datetime, out_dir: str):
+    """발표시각 기준 창(−6h 실황 맥락 ~ +24h 예보 전체) — 2026-08-23 사용자 요청.
+    발표 이후 구간에 실측이 겹쳐 그려져 '이 발표가 맞았나'가 바로 보임."""
+    bt = dt.datetime.strptime(bdt, "%Y%m%d%H")
+    x0, x1 = bt - dt.timedelta(hours=6), bt + dt.timedelta(hours=24)
+
+    series = {}   # city -> (obs Series, fcst Series) — y축 공동 스케일 계산용
+    for city in CITY_GRID:
+        o = obs[obs["STN"] == CITY_OBS_STN[city]].set_index("TM")["TA"].sort_index()
+        o = o[(o.index >= x0) & (o.index <= x1)]
+        ts = {dt.datetime.strptime(k, "%Y%m%d%H"): v
+              for k, v in fc.get(city, {}).items()}
+        s = pd.Series(ts).sort_index()
+        series[city] = (o, s[(s.index >= bt) & (s.index <= x1)])
+
+    allv = pd.concat([pd.concat(v) for v in series.values()])
+    ymid = (allv.min() + allv.max()) / 2
+    yspan = max(8.0, (allv.max() - allv.min()) + 3.0)   # 최소 8℃ 폭
+    y0, y1 = ymid - yspan / 2, ymid + yspan / 2
+
+    import matplotlib.dates as mdates
+    fig, axes = plt.subplots(3, 2, figsize=(13, 11), sharex=True, sharey=True)
     for ax, city in zip(axes.flat, CITY_GRID):
-        stn = CITY_OBS_STN[city]
-        o = obs[obs["STN"] == stn].set_index("TM")["TA"].sort_index()
+        o, s = series[city]
         ax.plot(o.index, o.values, "-o", color="black", ms=3.5, lw=1.8,
                 label="실측(ASOS)", zorder=5)
-        ser = fc.get(city, {})
-        ts = {dt.datetime.strptime(k, "%Y%m%d%H"): v for k, v in ser.items()}
-        s = pd.Series(ts).sort_index()
-        s = s[(s.index >= x0) & (s.index <= x1)]
         ax.plot(s.index, s.values, "--s", color="tab:blue", ms=3, lw=1.3,
                 label=f"예보({bdt[4:6]}-{bdt[6:8]} {bdt[8:]}시 발표)")
+        ax.axvline(bt, color="tab:blue", lw=1.0, ls=":", alpha=0.9)
         if x0 <= now <= x1:
             ax.axvline(now, color="#999", lw=0.8)
         ax.set_title(city, fontsize=13, weight="bold")
         ax.grid(alpha=0.3)
         ax.legend(fontsize=8, loc="best")
         ax.set_xlim(x0, x1)
-    fig.suptitle(f"기상청 단기예보(동네예보 TMP·1시간) vs ASOS 지상관측 — 기온(℃)  {day}\n"
-                 f"파랑 = {bdt[4:6]}-{bdt[6:8]} {bdt[8:]}시 발표 예보 · 검정 = 실측 "
-                 f"(생성 {now:%H:%M})", fontsize=13)
+        ax.set_ylim(y0, y1)
+        loc = mdates.HourLocator(byhour=range(0, 24, 3))  # 자정 눈금 → 날짜 전환 표시
+        ax.xaxis.set_major_locator(loc)
+        ax.xaxis.set_major_formatter(
+            mdates.ConciseDateFormatter(loc, formats=["%y", "%m월", "%d일", "%H시", "%H시", "%S"],
+                                        offset_formats=["", "", "", "", "", ""]))
+    fig.suptitle(f"기상청 단기예보(동네예보 TMP·1시간) vs ASOS 지상관측 — 기온(℃)\n"
+                 f"파란 점선 = {bdt[4:6]}-{bdt[6:8]} {bdt[8:]}시 발표 시점 · 창 = 발표 -6h ~ +24h · "
+                 f"y축 6도시 공통 (생성 {now:%H:%M})", fontsize=13)
     fig.autofmt_xdate()
     fig.tight_layout(rect=[0, 0, 1, 0.94])
     os.makedirs(out_dir, exist_ok=True)
@@ -162,15 +190,17 @@ def main():
                                  no_cache=True)
         kma_asos.save_monthly(df)
 
-    obs = load_obs_day(today)
     bdts = issuances_for(today, now)
     cache = load_fcst_cached(today, bdts, key)
+    # 창 = 가장 이른 발표 −6h ~ 가장 늦은 발표 +24h
+    obs = load_obs_range(dt.datetime.combine(today - dt.timedelta(days=1), dt.time(11)),
+                         now)
 
     out_dir = os.path.join(OUT_DIR, f"{today:%Y%m%d}", "kmafcst")
     n = 0
     for bdt in bdts:
         if bdt in cache and cache[bdt]:
-            render(today, bdt, cache[bdt], obs, now, out_dir)
+            render(bdt, cache[bdt], obs, now, out_dir)
             n += 1
     print(f"[단기예보] 발표 {n}건 렌더 → {out_dir}")
 
