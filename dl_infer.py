@@ -2,12 +2,14 @@
 """
 M4: FMI CloudCast 파인튜닝 모델 추론 (겨울 보완 게이트용).
 
-규격은 코랩 노트북(dl/finetune_cloudcast_gk2a.ipynb)과 동일해야 함:
-  · 입력 512², 운량 0..1, 채널 = [hist4(10분 간격) | 태양고도 | leadtime onehot]
-  · onehot k → +10*(k+1)분 예측. +120분 초과는 창 재귀(k=8..11 예측 4장이 새 hist)
+규격은 코랩 노트북(dl/finetune_cloudcast_gk2a.ipynb v2)과 동일해야 함 (FMI 코드 실측):
+  · 입력 512², 6채널 = [hist4(10분 간격, 운량 0..1) | k/12 상수평면 | 태양고도]
+    (가중치명 oh=False → 원핫이 아니라 스칼라 리드타임. sun은 고도각(도) 프레임별 min-max)
+  · k → +10*(k+1)분 예측. +120분 초과는 창 재귀(k=8..11 예측 4장이 새 hist)
   · 출력은 벤치 격자(N_PIX, 기본 450)로 리사이즈해 반환 — 채점 조건 동일화
+  · Keras 3는 구형 저장본 미지원 → tf_keras + h5 사용
 
-사용: nowcast_bench.py --dl (dl/gk2a_finetuned SavedModel 필요)
+사용: nowcast_bench.py --dl (dl/gk2a_finetuned.h5 필요)
 """
 import datetime as dt
 import math
@@ -19,9 +21,10 @@ import cv2
 from dl_dataset import load_ca_native
 from nowcast_bench import CLA_DIR, N_PIX
 
-MODEL_DIR = os.path.join("dl", "gk2a_finetuned")
+MODEL_H5 = os.path.join("dl", "gk2a_finetuned.h5")
 SIZE = 512
-STEP = 10  # 분
+STEP = 10   # 분
+N_LC = 12   # 리드 컨디셔닝 깊이 (가중치명 lc=12)
 
 # 노트북 3)과 동일한 근사 위경도 (태양고도 채널)
 _LATS = np.linspace(46.0, 29.7, SIZE)[:, None] * np.ones((1, SIZE))
@@ -35,16 +38,20 @@ def _sun(t: dt.datetime) -> np.ndarray:
     ha = (hour * 15 - 180) + _LONS
     s = (np.sin(np.radians(_LATS)) * math.sin(math.radians(decl)) +
          np.cos(np.radians(_LATS)) * math.cos(math.radians(decl)) * np.cos(np.radians(ha)))
-    return ((s + 1) / 2).astype(np.float32)
+    el = np.degrees(np.arcsin(np.clip(s, -1, 1)))
+    if el.max() > el.min():
+        el = (el - el.min()) / np.ptp(el)
+    return el.astype(np.float32)
 
 
 class DLNowcaster:
     def __init__(self):
-        import tensorflow as tf  # 지연 임포트 (--dl 시에만)
-        self.model = tf.keras.models.load_model(MODEL_DIR, compile=False)
-        self.n_ch = int(self.model.inputs[0].shape[-1])
-        self.n_lc = max(0, self.n_ch - 5)
-        print(f"[M4] 모델 로드: 채널 {self.n_ch} (leadtime {self.n_lc})")
+        import tf_keras  # 지연 임포트 (--dl 시에만) — Keras 2 호환 로더
+        self.model = tf_keras.models.load_model(MODEL_H5, compile=False)
+        n_ch = int(self.model.inputs[0].shape[-1])
+        assert n_ch == 6, f"6채널([hist4|k/12|sun]) 아님: {n_ch}"
+        self.n_lc = N_LC
+        print(f"[M4] 모델 로드: {MODEL_H5} (채널 {n_ch}, lc {self.n_lc})")
 
     def _frame(self, stamp: str) -> np.ndarray | None:
         path = os.path.join(CLA_DIR, f"{stamp}.nc")
@@ -58,13 +65,8 @@ class DLNowcaster:
 
     def _step(self, hist: list[np.ndarray], base_t: dt.datetime, k: int) -> np.ndarray:
         tgt = base_t + dt.timedelta(minutes=STEP * (k + 1))
-        ch = hist + [_sun(tgt)]
-        if self.n_lc:
-            oh = np.zeros((SIZE, SIZE, self.n_lc), np.float32)
-            oh[..., min(k, self.n_lc - 1)] = 1.0
-            x = np.concatenate([np.stack(ch, -1), oh], -1)
-        else:
-            x = np.stack(ch, -1)
+        lt = np.full((SIZE, SIZE), k / self.n_lc, np.float32)
+        x = np.stack(hist + [lt, _sun(tgt)], -1)
         y = self.model.predict(x[None], verbose=0)[0, ..., 0]
         return np.clip(y.astype(np.float32), 0, 1)
 
