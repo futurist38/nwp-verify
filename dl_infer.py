@@ -21,7 +21,11 @@ import cv2
 from dl_dataset import load_ca_native
 from nowcast_bench import CLA_DIR, N_PIX
 
-MODEL_H5 = os.path.join("dl", "gk2a_finetuned.h5")
+# 전 계절판이 있으면 우선, 없으면 겨울 게이트판 (DL_MODEL 환경변수로 강제 가능)
+_CAND = [os.environ.get("DL_MODEL", ""),
+         os.path.join("dl", "gk2a_allseason.h5"),
+         os.path.join("dl", "gk2a_finetuned.h5")]
+MODEL_H5 = next(p for p in _CAND if p and os.path.exists(p))
 SIZE = 512
 STEP = 10   # 분
 N_LC = 12   # 리드 컨디셔닝 깊이 (가중치명 lc=12)
@@ -90,7 +94,7 @@ class DLNowcaster:
         try:
             path.encode("ascii")
         except UnicodeEncodeError:
-            cache = os.path.join(tempfile.gettempdir(), "gk2a_finetuned.h5")
+            cache = os.path.join(tempfile.gettempdir(), os.path.basename(path))
             if (not os.path.exists(cache)
                     or os.path.getsize(cache) != os.path.getsize(path)):
                 shutil.copy2(path, cache)
