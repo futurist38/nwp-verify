@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header>
@@ -14,6 +14,7 @@
   <nav id="tabs">
     <button data-tab="charts" class="on">NWP</button>
     <button data-tab="obs">관측</button>
+    <button data-tab="nowcast" id="nowcastTabBtn" hidden>나우캐스트</button>
     <button data-tab="meteo">Meteogram</button>
     <button data-tab="kmaf">예보-관측</button>
     <button data-tab="verif">NWP-관측 검증</button>
@@ -52,6 +53,22 @@
     <div class="imgwrap"><img id="obsImg" alt="관측 실황" loading="lazy"></div>
     <p class="note">ASOS 전 지점(~97개) 보간 실황, 1시간 간격. 북한 지역은 지점이 없어 공백(추정으로 채우지 않음).
        색축은 절대 고정 — 오늘의 20℃와 내일의 20℃는 항상 같은 색.</p>
+  </section>
+
+  <section id="tab-nowcast" class="tab">
+    <p class="note" style="font-size:13px;color:#444">
+      <b>위성 기반 운량 나우캐스트 — GK2A 천리안2A 구름분석(CLA)을 딥러닝(U-Net)으로 +6시간 외삽.</b><br>
+      매시 갱신 · 자체 학습 모델(사전학습 가중치 미사용) · 지도 문법은 전운량과 동일
+      (0=어두움 · 100=밝음, 노란 등치선 50/75).</p>
+    <div id="ncIssue" class="step-label"></div>
+    <div class="controls"><div id="ncLeadBtns" class="btns"></div></div>
+    <div class="imgwrap"><img id="ncMap" alt="운량 나우캐스트 지도" loading="lazy"></div>
+    <h2>도시별 시계열</h2>
+    <div class="imgwrap"><img id="ncCities" alt="도시별 운량 시계열" loading="lazy"></div>
+    <h2>최근 7일 검증 (persistence 대비 skill)</h2>
+    <div id="ncSkill" class="tablewrap"></div>
+    <p class="note">skill = 1 − MAE(M4)/MAE(persistence), 위성 자기검증(발령 +6h 경과 후 자동 채점).
+       양(+)이면 "마지막 위성 화면 유지"보다 나음.</p>
   </section>
 
   <section id="tab-meteo" class="tab">
@@ -117,11 +134,12 @@
     <ul>
       <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료</li>
       <li>NOAA GFS 0.25° (NOMADS)</li>
-      <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), ASOS 지상관측</li>
+      <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), ASOS 지상관측,
+          GK2A 천리안2A 위성 구름분석(CLA)</li>
     </ul>
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

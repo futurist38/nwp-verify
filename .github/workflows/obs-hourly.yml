@@ -32,6 +32,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-nowcast.txt
 
       - name: 시스템 의존성 (한글 폰트)
         run: |
@@ -48,12 +51,51 @@ jobs:
       - name: 단기예보 vs 실측 시계열
         run: python plot_kmafcst.py --no-fetch || echo "::warning::단기예보 비교 실패 — 계속"
 
-      - name: 사이트 조립·발행 (관측 지도만 추가)
+      - name: site-data 복원 (나우캐스트 채점 대기분 포함)
         run: |
           mkdir -p site_build
           git fetch origin site-data
           git --work-tree=site_build checkout FETCH_HEAD -- .
           git reset > /dev/null
+          # 이전 런의 채점 대기 예측장 복원 (러너 휘발성 대응)
+          if [ -d site_build/nowcast/fields ]; then
+            mkdir -p output/nowcast/fields
+            cp site_build/nowcast/fields/*.npz output/nowcast/fields/ 2>/dev/null || true
+          fi
+
+      - name: 나우캐스트 가중치 (Release 자산)
+        id: ncw
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dl
+          if gh release download nowcast-weights -p "gk2a_scratch.h5" -D dl --clobber; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::나우캐스트 가중치 릴리스 없음 — 단계 건너뜀"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 운량 나우캐스트 (M4 추론·표출·지속채점)
+        if: steps.ncw.outputs.ok == 'true'
+        run: |
+          pip install -q -r requirements-nowcast.txt
+          python nowcast_live.py || echo "::warning::나우캐스트 실패 — 계속"
+
+      - name: 나우캐스트 검증 CSV 커밋
+        if: steps.ncw.outputs.ok == 'true'
+        run: |
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add verification/nowcast 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "nowcast 검증 $(date '+%Y-%m-%d %H:%M KST')"
+            git pull --rebase origin main
+            git push origin main
+          fi
+
+      - name: 사이트 조립·발행
+        run: |
           python build_site.py --site-dir site_build
           git config user.name "nwp-bot"
           git config user.email "actions@users.noreply.github.com"

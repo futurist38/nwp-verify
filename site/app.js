@@ -364,6 +364,39 @@ async function renderVerif() {
     renderK();
   }
 
+  // 나우캐스트 탭 — manifest.nowcast 있을 때만 노출
+  if (MF.nowcast && MF.nowcast.issue) {
+    $("nowcastTabBtn").hidden = false;
+    const nc = MF.nowcast;
+    const ep = Date.UTC(+nc.issue.slice(0, 4), +nc.issue.slice(4, 6) - 1,
+                        +nc.issue.slice(6, 8), +nc.issue.slice(8, 10), +nc.issue.slice(10, 12));
+    const k = new Date(ep + 9 * 3600e3);
+    const p = (n) => String(n).padStart(2, "0");
+    $("ncIssue").textContent =
+      `발령 ${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())} KST (${relNow(ep)})`;
+    let ncLead = 1;
+    const renderNc = () => {
+      $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
+        b.classList.toggle("on", +b.dataset.h === ncLead));
+      $("ncMap").src = `nowcast/map_${ncLead}h.png?${Date.now()}`;
+    };
+    $("ncLeadBtns").innerHTML = [1, 2, 3, 4, 5, 6].map((h) =>
+      `<button data-h="${h}">+${h}h</button>`).join("");
+    $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
+      b.onclick = () => { ncLead = +b.dataset.h; renderNc(); });
+    renderNc();
+    $("ncCities").src = `nowcast/cities.png?${Date.now()}`;
+    const leads = Object.keys(nc.skill || {}).map(Number).sort((a, b) => a - b);
+    $("ncSkill").innerHTML = !leads.length
+      ? "<p class='note'>검증 표본 누적 중 — 발령 +6시간 후부터 자동 채점됩니다.</p>"
+      : `<table><tr><th>리드</th>${leads.map((l) => `<th>+${l / 60}h</th>`).join("")}</tr>` +
+        `<tr><td>skill(%)</td>${leads.map((l) => {
+          const v = nc.skill[String(l)];
+          return `<td style="color:${v >= 0 ? "#1a7a3c" : "#c22"}">${v > 0 ? "+" : ""}${v}</td>`;
+        }).join("")}</tr></table>` +
+        `<p class='note'>최근 7일, 발령 ${nc.n_issues}건 평균.</p>`;
+  }
+
   const vdates = (MF.verif_dates || []).slice().reverse();
   $("dateSelV").innerHTML = vdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
   $("dateSelV").onchange = renderVerifDaily;

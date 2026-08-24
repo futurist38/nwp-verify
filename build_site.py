@@ -123,10 +123,52 @@ def export_verif_daily(site_dir: str) -> list[str]:
     return sorted(dates)
 
 
-def build_manifest(site_dir: str):
+def copy_nowcast(site_dir: str) -> dict | None:
+    """운영 나우캐스트(최신 발령 표출 + 최근 7일 skill 요약) → site/nowcast/.
+    산출이 없으면 None — app.js 는 manifest.nowcast 부재 시 탭을 숨긴다."""
+    src = os.path.join(OUT_DIR, "nowcast", "latest")
+    issue_txt = os.path.join(src, "issue.txt")
+    if not os.path.exists(issue_txt):
+        return None
+    nd = os.path.join(site_dir, "nowcast")
+    os.makedirs(nd, exist_ok=True)
+    for png in glob.glob(os.path.join(src, "*.png")):
+        shutil.copy2(png, nd)   # 무조건 복사(mtime 함정 — copy_outputs 참조)
+
+    # 채점 대기 예측장 미러 — Actions 러너는 휘발성이라 site-data에 실어 왕복
+    # (워크플로가 런 시작 시 site_build/nowcast/fields → output 으로 복원)
+    fdst = os.path.join(nd, "fields")
+    if os.path.exists(fdst):
+        shutil.rmtree(fdst)     # 채점 완료로 로컬에서 삭제된 것을 반영(미러)
+    os.makedirs(fdst, exist_ok=True)
+    for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
+        shutil.copy2(npz, fdst)
+
+    info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0}
+
+    frames = [pd.read_csv(f, parse_dates=["issue_utc"])
+              for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]
+    if frames:
+        df = pd.concat(frames, ignore_index=True)
+        cut = dt.datetime.utcnow() - dt.timedelta(days=7)
+        df = df[df["issue_utc"] >= cut]
+        if len(df):
+            piv = df.pivot_table(index="lead_min", columns="method",
+                                 values="mae", aggfunc="mean")
+            if "M0" in piv.columns and "M4" in piv.columns:
+                sk = (1 - piv["M4"] / piv["M0"]) * 100
+                info["skill"] = {str(int(k)): round(float(v), 1)
+                                 for k, v in sk.items() if pd.notna(v)}
+                info["n_issues"] = int(df[df["method"] == "M4"]["issue_utc"].nunique())
+    return info
+
+
+def build_manifest(site_dir: str, nowcast: dict | None = None):
     """archive/ 를 스캔해 manifest.json 생성 — 파일명이 유일한 진실."""
     manifest = {"generated_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 "max_days": MAX_DAYS, "dates": {}}
+    if nowcast:
+        manifest["nowcast"] = nowcast
     for d in sorted(glob.glob(os.path.join(site_dir, "archive", "????????"))):
         ymd = os.path.basename(d)
         entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
@@ -187,7 +229,7 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
-    build_manifest(args.site_dir)
+    build_manifest(args.site_dir, copy_nowcast(args.site_dir))
     print(f"[site] 완료: {args.site_dir}")
 
 
