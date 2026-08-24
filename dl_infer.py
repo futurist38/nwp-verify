@@ -122,7 +122,10 @@ class DLNowcaster:
             tgt = base_t + dt.timedelta(minutes=STEP * (k + 1))
             lt = np.full((SIZE, SIZE), k / self.n_lc, np.float32)
             xs.append(np.stack(hist + [lt, _sun(tgt)], -1))
-        y = self.model.predict(np.stack(xs), verbose=0)[..., 0]
+        xb = np.stack(xs)
+        if len(xs) == 1:      # oneDNN 배치1 conv 경로가 ~90배 느림(실측 76s vs 0.8s)
+            xb = np.concatenate([xb, xb])
+        y = self.model.predict(xb, verbose=0)[..., 0]
         return {k: np.clip(y[i].astype(np.float32), 0, 1) for i, k in enumerate(ks)}
 
     def predict(self, issue: dt.datetime, leads_min: list[int]) -> dict[int, np.ndarray] | None:
