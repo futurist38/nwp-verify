@@ -21,8 +21,9 @@ import cv2
 from dl_dataset import load_ca_native
 from nowcast_bench import CLA_DIR, N_PIX
 
-# 전 계절판이 있으면 우선, 없으면 겨울 게이트판 (DL_MODEL 환경변수로 강제 가능)
+# 우선순위: 환경변수 > scratch(라이선스 클린, 운영판) > 전계절 파인튜닝 > 겨울 게이트판
 _CAND = [os.environ.get("DL_MODEL", ""),
+         os.path.join("dl", "gk2a_scratch.h5"),
          os.path.join("dl", "gk2a_allseason.h5"),
          os.path.join("dl", "gk2a_finetuned.h5")]
 MODEL_H5 = next(p for p in _CAND if p and os.path.exists(p))
