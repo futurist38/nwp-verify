@@ -12,4 +12,4 @@ summary_mail.html
 site_build/
 site_build*/
 dl/*
-!dl/finetune_cloudcast_gk2a.ipynb
+!dl/*.ipynb
