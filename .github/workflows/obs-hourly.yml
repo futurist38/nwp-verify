@@ -24,7 +24,7 @@ env:
 jobs:
   obs:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -46,10 +46,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 관측 수신·지도 생성 (어제+오늘)
-        run: python plot_obsmap.py
+        run: timeout 600 python plot_obsmap.py
 
       - name: 단기예보 vs 실측 시계열
-        run: python plot_kmafcst.py --no-fetch || echo "::warning::단기예보 비교 실패 — 계속"
+        # KMA API가 붐비면 발표시각 수신이 10분+ (2026-08-25 실측: 이 단계가 잡 상한을
+        # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
+        run: timeout 480 python plot_kmafcst.py --no-fetch || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
 
       - name: site-data 복원 (나우캐스트 채점 대기분 포함)
         run: |
@@ -80,7 +82,7 @@ jobs:
         if: steps.ncw.outputs.ok == 'true'
         run: |
           pip install -q -r requirements-nowcast.txt
-          python nowcast_live.py || echo "::warning::나우캐스트 실패 — 계속"
+          timeout 600 python nowcast_live.py || echo "::warning::나우캐스트 실패/시간초과 — 계속"
 
       - name: 사이트 조립·발행
         run: |
