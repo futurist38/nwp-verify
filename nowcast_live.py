@@ -43,9 +43,11 @@ def _gk2a_proj():
 NOWCAST_OUT = os.path.join(OUT_DIR, "nowcast")
 FIELDS_DIR = os.path.join(NOWCAST_OUT, "fields")
 SCORE_DIR = os.path.join(VERIF_DIR, "nowcast")
-MAP_LEADS_H = [1, 2, 3, 4, 5, 6]
+# 운영 리드 +3h 제한 (2026-08-25 판정: from-scratch는 +2h까지 전승, 여름 장리드 붕괴
+#  — 문헌 표준도 "0~3h 위성, 그 너머 NWP". +6h 확장은 롤아웃 안정화 라운드 후)
+MAP_LEADS_H = [1, 2, 3]
 SERIES_STEP_MIN = 30          # 도시 시계열 해상도
-LEADS_ALL = list(range(30, 361, 30))
+LEADS_ALL = list(range(30, 181, 30))
 
 from matplotlib import font_manager as _fm
 _inst = {f.name for f in _fm.fontManager.ttflist}

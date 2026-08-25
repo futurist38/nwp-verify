@@ -380,7 +380,9 @@ async function renderVerif() {
         b.classList.toggle("on", +b.dataset.h === ncLead));
       $("ncMap").src = `nowcast/map_${ncLead}h.png?${Date.now()}`;
     };
-    $("ncLeadBtns").innerHTML = [1, 2, 3, 4, 5, 6].map((h) =>
+    const ncLeads = (nc.leads && nc.leads.length) ? nc.leads : [1, 2, 3];
+    ncLead = ncLeads[0];
+    $("ncLeadBtns").innerHTML = ncLeads.map((h) =>
       `<button data-h="${h}">+${h}h</button>`).join("");
     $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
       b.onclick = () => { ncLead = +b.dataset.h; renderNc(); });

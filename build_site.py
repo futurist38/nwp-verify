@@ -132,6 +132,8 @@ def copy_nowcast(site_dir: str) -> dict | None:
         return None
     nd = os.path.join(site_dir, "nowcast")
     os.makedirs(nd, exist_ok=True)
+    for old in glob.glob(os.path.join(nd, "*.png")):
+        os.remove(old)          # 미러 — 리드 축소 시 옛 지도(map_6h 등) 잔존 방지
     for png in glob.glob(os.path.join(src, "*.png")):
         shutil.copy2(png, nd)   # 무조건 복사(mtime 함정 — copy_outputs 참조)
 
@@ -144,7 +146,9 @@ def copy_nowcast(site_dir: str) -> dict | None:
     for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
         shutil.copy2(npz, fdst)
 
-    info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0}
+    info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0,
+            "leads": sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
+                            for p in glob.glob(os.path.join(nd, "map_*h.png")))}
 
     frames = [pd.read_csv(f, parse_dates=["issue_utc"])
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]
@@ -157,8 +161,10 @@ def copy_nowcast(site_dir: str) -> dict | None:
                                  values="mae", aggfunc="mean")
             if "M0" in piv.columns and "M4" in piv.columns:
                 sk = (1 - piv["M4"] / piv["M0"]) * 100
+                max_lead = max(info["leads"], default=3) * 60
                 info["skill"] = {str(int(k)): round(float(v), 1)
-                                 for k, v in sk.items() if pd.notna(v)}
+                                 for k, v in sk.items()
+                                 if pd.notna(v) and int(k) <= max_lead}
                 info["n_issues"] = int(df[df["method"] == "M4"]["issue_utc"].nunique())
     return info
 
