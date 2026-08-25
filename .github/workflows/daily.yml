@@ -23,7 +23,7 @@ env:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +45,9 @@ jobs:
         run: |
           python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패 — 계속"
           python fetch_gfs.py   || echo "::warning::GFS 수신 실패 — 계속"
-          python fetch_kim.py   || echo "::warning::KIM 수신 실패 — 계속"
+          # KIM은 25스텝×76MB. API허브가 느린 날 50분+ 걸려 전체 60분 타임아웃을 유발했다
+          # (2026-08-25 실측) → 개별 상한 30분으로 뒤 단계(표출·검증·메일)가 굶지 않게 한다
+          timeout 1800 python fetch_kim.py || echo "::warning::KIM 수신 실패/시간초과 — 계속"
           python plot_charts.py
           python verify.py archive || echo "::warning::archive 실패 — 계속"
           python verify.py score   || echo "::warning::score 실패 — 계속"

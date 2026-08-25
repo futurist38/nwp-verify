@@ -82,18 +82,6 @@ jobs:
           pip install -q -r requirements-nowcast.txt
           python nowcast_live.py || echo "::warning::나우캐스트 실패 — 계속"
 
-      - name: 나우캐스트 검증 CSV 커밋
-        if: steps.ncw.outputs.ok == 'true'
-        run: |
-          git config user.name "nwp-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add verification/nowcast 2>/dev/null || true
-          if ! git diff --cached --quiet; then
-            git commit -m "nowcast 검증 $(date '+%Y-%m-%d %H:%M KST')"
-            git pull --rebase origin main
-            git push origin main
-          fi
-
       - name: 사이트 조립·발행
         run: |
           python build_site.py --site-dir site_build
@@ -105,3 +93,17 @@ jobs:
           unset GIT_INDEX_FILE
           COMMIT=$(git commit-tree "$TREE" -m "obs $(date '+%Y-%m-%d %H:%M KST')")
           git push --force origin "$COMMIT:refs/heads/site-data"
+
+      # 검증 CSV 커밋은 사이트 발행 뒤에 — 실패해도 관측/나우캐스트 표출은 이미 배포됨.
+      # (2026-08-25: 이 단계가 앞에 있다가 실패해 관측 갱신이 4시간 멈춤. 작업트리에
+      #  obs·kmafcst 캐시 변경이 남아 있어 rebase가 거부됨 → autostash 필수)
+      - name: 나우캐스트 검증 CSV 커밋
+        if: steps.ncw.outputs.ok == 'true'
+        continue-on-error: true
+        run: |
+          git add verification/nowcast 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "nowcast 검증 $(date '+%Y-%m-%d %H:%M KST')"
+            git -c rebase.autoStash=true pull --rebase origin main
+            git push origin main
+          fi
