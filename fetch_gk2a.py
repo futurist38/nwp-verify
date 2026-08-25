@@ -58,6 +58,7 @@ def data_list(prod: str, area: str, s: dt.datetime, e: dt.datetime) -> list[str]
 
 
 def fetch_one(prod: str, area: str, stamp: str, out_dir: str) -> bool:
+    os.makedirs(out_dir, exist_ok=True)   # 단독 호출(Actions 러너 빈 체크아웃) 대비
     path = os.path.join(out_dir, f"{stamp}.nc")
     if os.path.exists(path) and os.path.getsize(path) > 0:
         return True
