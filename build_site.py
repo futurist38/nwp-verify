@@ -129,6 +129,17 @@ def copy_nowcast(site_dir: str) -> dict | None:
     src = os.path.join(OUT_DIR, "nowcast", "latest")
     issue_txt = os.path.join(src, "issue.txt")
     if not os.path.exists(issue_txt):
+        # 이번 런에서 산출이 없으면(API 혼잡 등) 직전 발행분을 그대로 유지 —
+        # 일시적 실패로 탭이 사라지지 않게. 화면의 상대시간이 노후를 드러낸다.
+        prev = os.path.join(site_dir, "manifest.json")
+        if os.path.exists(prev):
+            try:
+                old = json.load(open(prev, encoding="utf-8")).get("nowcast")
+                if old and os.path.exists(os.path.join(site_dir, "nowcast")):
+                    print("[site] 나우캐스트: 신규 산출 없음 — 직전 발행분 유지")
+                    return old
+            except Exception:
+                pass
         return None
     nd = os.path.join(site_dir, "nowcast")
     os.makedirs(nd, exist_ok=True)

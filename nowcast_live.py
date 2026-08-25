@@ -58,28 +58,39 @@ for _font in ["Malgun Gothic", "NanumGothic", "Noto Sans CJK KR"]:
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
+SERIES_CITIES = ["서울", "대전", "대구", "광주", "부산", "강릉"]   # 사용자 확정 지점·순서
+
+
+def frames_ready(issue: dt.datetime) -> bool:
+    """추론용 4프레임(t-30~t) 확보 — 이미 있으면 그대로, 없으면 수신 시도."""
+    for i in range(3, -1, -1):
+        stamp = (issue - dt.timedelta(minutes=10 * i)).strftime("%Y%m%d%H%M")
+        if not fetch_one("CLA", "KO", stamp, CLA_DIR):
+            return False
+    return True
+
+
 def pick_issue(now_utc: dt.datetime) -> dt.datetime:
-    """지연(~8분) 고려, 4프레임(t-30~t)이 제공 목록에 있는 최신 10분 단위 시각."""
-    cand = now_utc.replace(minute=now_utc.minute // 10 * 10, second=0, microsecond=0)
-    avail = set(data_list("CLA", "KO", now_utc - dt.timedelta(hours=2), now_utc))
+    """제공 지연(~8분)을 감안한 최신 발령시각. 목록 조회가 실패해도(API 혼잡)
+    직접 수신으로 대체한다 — 운영이 목록 API 가용성에 종속되지 않도록."""
+    cand = (now_utc.replace(minute=now_utc.minute // 10 * 10, second=0, microsecond=0)
+            - dt.timedelta(minutes=10))
+    try:
+        avail = set(data_list("CLA", "KO", now_utc - dt.timedelta(hours=2), now_utc))
+    except Exception as ex:
+        print(f"[nowcast] 목록 조회 실패({str(ex)[:80]}) — 직접 수신으로 대체")
+        avail = None
     for _ in range(9):
         need = [(cand - dt.timedelta(minutes=10 * i)).strftime("%Y%m%d%H%M")
                 for i in range(4)]
-        if all(n in avail for n in need):
+        if (avail is None or all(n in avail for n in need)) and frames_ready(cand):
             return cand
         cand -= dt.timedelta(minutes=10)
     raise SystemExit("[nowcast] 최근 4프레임 확보 불가 — GK2A 제공 지연")
 
 
-SERIES_CITIES = ["서울", "대전", "대구", "광주", "부산", "강릉"]   # 사용자 확정 지점·순서
-
-
-def ensure_frames(issue: dt.datetime):
-    # 추론용 t-30~t(10분 간격, 필수) + 도시 시계열 과거 3h(30분 간격, 있으면 좋음)
-    for i in range(3, -1, -1):
-        stamp = (issue - dt.timedelta(minutes=10 * i)).strftime("%Y%m%d%H%M")
-        if not fetch_one("CLA", "KO", stamp, CLA_DIR):
-            raise SystemExit(f"[nowcast] 프레임 수신 실패: {stamp}")
+def fetch_series_past(issue: dt.datetime):
+    """도시 시계열용 과거 3h(30분 간격) — 있으면 좋고 없어도 진행(그림만 짧아짐)."""
     for m in range(-180, -30, 30):
         fetch_one("CLA", "KO",
                   (issue + dt.timedelta(minutes=m)).strftime("%Y%m%d%H%M"), CLA_DIR)
@@ -202,8 +213,10 @@ def main():
     now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     issue = (dt.datetime.strptime(args.issue, "%Y%m%d%H%M") if args.issue
              else pick_issue(now_utc))
+    if args.issue and not frames_ready(issue):
+        raise SystemExit(f"[nowcast] 프레임 확보 실패: {issue}")
     print(f"[nowcast] 발령 {issue} UTC")
-    ensure_frames(issue)
+    fetch_series_past(issue)
 
     from dl_infer import DLNowcaster, MODEL_H5
     print(f"[nowcast] 모델: {MODEL_H5}")
