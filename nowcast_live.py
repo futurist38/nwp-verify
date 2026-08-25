@@ -92,21 +92,29 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str)
     lons, lats = grid_lonlat()
     proj = _gk2a_proj()
     kst = issue + dt.timedelta(hours=9)
-    for h in MAP_LEADS_H:
-        f = fields[h * 60]
+    # lead 0 = 현재 위성 관측(비교 기준) — 사용자 요청 2026-08-25
+    panels = [(0, load_ca(issue.strftime("%Y%m%d%H%M")))]
+    panels += [(h, fields[h * 60]) for h in MAP_LEADS_H]
+    for h, f in panels:
+        if f is None:
+            continue
         fig = plt.figure(figsize=(7.4, 5.9))
         ax = fig.add_axes([0.06, 0.05, 0.9, 0.86], projection=proj)
         ax.imshow(f, transform=proj, origin="upper",   # row0=북 실측 확정
                   extent=[-899000, 899000, -899000, 899000],
                   cmap="gray", vmin=0, vmax=100, interpolation="bilinear")
-        cs = ax.contour(lons, lats, f, levels=[50, 75], colors="yellow",
-                        linewidths=[0.9, 1.4], transform=ccrs.PlateCarree())
+        # 등치선은 평활장에서 — 관측 원장은 화소 잡음이 심해 얼룩이 됨(그림은 원본 유지)
+        from scipy.ndimage import gaussian_filter
+        ax.contour(lons, lats, gaussian_filter(np.nan_to_num(f, nan=0.0), 3.0),
+                   levels=[50, 75], colors="yellow",
+                   linewidths=[0.9, 1.4], transform=ccrs.PlateCarree())
         ax.coastlines(resolution="10m", color="#00cfff", linewidth=0.9)
         ax.add_feature(cfeature.STATES.with_scale("10m"),
                        edgecolor="#00cfff", linewidth=0.35, facecolor="none")
         vt = kst + dt.timedelta(hours=h)
-        ax.set_title(f"운량 나우캐스트 +{h}h  유효 {vt:%m-%d %H시} KST "
-                     f"(발령 {kst:%H:%M})", fontsize=11)
+        ax.set_title(f"현재 위성 관측  {kst:%m-%d %H:%M} KST" if h == 0 else
+                     f"운량 나우캐스트 +{h}h  유효 {vt:%m-%d %H시} KST (발령 {kst:%H:%M})",
+                     fontsize=11)
         fig.savefig(os.path.join(out_dir, f"map_{h}h.png"), dpi=110)
         plt.close(fig)
 

@@ -387,6 +387,8 @@ async function renderVerif() {
     $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
       b.onclick = () => { ncLead = +b.dataset.h; renderNc(); });
     renderNc();
+    if (nc.has_now) $("ncNow").src = `nowcast/map_0h.png?${Date.now()}`;
+    else $("ncNow").closest(".imgwrap").hidden = true;
     $("ncCities").src = `nowcast/cities.png?${Date.now()}`;
     const leads = Object.keys(nc.skill || {}).map(Number).sort((a, b) => a - b);
     $("ncSkill").innerHTML = !leads.length

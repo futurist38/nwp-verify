@@ -146,9 +146,11 @@ def copy_nowcast(site_dir: str) -> dict | None:
     for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
         shutil.copy2(npz, fdst)
 
+    all_leads = sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
+                       for p in glob.glob(os.path.join(nd, "map_*h.png")))
     info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0,
-            "leads": sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
-                            for p in glob.glob(os.path.join(nd, "map_*h.png")))}
+            "leads": [h for h in all_leads if h > 0],   # 0=현재 관측(별도 표출)
+            "has_now": 0 in all_leads}
 
     frames = [pd.read_csv(f, parse_dates=["issue_utc"])
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]

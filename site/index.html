@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <header>
@@ -63,7 +63,12 @@
       (위성 외삽의 유효 구간이 ~3시간까지라 역할을 나눴습니다).</p>
     <div id="ncIssue" class="step-label"></div>
     <div class="controls"><div id="ncLeadBtns" class="btns"></div></div>
-    <div class="imgwrap"><img id="ncMap" alt="운량 나우캐스트 지도" loading="lazy"></div>
+    <div id="ncPair">
+      <div class="imgwrap"><img id="ncNow" alt="현재 위성 관측" loading="lazy"></div>
+      <div class="imgwrap"><img id="ncMap" alt="운량 나우캐스트 지도" loading="lazy"></div>
+    </div>
+    <p class="note">왼쪽 = <b>지금 위성이 보고 있는 구름</b>, 오른쪽 = 선택한 시간 뒤 예측.
+       같은 색 문법이라 구름대가 어디로 이동·발달·소멸할지 바로 비교됩니다.</p>
     <h2>도시별 시계열</h2>
     <div class="imgwrap"><img id="ncCities" alt="도시별 운량 시계열" loading="lazy"></div>
     <h2>최근 7일 검증 (persistence 대비 skill)</h2>
@@ -141,6 +146,6 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
