@@ -157,12 +157,22 @@ def copy_nowcast(site_dir: str) -> dict | None:
     for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
         shutil.copy2(npz, fdst)
 
+    # 과거 검증 패널 보관분 미러
+    adst = os.path.join(nd, "archive")
+    if os.path.exists(adst):
+        shutil.rmtree(adst)
+    os.makedirs(adst, exist_ok=True)
+    for png in glob.glob(os.path.join(OUT_DIR, "nowcast", "archive", "*.png")):
+        shutil.copy2(png, adst)
+
     all_leads = sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
                        for p in glob.glob(os.path.join(nd, "map_*h.png")))
     info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0,
             "leads": [h for h in all_leads if h > 0],   # 0=현재 관측(별도 표출)
             "has_now": 0 in all_leads,
-            "has_verify": os.path.exists(os.path.join(nd, "verify.png"))}
+            "has_verify": os.path.exists(os.path.join(nd, "verify.png")),
+            "past": sorted(os.path.basename(p)[:-4]
+                           for p in glob.glob(os.path.join(nd, "archive", "*.png")))}
 
     frames = [pd.read_csv(f, parse_dates=["issue_utc"])
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]

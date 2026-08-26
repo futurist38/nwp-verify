@@ -18,6 +18,21 @@ document.querySelectorAll("#tabs button").forEach((b) => {
   };
 });
 
+// ── 방향키 탐색: 활성 탭의 이전/다음 버튼에 연결 ──
+const ARROW_BTN = { "tab-charts": ["stepPrev", "stepNext"],
+                    "tab-obs": ["obsPrev", "obsNext"],
+                    "tab-nowcast": ["ncPrev", "ncNext"] };
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+  const tag = (ev.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "select" || tag === "textarea") return;
+  const sec = document.querySelector(".tab.on");
+  const pair = sec && ARROW_BTN[sec.id];
+  if (!pair) return;
+  const btn = $(pair[ev.key === "ArrowLeft" ? 0 : 1]);
+  if (btn) { btn.click(); ev.preventDefault(); }
+});
+
 // ── 유틸 ──
 function fmtDate(ymd) {
   return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
@@ -388,24 +403,44 @@ async function renderVerif() {
     const p = (n) => String(n).padStart(2, "0");
     $("ncIssue").textContent =
       `발령 ${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())} KST (${relNow(ep)})`;
-    let ncLead = 1;
-    const renderNc = () => {
-      $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
-        b.classList.toggle("on", +b.dataset.h === ncLead));
-      $("ncMap").src = `nowcast/map_${ncLead}h.png?${Date.now()}`;
-    };
     const ncLeads = (nc.leads && nc.leads.length) ? nc.leads : [1, 2, 3];
-    ncLead = ncLeads[0];
-    $("ncLeadBtns").innerHTML = ncLeads.map((h) =>
-      `<button data-h="${h}">+${h}h</button>`).join("");
-    $("ncLeadBtns").querySelectorAll("button").forEach((b) =>
-      b.onclick = () => { ncLead = +b.dataset.h; renderNc(); });
+    let ncIdx = 0;
+    const renderNc = () => {
+      const h = ncLeads[ncIdx];
+      $("ncSlider").value = ncIdx;
+      const vt = ep + h * 3600e3;
+      $("ncLeadLabel").textContent =
+        `+${h}시간 → 유효 ${p(new Date(vt + 9 * 3600e3).getUTCHours())}시 KST (${relNow(vt)})`;
+      $("ncMap").src = `nowcast/map_${h}h.png?${Date.now()}`;
+      [ncIdx - 1, ncIdx + 1].forEach((i) => {   // 인접 스텝만 프리로드
+        if (i >= 0 && i < ncLeads.length) new Image().src = `nowcast/map_${ncLeads[i]}h.png`;
+      });
+    };
+    $("ncSlider").max = ncLeads.length - 1;
+    $("ncSlider").oninput = (e) => { ncIdx = +e.target.value; renderNc(); };
+    $("ncPrev").onclick = () => { if (ncIdx > 0) { ncIdx--; renderNc(); } };
+    $("ncNext").onclick = () => { if (ncIdx < ncLeads.length - 1) { ncIdx++; renderNc(); } };
     renderNc();
     if (nc.has_now) $("ncNow").src = `nowcast/map_0h.png?${Date.now()}`;
     else $("ncNow").closest(".imgwrap").hidden = true;
     $("ncCities").src = `nowcast/cities.png?${Date.now()}`;
     ["ncVerifyTitle", "ncVerifyNote", "ncVerify"].forEach((id) => { $(id).hidden = !nc.has_verify; });
     if (nc.has_verify) $("ncVerify").src = `nowcast/verify.png?${Date.now()}`;
+    // 과거 검증 패널 — 3시간 간격 보관분에서 선택
+    const past = (nc.past || []).slice().reverse();
+    if (past.length) {
+      $("ncPastRow").hidden = false;
+      $("ncPastSel").innerHTML = ['<option value="">지금 (최신)</option>'].concat(
+        past.map((t) => `<option value="${t}">${t.slice(4, 6)}-${t.slice(6, 8)} ${t.slice(8)}시</option>`)
+      ).join("");
+      const showPast = () => {
+        const v = $("ncPastSel").value;
+        $("ncVerify").src = v ? `nowcast/archive/${v}.png?${Date.now()}`
+                              : `nowcast/verify.png?${Date.now()}`;
+      };
+      $("ncPastSel").onchange = showPast;
+      $("ncPastNow").onclick = () => { $("ncPastSel").value = ""; showPast(); };
+    }
     const leads = Object.keys(nc.skill || {}).map(Number).sort((a, b) => a - b);
     $("ncSkill").innerHTML = !leads.length
       ? "<p class='note'>검증 표본 누적 중 — 발령 +6시간 후부터 자동 채점됩니다.</p>"

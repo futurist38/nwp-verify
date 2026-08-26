@@ -43,6 +43,9 @@ def _gk2a_proj():
 NOWCAST_OUT = os.path.join(OUT_DIR, "nowcast")
 FIELDS_DIR = os.path.join(NOWCAST_OUT, "fields")
 SCORE_DIR = os.path.join(VERIF_DIR, "nowcast")
+ARCHIVE_DIR = os.path.join(NOWCAST_OUT, "archive")   # 과거 조회용 검증 패널
+ARCHIVE_EVERY_H = 3    # 3시간마다 한 장만 보관 — 매시 보관하면 site-data가 감당 못 함
+ARCHIVE_KEEP_DAYS = 30
 # 운영 리드 +6h (2026-08-26 확장). 근거 둘:
 #  · 계절별 5기간에서 v5가 +6h까지 지속성 대비 +15~23% 유지 (V5_판정.md)
 #  · ASOS 실측 대비 NWP와 직접 대결에서 +6h까지 교차점 없음 — 나우캐스트 14.9 vs
@@ -158,7 +161,8 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
         plt.close(fig)
 
 
-def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str) -> bool:
+def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str,
+                note: str = "") -> bool:
     """패널 목록[(라벨, 장 or None)] → 한 장으로. 첫 칸이 실제, 나머지가 과거 예측."""
     import cartopy.feature as cfeature
     proj = _gk2a_proj()
@@ -184,6 +188,8 @@ def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str) -> bool:
         ax.add_feature(cfeature.STATES.with_scale("10m"),
                        edgecolor="yellow", linewidth=0.3, facecolor="none")
     head = f"같은 시각을 언제 예측했나 - 유효 {valid_kst:%Y-%m-%d %H:%M} KST"
+    if note:
+        head += f"   [{note}]"
     fig.suptitle(head + "\n왼쪽 위가 실제, 나머지는 그 시각을 1~6시간 전에 내다본 결과",
                  fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.93])
@@ -224,7 +230,8 @@ def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
     return draw_verify(panels, kst, os.path.join(out_dir, "verify.png"))
 
 
-def verify_case(valid_utc: dt.datetime, out_dir: str) -> bool:
+def verify_case(valid_utc: dt.datetime, out_dir: str,
+                out_name: str = "", note: str = "") -> bool:
     """과거 임의 시각을 되짚어 본다 — 그 시각을 1~6시간 전에 각각 어떻게 예측했는지 재현.
     보관분에 의존하지 않고 그 자리에서 추론하므로 위성 원자료가 있는 기간이면 언제든 가능.
     사이트에는 올라가지 않는다(발행 대상은 output/nowcast/latest 뿐)."""
@@ -250,11 +257,34 @@ def verify_case(valid_utc: dt.datetime, out_dir: str) -> bool:
         panels.append((f"{h}시간 전 예측", f))
 
     kst = valid_utc + dt.timedelta(hours=9)
-    out_path = os.path.join(out_dir, f"case_{valid_utc:%Y%m%d%H%M}.png")
-    ok = draw_verify(panels, kst, out_path)
+    out_path = os.path.join(out_dir, out_name or f"case_{valid_utc:%Y%m%d%H%M}.png")
+    ok = draw_verify(panels, kst, out_path, note)
     if ok:
         print(f"[사례] 저장 → {out_path}")
     return ok
+
+
+def archive_verify(issue: dt.datetime, latest_dir: str):
+    """검증 패널을 유효시각 이름으로 보관 — 과거 날짜 조회용.
+    장당 ~400KB라 매시 보관하면 하루 10MB, site-data(이미 500MB)가 감당 못 한다.
+    3시간 간격 · 30일 보존이면 ~95MB 선에서 유지된다."""
+    kst = issue + dt.timedelta(hours=9)
+    if kst.hour % ARCHIVE_EVERY_H != 0:
+        return
+    src = os.path.join(latest_dir, "verify.png")
+    if not os.path.exists(src):
+        return
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
+    import shutil
+    shutil.copy2(src, os.path.join(ARCHIVE_DIR, f"{kst:%Y%m%d%H}.png"))
+    cut = f"{(kst - dt.timedelta(days=ARCHIVE_KEEP_DAYS)):%Y%m%d%H}"
+    n = 0
+    for f in os.listdir(ARCHIVE_DIR):
+        if f.endswith(".png") and f[:-4] < cut:
+            os.remove(os.path.join(ARCHIVE_DIR, f))
+            n += 1
+    if n:
+        print(f"[nowcast] 보관 정리: {n}장 삭제")
 
 
 def render_cities(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str):
@@ -338,9 +368,31 @@ def main():
     p.add_argument("--issue", default="", help="발령시각 YYYYMMDDHHMM(UTC), 생략=자동")
     p.add_argument("--no-score", action="store_true")
     p.add_argument("--no-plot", action="store_true")
+    p.add_argument("--backfill", nargs=2, metavar=("YYYYMMDD", "YYYYMMDD"), default=None,
+                   help="과거 보관분 소급 생성(KST 3시간 간격) — 현재 모델로 재현")
     p.add_argument("--case", default="",
                    help="과거 유효시각 YYYYMMDDHHMM(UTC) 되짚어보기 — 사이트 미발행")
     args = p.parse_args()
+
+    if args.backfill:   # 과거 보관분 채우기 — 당시 예측이 아니라 현 모델 소급 재현
+        d0 = dt.datetime.strptime(args.backfill[0], "%Y%m%d")
+        d1 = dt.datetime.strptime(args.backfill[1], "%Y%m%d")
+        os.makedirs(ARCHIVE_DIR, exist_ok=True)
+        made = skip = 0
+        day = d0
+        while day <= d1:
+            for hh in range(0, 24, ARCHIVE_EVERY_H):
+                kst = day + dt.timedelta(hours=hh)
+                name = f"{kst:%Y%m%d%H}.png"
+                if os.path.exists(os.path.join(ARCHIVE_DIR, name)):
+                    skip += 1
+                    continue
+                if verify_case(kst - dt.timedelta(hours=9), ARCHIVE_DIR, name,
+                               "현 모델 소급 재현"):
+                    made += 1
+            print(f"[백필] {day:%m-%d} 누적 생성 {made} / 기존 {skip}")
+            day += dt.timedelta(days=1)
+        return
 
     if args.case:   # 과거 사례 조회 모드 — 운영 산출물을 건드리지 않는다
         verify_case(dt.datetime.strptime(args.case, "%Y%m%d%H%M"),
@@ -383,7 +435,8 @@ def main():
         latest = os.path.join(NOWCAST_OUT, "latest")
         os.makedirs(latest, exist_ok=True)
         render_maps(issue, native, latest, obs_native, ref_q)
-        render_verify(issue, obs_native, latest)
+        if render_verify(issue, obs_native, latest):
+            archive_verify(issue, latest)
         render_cities(issue, fields, latest)
         with open(os.path.join(latest, "issue.txt"), "w") as f:
             f.write(f"{issue:%Y%m%d%H%M}")
