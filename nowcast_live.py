@@ -63,6 +63,35 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 SERIES_CITIES = ["서울", "대전", "대구", "광주", "부산", "강릉"]   # 사용자 확정 지점·순서
 
 
+REF_Q = 4096      # 확률매칭 참조 분위 개수 (npz에 함께 보관 — 값이 작아 부담 없음)
+
+
+def ref_quantiles(field: np.ndarray | None) -> np.ndarray | None:
+    """참조장(발령시각 실황)의 값 분포를 분위로 압축."""
+    if field is None:
+        return None
+    v = field[np.isfinite(field)]
+    if v.size < 1000:
+        return None
+    return np.quantile(v, np.linspace(0, 1, REF_Q)).astype(np.float32)
+
+
+def pmm(pred: np.ndarray, ref_q: np.ndarray | None) -> np.ndarray:
+    """확률매칭(probability matching) — 예측의 순위는 그대로 두고 값 분포만 참조장에 맞춘다.
+    긴 리드에서 모델이 불확실성 때문에 평평해진 대비를 되살리는 나우캐스팅 표준 기법.
+    실측(2026-08-26, +6h 25발령): 대비 유지율 0.74→0.99, MAE 22.8→23.4(+3%).
+    **정보를 더하지는 않는다 — 표출 전용이며 채점은 원본으로 한다.**
+    참조는 '발령시각 실황'이라 미래 정보를 쓰지 않는다."""
+    if ref_q is None:
+        return pred
+    order = np.argsort(pred.ravel())
+    vals = np.interp(np.linspace(0, 1, pred.size),
+                     np.linspace(0, 1, len(ref_q)), ref_q)
+    out = np.empty(pred.size, np.float32)
+    out[order] = vals
+    return out.reshape(pred.shape)
+
+
 def frames_ready(issue: dt.datetime) -> bool:
     """추론용 4프레임(t-30~t) 확보 — 이미 있으면 그대로, 없으면 수신 시도."""
     for i in range(3, -1, -1):
@@ -99,7 +128,8 @@ def fetch_series_past(issue: dt.datetime):
 
 
 def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
-                obs_native: np.ndarray | None = None):
+                obs_native: np.ndarray | None = None,
+                ref_q: np.ndarray | None = None):
     """위성영상 문법(plot_charts 전운량과 동일): gray 0어두움/100밝음 + 노란 지리선."""
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -107,7 +137,7 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
     kst = issue + dt.timedelta(hours=9)
     # lead 0 = 현재 위성 관측(비교 기준) — 사용자 요청 2026-08-25
     panels = [(0, obs_native if obs_native is not None else load_ca(issue.strftime("%Y%m%d%H%M")))]
-    panels += [(h, fields[h * 60]) for h in MAP_LEADS_H]
+    panels += [(h, pmm(fields[h * 60], ref_q)) for h in MAP_LEADS_H]
     for h, f in panels:
         if f is None:
             continue
@@ -187,6 +217,8 @@ def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
                 key = f"m{h * 60}"
                 if key in z.files:
                     f = z[key].astype(np.float32)
+                    rq = z["ref"] if "ref" in z.files else None
+                    f = pmm(f, rq if rq is not None and rq.size else None)
         panels.append((f"{h}시간 전 예측", f))
 
     return draw_verify(panels, kst, os.path.join(out_dir, "verify.png"))
@@ -210,7 +242,9 @@ def verify_case(valid_utc: dt.datetime, out_dir: str) -> bool:
         if frames_ready(issue):
             out = d.predict(issue, [h * 60], native=True)
             if out:
-                f = out[h * 60]
+                ip = os.path.join(CLA_DIR, issue.strftime("%Y%m%d%H%M") + ".nc")
+                rq = ref_quantiles(load_ca_native(ip)) if os.path.exists(ip) else None
+                f = pmm(out[h * 60], rq)
         else:
             print(f"[사례] {h}시간 전({issue:%m-%d %H:%M}) 입력 프레임 부족")
         panels.append((f"{h}시간 전 예측", f))
@@ -334,19 +368,21 @@ def main():
               for m, f in native.items()}
     obs_path = os.path.join(CLA_DIR, issue.strftime("%Y%m%d%H%M") + ".nc")
     obs_native = load_ca_native(obs_path) if os.path.exists(obs_path) else None
+    ref_q = ref_quantiles(obs_native)      # 표출 대비 보정용(발령시각 실황 분포)
 
     os.makedirs(FIELDS_DIR, exist_ok=True)
     # uint8 저장 — Actions에선 site-data에 실려 런 간 왕복하므로 크기 최소화.
     # 원해상도(512)로 보관: 채점은 축소해 쓰고, "과거 예측 vs 지금" 표출에 재사용한다
     # (450으로 저장하면 표출 때 맥놀이 격자가 되살아남 — 2026-08-26)
     np.savez_compressed(os.path.join(FIELDS_DIR, f"{issue:%Y%m%d%H%M}.npz"),
+                        ref=(ref_q if ref_q is not None else np.zeros(0, np.float32)),
                         **{f"m{m}": np.round(v).astype(np.uint8)
                            for m, v in native.items()})
 
     if not args.no_plot:
         latest = os.path.join(NOWCAST_OUT, "latest")
         os.makedirs(latest, exist_ok=True)
-        render_maps(issue, native, latest, obs_native)
+        render_maps(issue, native, latest, obs_native, ref_q)
         render_verify(issue, obs_native, latest)
         render_cities(issue, fields, latest)
         with open(os.path.join(latest, "issue.txt"), "w") as f:
