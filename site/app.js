@@ -404,6 +404,8 @@ async function renderVerif() {
     if (nc.has_now) $("ncNow").src = `nowcast/map_0h.png?${Date.now()}`;
     else $("ncNow").closest(".imgwrap").hidden = true;
     $("ncCities").src = `nowcast/cities.png?${Date.now()}`;
+    ["ncVerifyTitle", "ncVerifyNote", "ncVerify"].forEach((id) => { $(id).hidden = !nc.has_verify; });
+    if (nc.has_verify) $("ncVerify").src = `nowcast/verify.png?${Date.now()}`;
     const leads = Object.keys(nc.skill || {}).map(Number).sort((a, b) => a - b);
     $("ncSkill").innerHTML = !leads.length
       ? "<p class='note'>검증 표본 누적 중 — 발령 +6시간 후부터 자동 채점됩니다.</p>"

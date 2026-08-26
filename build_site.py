@@ -161,7 +161,8 @@ def copy_nowcast(site_dir: str) -> dict | None:
                        for p in glob.glob(os.path.join(nd, "map_*h.png")))
     info = {"issue": open(issue_txt).read().strip(), "skill": {}, "n_issues": 0,
             "leads": [h for h in all_leads if h > 0],   # 0=현재 관측(별도 표출)
-            "has_now": 0 in all_leads}
+            "has_now": 0 in all_leads,
+            "has_verify": os.path.exists(os.path.join(nd, "verify.png"))}
 
     frames = [pd.read_csv(f, parse_dates=["issue_utc"])
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]

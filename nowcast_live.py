@@ -128,6 +128,65 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
         plt.close(fig)
 
 
+def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
+    """'지금 위성' vs '과거에 예측한 지금' — 리드 1~6h를 한 장에 (2026-08-26 사용자 요청).
+    보관해 둔 과거 발령 예측장(FIELDS_DIR)에서 유효시각이 이번 발령과 맞는 것을 꺼내 쓴다
+    — 추가 추론도 추가 수신도 없다."""
+    import cartopy.feature as cfeature
+    proj = _gk2a_proj()
+    kst = issue + dt.timedelta(hours=9)
+
+    stored = {}
+    for path in glob.glob(os.path.join(FIELDS_DIR, "*.npz")):
+        try:
+            stored[dt.datetime.strptime(os.path.basename(path)[:-4], "%Y%m%d%H%M")] = path
+        except ValueError:
+            continue
+
+    panels = [("현재 위성 관측", obs)]
+    for h in MAP_LEADS_H:
+        want = issue - dt.timedelta(hours=h)
+        cand = [t for t in stored if abs((t - want).total_seconds()) <= 1200]
+        f = None
+        if cand:
+            t = min(cand, key=lambda t: abs((t - want).total_seconds()))
+            with np.load(stored[t]) as z:
+                key = f"m{h * 60}"
+                if key in z.files:
+                    f = z[key].astype(np.float32)
+        panels.append((f"{h}시간 전 예측", f))
+
+    if sum(f is not None for _, f in panels) < 2:
+        print("[nowcast] 과거 예측 보관분 부족 — 검증 화면 생략")
+        return False
+
+    fig = plt.figure(figsize=(16.5, 8.6))
+    for n, (label, f) in enumerate(panels):
+        if f is None:   # 지도 축으로 만들면 투영 경계가 부채꼴로 그려져 흉하다 → 평면 축
+            ax = fig.add_subplot(2, 4, n + 1)
+            ax.set_xticks([]); ax.set_yticks([])
+            ax.set_facecolor("#f2f2f2")
+            ax.text(0.5, 0.5, "보관 없음\n(운영 누적 후 표시)", ha="center", va="center",
+                    transform=ax.transAxes, fontsize=10, color="#888")
+            ax.set_title(label, fontsize=11)
+            continue
+        ax = fig.add_subplot(2, 4, n + 1, projection=proj)
+        ax.set_title(label, fontsize=11, weight="bold" if n == 0 else "normal")
+        ax.imshow(f, transform=proj, origin="upper",
+                  extent=[-899000, 899000, -899000, 899000],
+                  cmap="gray", vmin=0, vmax=100, interpolation="bilinear")
+        ax.coastlines(resolution="10m", color="yellow", linewidth=0.7)
+        ax.add_feature(cfeature.STATES.with_scale("10m"),
+                       edgecolor="yellow", linewidth=0.3, facecolor="none")
+    head = f"같은 시각을 언제 예측했나 - 유효 {kst:%m-%d %H:%M} KST"
+    fig.suptitle(head + "\n왼쪽 위가 실제, 나머지는 그 시각을 1~6시간 전에 내다본 결과",
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(os.path.join(out_dir, "verify.png"), dpi=100)
+    plt.close(fig)
+    return True
+
+
 def render_cities(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str):
     """과거 3h 위성 실측 + 예측 6h — 6도시, y축 0~100 공통."""
     cpx_all = city_pixels()
@@ -179,6 +238,9 @@ def score_due(now_utc: dt.datetime):
             if actual is None or f"m{m}" not in preds:
                 continue
             pred = preds[f"m{m}"]
+            if pred.shape != actual.shape:      # 원해상도 보관본 → 채점 격자로
+                import cv2
+                pred = cv2.resize(pred, actual.shape[::-1], interpolation=cv2.INTER_AREA)
             valid = np.isfinite(actual)
             rows.append({"issue_utc": issue, "lead_min": m, "method": "M4",
                          "mae": float(np.mean(np.abs(pred[valid] - actual[valid])))})
@@ -231,15 +293,18 @@ def main():
     obs_native = load_ca_native(obs_path) if os.path.exists(obs_path) else None
 
     os.makedirs(FIELDS_DIR, exist_ok=True)
-    # uint8 저장 — Actions에선 site-data에 실려 런 간 왕복하므로 크기 최소화
+    # uint8 저장 — Actions에선 site-data에 실려 런 간 왕복하므로 크기 최소화.
+    # 원해상도(512)로 보관: 채점은 축소해 쓰고, "과거 예측 vs 지금" 표출에 재사용한다
+    # (450으로 저장하면 표출 때 맥놀이 격자가 되살아남 — 2026-08-26)
     np.savez_compressed(os.path.join(FIELDS_DIR, f"{issue:%Y%m%d%H%M}.npz"),
                         **{f"m{m}": np.round(v).astype(np.uint8)
-                           for m, v in fields.items()})
+                           for m, v in native.items()})
 
     if not args.no_plot:
         latest = os.path.join(NOWCAST_OUT, "latest")
         os.makedirs(latest, exist_ok=True)
         render_maps(issue, native, latest, obs_native)
+        render_verify(issue, obs_native, latest)
         render_cities(issue, fields, latest)
         with open(os.path.join(latest, "issue.txt"), "w") as f:
             f.write(f"{issue:%Y%m%d%H%M}")
