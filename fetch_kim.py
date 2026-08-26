@@ -89,7 +89,10 @@ def _filter_append(src_path: str, dst, keep=KEEP_SHORTNAMES) -> int:
     return n
 
 
-def fetch(tmfc: str | None = None) -> str:
+def fetch(tmfc: str | None = None, max_minutes: float = 0.0) -> str:
+    """max_minutes>0이면 그 시간을 넘긴 순간 남은 스텝을 포기하고 받은 데까지 완성한다.
+    (2026-08-26 실측: API 혼잡으로 외부 timeout에 걸리면 .part만 남아 KIM 표출이 통째로
+     사라졌다. 짧은 리드부터 순서대로 받으므로 부분 수신도 그대로 쓸모가 있다.)"""
     key = _auth_key()
     if tmfc is None:
         tmfc = find_latest_run(key)
@@ -102,9 +105,15 @@ def fetch(tmfc: str | None = None) -> str:
         return target
 
     tmp_out = target + ".part"
-    n_ok = n_fail = 0
+    n_ok = n_fail = n_skip = 0
+    t_start = time.time()
     with open(tmp_out, "wb") as dst:
         for step in KIM_STEPS:
+            if max_minutes and (time.time() - t_start) / 60 >= max_minutes:
+                n_skip = len(KIM_STEPS) - n_ok - n_fail
+                print(f"[KIM] 시간 상한 {max_minutes}분 도달 — 남은 {n_skip}스텝 포기, "
+                      f"받은 {n_ok}스텝으로 마무리")
+                break
             ok = False
             for attempt in range(3):
                 try:
@@ -143,17 +152,19 @@ def fetch(tmfc: str | None = None) -> str:
         raise RuntimeError("KIM 스텝을 하나도 받지 못했습니다")
     os.replace(tmp_out, target)
     print(f"[KIM] 수신 완료: {target} ({os.path.getsize(target)/1e6:.1f} MB, "
-          f"성공 {n_ok} / 실패 {n_fail} 스텝)")
+          f"성공 {n_ok} / 실패 {n_fail} / 미수신 {n_skip} 스텝)")
     return target
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--run", nargs=2, metavar=("YYYYMMDD", "HH"), default=None)
+    p.add_argument("--max-minutes", type=float, default=0.0,
+                   help="시간 상한(분). 초과 시 받은 스텝까지만 사용")
     args = p.parse_args()
     tmfc = (args.run[0] + args.run[1]) if args.run else None
     try:
-        print(fetch(tmfc))
+        print(fetch(tmfc, args.max_minutes))
     except Exception as e:
         print(f"[KIM] 수신 실패: {e}", file=sys.stderr)
         sys.exit(1)
