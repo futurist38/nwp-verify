@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 <header>
@@ -95,8 +95,18 @@
   </section>
 
   <section id="tab-meteo" class="tab">
-    <div class="controls"><select id="dateSelM"></select></div>
-    <div id="meteoList"></div>
+    <p class="note" style="font-size:13px;color:#444">
+      <b>도시별 시계열 — 모델 3종 비교.</b> 각 모델의 최신 런을 3시간 간격으로 겹쳐 그립니다.
+      선 위에 마우스를 올리거나(휴대폰은 손가락으로 짚으면) 그 시각의 모델별 값이 표시됩니다.</p>
+    <div class="controls">
+      <select id="dateSelM"></select>
+      <div id="meteoVarBtns" class="btns">
+        <button data-v="t2m" class="on">기온</button>
+        <button data-v="tcc">전운량</button>
+      </div>
+    </div>
+    <div id="meteoLegend" class="step-label"></div>
+    <div id="meteoCharts"></div>
   </section>
 
   <section id="tab-kmaf" class="tab">
@@ -108,7 +118,6 @@
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
     <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
     <div id="kmafCharts"></div>
-    <div id="kmafTip" class="tip" hidden></div>
 
     <h2 id="fdTitle">예보 변화 — 어제 발표 대비</h2>
     <p class="note" style="font-size:13px;color:#444">
@@ -152,8 +161,6 @@
     <h2>리드타임별 MAE</h2>
     <div class="imgwrap"><img src="verif/mae_curve_t2m.png" alt="기온 MAE" loading="lazy"></div>
     <div class="imgwrap"><img src="verif/mae_curve_tcc.png" alt="운량 MAE" loading="lazy"></div>
-    <h2>도시×모델×리드타임 ME/MAE</h2>
-    <div id="verifTable" class="tablewrap"></div>
     <h2>오답노트 사례</h2>
     <ul id="caseList"></ul>
   </section>
@@ -175,6 +182,7 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=21"></script>
+<div id="chartTip" class="tip" hidden></div>
+<script src="app.js?v=24"></script>
 </body>
 </html>

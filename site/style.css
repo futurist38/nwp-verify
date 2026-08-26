@@ -53,7 +53,9 @@ tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
 /* 예보-관측 인터랙티브 차트 (이미지 대신 데이터로 그린다 — 2026-08-26) */
 #kmafCharts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
               gap: 6px; }
-#kmafCharts svg { width: 100%; height: auto; background: #fff; border: 1px solid #e0e0e0;
+/* 미티오그램은 한 줄에 하나 — 3×2로는 x축 시각 라벨이 뭉개진다 (2026-08-26) */
+#meteoCharts { display: grid; grid-template-columns: 1fr; gap: 6px; }
+#kmafCharts svg, #meteoCharts svg { width: 100%; height: auto; background: #fff; border: 1px solid #e0e0e0;
                   border-radius: 6px; }
 .tip { position: fixed; z-index: 20; background: rgba(255,255,255,.97); border: 1px solid #bbb;
        border-radius: 6px; padding: 6px 9px; font-size: 13px; pointer-events: none;

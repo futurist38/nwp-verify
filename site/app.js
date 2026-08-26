@@ -34,24 +34,19 @@ document.addEventListener("keydown", (ev) => {
 });
 
 
-// ── 예보-관측 인터랙티브 차트 ─────────────────────────────
-// 이미지 대신 데이터(JSON)를 받아 SVG로 그린다 — 같은 내용이 347KB → 11KB이고
-// 마우스를 올리면 그 시각의 실측·예보·차이를 바로 읽을 수 있다 (2026-08-26).
-let KMAF = { date: null, data: null };
+// ── 시계열 차트 (공용) ────────────────────────────────
+// 이미지 대신 데이터를 받아 SVG로 그린다 — 용량이 30배 작고 값을 마우스/터치로 읽을 수 있다.
+// 예보-관측(실측 vs 예보)과 미티오그램(모델 3종)이 같은 렌더러를 쓴다 (2026-08-26).
 
-function kmafKeyToMs(key) {   // YYYYMMDDHH(KST) → epoch
-  return Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8), +key.slice(8, 10))
-         - 9 * 3600e3;
-}
-
-function drawKmafPanel(city, obs, fc, i0, i1, iIss, ylo, yhi, t0ms) {
-  const W = 400, H = 210, ML = 36, MR = 10, MT = 16, MB = 24;
-  const n = Math.max(1, i1 - i0);
-  const X = (i) => ML + ((i - i0) / n) * (W - ML - MR);
-  const Y = (v) => MT + ((yhi - v) / Math.max(1e-6, yhi - ylo)) * (H - MT - MB);
-  const seg = (arr) => {   // null 구간에서 선을 끊는다
+function drawPanel(o) {
+  // o: {title, series:[{color,dash,data}], i0,i1, ylo,yhi, t0ms, stepMs, vline}
+  const W = o.w || 400, H = o.h || 210, ML = 38, MR = 10, MT = 16, MB = 24;
+  const n = Math.max(1, o.i1 - o.i0);
+  const X = (i) => ML + ((i - o.i0) / n) * (W - ML - MR);
+  const Y = (v) => MT + ((o.yhi - v) / Math.max(1e-6, o.yhi - o.ylo)) * (H - MT - MB);
+  const path = (arr) => {
     let out = "", pen = false;
-    for (let i = i0; i <= i1; i++) {
+    for (let i = o.i0; i <= o.i1; i++) {
       const v = arr && arr[i];
       if (v == null) { pen = false; continue; }
       out += (pen ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1) + " ";
@@ -59,34 +54,101 @@ function drawKmafPanel(city, obs, fc, i0, i1, iIss, ylo, yhi, t0ms) {
     }
     return out;
   };
+  const dots = (arr, color) => {
+    let out = "";
+    for (let i = o.i0; i <= o.i1; i++) {
+      const v = arr && arr[i];
+      if (v != null) out += `<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2" fill="${color}"/>`;
+    }
+    return out;
+  };
+  const span = o.yhi - o.ylo;
+  const gy = span > 60 ? 20 : span > 25 ? 10 : 5;
   let g = "";
-  for (let v = Math.ceil(ylo / 5) * 5; v <= yhi; v += 5) {
-    g += `<line x1="${ML}" y1="${Y(v)}" x2="${W - MR}" y2="${Y(v)}" stroke="#eee"/>`
-       + `<text x="${ML - 4}" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="#888">${v}</text>`;
+  for (let v = Math.ceil(o.ylo / gy) * gy; v <= o.yhi; v += gy) {
+    g += `<line x1="${ML}" y1="${Y(v)}" x2="${W - MR}" y2="${Y(v)}" stroke="#d5d5d5"/>`
+       + `<text x="${ML - 4}" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="#666">${v}</text>`;
   }
-  for (let i = i0; i <= i1; i++) {
-    const d = new Date(t0ms + i * 3600e3 + 9 * 3600e3);
-    if (d.getUTCHours() % 6) continue;
+  // 라벨 간격: 라벨끼리 60px 이상 떨어지도록 폭에 맞춰 자동 조절
+  const perStep = (W - ML - MR) / n;
+  const stepH = o.stepMs / 3600e3;
+  let labH = 6;
+  while (perStep * (labH / stepH) < 60) labH += stepH;
+  for (let i = o.i0; i <= o.i1; i++) {
+    const d = new Date(o.t0ms + i * o.stepMs + 9 * 3600e3);
+    if (d.getUTCHours() % labH) continue;
     const lab = d.getUTCHours() === 0 ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : d.getUTCHours() + "시";
-    g += `<line x1="${X(i)}" y1="${MT}" x2="${X(i)}" y2="${H - MB}" stroke="#f2f2f2"/>`
-       + `<text x="${X(i)}" y="${H - MB + 14}" text-anchor="middle" font-size="10" fill="#888">${lab}</text>`;
+    g += `<line x1="${X(i)}" y1="${MT}" x2="${X(i)}" y2="${H - MB}" stroke="#e2e2e2"/>`
+       + `<text x="${X(i)}" y="${H - MB + 14}" text-anchor="middle" font-size="10" fill="#666">${lab}</text>`;
   }
-  return `<svg viewBox="0 0 ${W} ${H}" data-city="${city}" data-ml="${ML}" data-mr="${MR}"
-    data-i0="${i0}" data-i1="${i1}" data-w="${W}">
-    ${g}
-    <line x1="${X(iIss)}" y1="${MT}" x2="${X(iIss)}" y2="${H - MB}" stroke="#1a5fb4" stroke-dasharray="3 3"/>
-    <path d="${seg(fc)}" fill="none" stroke="#1a5fb4" stroke-width="1.6" stroke-dasharray="5 3"/>
-    <path d="${seg(obs)}" fill="none" stroke="#111" stroke-width="1.8"/>
-    <text x="${ML + 2}" y="${MT - 4}" font-size="12" font-weight="bold">${city}</text>
+  const vl = (o.vline != null && o.vline >= o.i0 && o.vline <= o.i1)
+    ? `<line x1="${X(o.vline)}" y1="${MT}" x2="${X(o.vline)}" y2="${H - MB}" stroke="#1a5fb4" stroke-dasharray="3 3"/>` : "";
+  const lines = o.series.map((se) =>
+    `<path d="${path(se.data)}" fill="none" stroke="${se.color}" stroke-width="1.7"`
+    + (se.dash ? ` stroke-dasharray="${se.dash}"` : "") + "/>").join("");
+  const pts = o.series.map((se) => dots(se.data, se.color)).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" data-t="${o.title}" data-ml="${ML}" data-mr="${MR}"
+    data-i0="${o.i0}" data-i1="${o.i1}" data-w="${W}">${g}${vl}${lines}${pts}
+    <text x="${ML + 2}" y="${MT - 4}" font-size="12" font-weight="bold">${o.title}</text>
     <line class="cross" x1="0" y1="${MT}" x2="0" y2="${H - MB}" stroke="#e01b24" stroke-width="1" opacity="0"/>
   </svg>`;
 }
 
+function bindHover(container, lookup) {
+  // lookup(title, i) → {when, rows:[[이름, 값문자열], ...]}
+  const tip = $("chartTip");
+  $(container).querySelectorAll("svg").forEach((svg) => {
+    const title = svg.dataset.t, ML = +svg.dataset.ml, MR = +svg.dataset.mr;
+    const i0 = +svg.dataset.i0, i1 = +svg.dataset.i1, W = +svg.dataset.w;
+    const cross = svg.querySelector(".cross");
+    const at = (cx, cy) => {
+      const r = svg.getBoundingClientRect();
+      const px = ((cx - r.left) / r.width) * W;
+      const i = Math.round(i0 + ((px - ML) / (W - ML - MR)) * (i1 - i0));
+      if (i < i0 || i > i1) { tip.hidden = true; cross.setAttribute("opacity", 0); return; }
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px);
+      cross.setAttribute("opacity", 1);
+      const info = lookup(title, i);
+      tip.innerHTML = `<b>${title}</b> ${info.when}<br>`
+        + info.rows.map((kv) => `${kv[0]} ${kv[1]}`).join(" · ");
+      tip.hidden = false;
+      tip.style.left = Math.min(Math.max(8, cx + 14), innerWidth - 210) + "px";
+      tip.style.top = Math.max(8, cy - 70) + "px";
+    };
+    svg.onmousemove = (ev) => at(ev.clientX, ev.clientY);
+    svg.onmouseleave = () => { tip.hidden = true; cross.setAttribute("opacity", 0); };
+    // 터치 기기: 손가락으로 짚어도 값이 보이게
+    const touch = (ev) => {
+      const t = ev.touches && ev.touches[0];
+      if (!t) return;
+      at(t.clientX, t.clientY);
+      ev.preventDefault();
+    };
+    svg.addEventListener("touchstart", touch, { passive: false });
+    svg.addEventListener("touchmove", touch, { passive: false });
+    svg.addEventListener("touchend", () => {
+      setTimeout(() => { tip.hidden = true; cross.setAttribute("opacity", 0); }, 2500);
+    });
+  });
+}
+
+function keyToMs(key) {   // YYYYMMDDHH(KST) → epoch
+  return Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8), +key.slice(8, 10))
+         - 9 * 3600e3;
+}
+function fmtWhen(ms) {
+  const d = new Date(ms + 9 * 3600e3), p2 = (x) => String(x).padStart(2, "0");
+  return `${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}시`;
+}
+
+// ── 예보-관측 ──
+let KMAF = { date: null, data: null };
+
 function renderKmaf() {
   const d = KMAF.data, b = $("issueSelK").value;
   if (!d || !d.fcst[b]) { $("kmafCharts").innerHTML = ""; return; }
-  const t0ms = kmafKeyToMs(d.t0);
-  const iIss = Math.round((kmafKeyToMs(b) - t0ms) / 3600e3);
+  const t0ms = keyToMs(d.t0);
+  const iIss = Math.round((keyToMs(b) - t0ms) / 3600e3);
   const i0 = Math.max(0, iIss - 6), i1 = Math.min(d.hours - 1, iIss + 24);
   let lo = Infinity, hi = -Infinity;
   d.cities.forEach((c) => {
@@ -98,38 +160,53 @@ function renderKmaf() {
   });
   if (!isFinite(lo)) { $("kmafCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
   const pad = Math.max(1, (hi - lo) * 0.12);
-  lo -= pad; hi += pad;
-  $("kmafCharts").innerHTML = d.cities
-    .map((c) => drawKmafPanel(c, d.obs[c], d.fcst[b][c], i0, i1, iIss, lo, hi, t0ms)).join("");
-  bindKmafHover(t0ms, b);
+  $("kmafCharts").innerHTML = d.cities.map((c) => drawPanel({
+    title: c, i0: i0, i1: i1, ylo: lo - pad, yhi: hi + pad,
+    t0ms: t0ms, stepMs: 3600e3, vline: iIss,
+    series: [{ color: "#1a5fb4", dash: "5 3", data: d.fcst[b][c] },
+             { color: "#111", data: d.obs[c] }],
+  })).join("");
+  bindHover("kmafCharts", (city, i) => {
+    const o = d.obs[city] && d.obs[city][i], f = d.fcst[b][city] && d.fcst[b][city][i];
+    const rows = [["실측", o == null ? "—" : o.toFixed(1) + "℃"],
+                  ["예보", f == null ? "—" : f.toFixed(1) + "℃"]];
+    if (o != null && f != null) rows.push(["차이", (f - o > 0 ? "+" : "") + (f - o).toFixed(1) + "℃"]);
+    return { when: fmtWhen(t0ms + i * 3600e3), rows: rows };
+  });
 }
 
-function bindKmafHover(t0ms, b) {
-  const tip = $("kmafTip"), d = KMAF.data;
-  $("kmafCharts").querySelectorAll("svg").forEach((svg) => {
-    const city = svg.dataset.city, ML = +svg.dataset.ml, MR = +svg.dataset.mr;
-    const i0 = +svg.dataset.i0, i1 = +svg.dataset.i1, W = +svg.dataset.w;
-    const cross = svg.querySelector(".cross");
-    svg.onmousemove = (ev) => {
-      const r = svg.getBoundingClientRect();
-      const px = ((ev.clientX - r.left) / r.width) * W;
-      const frac = (px - ML) / (W - ML - MR);
-      const i = Math.round(i0 + frac * (i1 - i0));
-      if (i < i0 || i > i1) { tip.hidden = true; cross.setAttribute("opacity", 0); return; }
-      cross.setAttribute("x1", px); cross.setAttribute("x2", px);
-      cross.setAttribute("opacity", 1);
-      const o = d.obs[city] && d.obs[city][i], f = d.fcst[b][city] && d.fcst[b][city][i];
-      const t = new Date(t0ms + i * 3600e3 + 9 * 3600e3);
-      const p2 = (x) => String(x).padStart(2, "0");
-      const diff = (o != null && f != null) ? `<br>차이 <b>${(f - o > 0 ? "+" : "") + (f - o).toFixed(1)}</b>℃` : "";
-      tip.innerHTML = `<b>${city}</b> ${p2(t.getUTCMonth() + 1)}-${p2(t.getUTCDate())} ${p2(t.getUTCHours())}시<br>`
-        + `실측 ${o == null ? "—" : o.toFixed(1) + "℃"} · 예보 ${f == null ? "—" : f.toFixed(1) + "℃"}${diff}`;
-      tip.hidden = false;
-      tip.style.left = Math.min(ev.clientX + 14, innerWidth - 190) + "px";
-      tip.style.top = (ev.clientY + 14) + "px";
-    };
-    svg.onmouseleave = () => { tip.hidden = true; cross.setAttribute("opacity", 0); };
-  });
+// ── 미티오그램 ──
+const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
+const METEO_UNIT = { t2m: "℃", tcc: "%" };
+let METEO = { date: null, data: null, v: "t2m" };
+
+function renderMeteoCharts() {
+  const d = METEO.data, v = METEO.v;
+  if (!d) { $("meteoCharts").innerHTML = ""; return; }
+  const t0ms = keyToMs(d.t0), i1 = d.steps - 1;
+  let lo = Infinity, hi = -Infinity;
+  d.models.forEach((m) => d.cities.forEach((c) => (d.series[m][c][v] || []).forEach((x) => {
+    if (x != null) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+  })));
+  if (!isFinite(lo)) { $("meteoCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
+  if (v === "tcc") { lo = 0; hi = 100; }
+  const pad = v === "tcc" ? 0 : Math.max(1, (hi - lo) * 0.12);
+  $("meteoCharts").innerHTML = d.cities.map((c) => drawPanel({
+    title: c, i0: 0, i1: i1, ylo: lo - pad, yhi: hi + pad,
+    t0ms: t0ms, stepMs: 3 * 3600e3, w: 1160, h: 200,
+    series: d.models.map((m) => ({ color: MODEL_COLOR[m] || "#666", data: d.series[m][c][v] })),
+  })).join("");
+  $("meteoLegend").innerHTML = d.models.map((m) =>
+    `<span style="color:${MODEL_COLOR[m] || "#666"};font-weight:bold">■ ${m}</span>`
+    + `<span style="color:#777;font-size:12px"> 런 ${d.runs[m].slice(4, 6)}-${d.runs[m].slice(6, 8)} ${d.runs[m].slice(8)}z</span>`
+  ).join(" &nbsp; ");
+  bindHover("meteoCharts", (city, i) => ({
+    when: fmtWhen(t0ms + i * 3 * 3600e3),
+    rows: d.models.map((m) => {
+      const x = d.series[m][city][v] && d.series[m][city][v][i];
+      return [m, x == null ? "—" : x.toFixed(v === "tcc" ? 0 : 1) + METEO_UNIT[v]];
+    }),
+  }));
 }
 
 // ── 유틸 ──
@@ -377,16 +454,13 @@ document.querySelectorAll("#vmWinBtns button").forEach((b) => {
 });
 
 // ── Meteogram 탭 ──
-const METEO_ORDER = ["서울", "대전", "대구", "광주", "부산"];  // 사용자 지정 순서
-function renderMeteo() {
+async function renderMeteo() {
   const d = $("dateSelM").value;
-  const files = (MF.dates[d].meteograms || []).slice().sort((a, b) => {
-    const ia = METEO_ORDER.findIndex((c) => a.includes(c));
-    const ib = METEO_ORDER.findIndex((c) => b.includes(c));
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
-  $("meteoList").innerHTML = files.map((fn) =>
-    `<img src="archive/${d}/${fn}" alt="${fn}" loading="lazy">`).join("");
+  if (METEO.date !== d) {
+    METEO.data = await (await fetch(`meteo/${d}.json?${Date.now()}`)).json();
+    METEO.date = d;
+  }
+  renderMeteoCharts();
 }
 
 // ── 검증 탭: 일별 검증표 ──
@@ -430,15 +504,8 @@ async function renderVerifDaily() {
 }
 
 // ── 검증 탭 ──
-async function renderVerif() {
-  try {
-    const data = await (await fetch("verif/summary.json")).json();
-    let html = "<table><tr>" + data.columns.map((c) => `<th>${c}</th>`).join("") + "</tr>";
-    for (const r of data.rows) {
-      html += "<tr>" + r.map((v) => `<td>${v === null ? "-" : v}</td>`).join("") + "</tr>";
-    }
-    $("verifTable").innerHTML = html + "</table>";
-  } catch { $("verifTable").innerHTML = "<p>검증 요약 없음</p>"; }
+function renderVerif() {
+  // 도시×모델×리드타임 ME/MAE 표는 제거 (2026-08-26 사용자: 보기 어렵고 필요성 낮음)
   $("caseList").innerHTML = (MF.cases || []).slice().reverse().map((fn) =>
     `<li><a href="verif/cases/${fn}" target="_blank">${fn.replace(".md", "")}</a></li>`).join("");
 }
@@ -451,7 +518,16 @@ async function renderVerif() {
   state.date = dates[0];
 
   fillDateSel($("dateSel"), (ev) => { state.date = ev.target.value; renderModelBtns(); });
-  fillDateSel($("dateSelM"), renderMeteo);
+  const mdates = (MF.meteo_dates || []).slice().reverse();
+  $("dateSelM").innerHTML = mdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
+  $("dateSelM").onchange = renderMeteo;
+  $("meteoVarBtns").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      METEO.v = b.dataset.v;
+      $("meteoVarBtns").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      renderMeteoCharts();
+    };
+  });
 
   obsState.date = dates[0];
   fillDateSel($("dateSelO"), (ev) => { obsState.date = ev.target.value; renderObsVarBtns(); });

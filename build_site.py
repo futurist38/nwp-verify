@@ -27,6 +27,7 @@ import pandas as pd
 from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
 KMAFCST_DATES: list[str] = []
+METEO_DATES: list[str] = []
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
@@ -46,7 +47,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "meteograms", "obsmaps", "kmafcst", "fcstdiff"):
+        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "obsmaps", "kmafcst", "fcstdiff"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
@@ -258,6 +259,55 @@ def export_kmafcst(site_dir: str) -> list[str]:
     return sorted(dates)
 
 
+def export_meteo(site_dir: str) -> list[str]:
+    """미티오그램을 이미지 대신 데이터로 (2026-08-26). city_forecast.csv 가 이미 도시·모델·
+    시각별 기온/운량을 담고 있어 새로 계산할 것이 없다. 모델별 최신 런만 3시간 격자에 정렬.
+
+    구조: {cities, models, runs:{model:run}, t0(YYYYMMDDHH), steps, 
+           series:{model:{city:{t2m:[...], tcc:[...]}}}}
+    """
+    out_dir = os.path.join(site_dir, "meteo")
+    os.makedirs(out_dir, exist_ok=True)
+    dates = []
+    for day_dir in sorted(glob.glob(os.path.join(OUT_DIR, "????????"))):
+        csv = os.path.join(day_dir, "city_forecast.csv")
+        if not os.path.exists(csv):
+            continue
+        ymd = os.path.basename(day_dir)
+        df = pd.read_csv(csv)
+        df = df[df["city"].isin(KMAF_CITIES)]
+        if df.empty:
+            continue
+        df["valid"] = pd.to_datetime(df["valid_kst"])
+        # 모델별 최신 런만
+        latest = df.groupby("model")["run_utc"].max()
+        df = df[[r.run_utc == latest[r.model] for r in df.itertuples()]]
+
+        grid = pd.date_range(df["valid"].min(), df["valid"].max(), freq="3h")
+        idx = {t: i for i, t in enumerate(grid)}
+        data = {"cities": KMAF_CITIES, "models": sorted(latest.index),
+                "runs": {m: pd.Timestamp(latest[m]).strftime("%Y%m%d%H") for m in latest.index},
+                "t0": grid[0].strftime("%Y%m%d%H"), "steps": len(grid), "series": {}}
+        for m in data["models"]:
+            data["series"][m] = {}
+            for c in KMAF_CITIES:
+                sub = df[(df["model"] == m) & (df["city"] == c)]
+                t2m = [None] * len(grid); tcc = [None] * len(grid)
+                for r in sub.itertuples():
+                    i = idx.get(r.valid)
+                    if i is None:
+                        continue
+                    if pd.notna(r.t2m_C):
+                        t2m[i] = round(float(r.t2m_C), 1)
+                    if pd.notna(r.tcc_pct):
+                        tcc[i] = round(float(r.tcc_pct), 0)
+                data["series"][m][c] = {"t2m": t2m, "tcc": tcc}
+        with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        dates.append(ymd)
+    return sorted(dates)
+
+
 def prune_kmafcst(site_dir: str):
     """예보-관측 그림 전량 제거 — 이제 사이트가 JSON으로 직접 그린다(2026-08-26).
     이미 배포된 과거분을 걷어내기 위한 정리 단계."""
@@ -339,6 +389,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         os.path.basename(p) for p in
         glob.glob(os.path.join(site_dir, "verif", "cases", "*.md")))
     manifest["kmafcst_dates"] = KMAFCST_DATES
+    manifest["meteo_dates"] = METEO_DATES
     manifest["verif_dates"] = sorted(
         os.path.basename(p)[:-5] for p in
         glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
@@ -362,8 +413,9 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
-    global KMAFCST_DATES
+    global KMAFCST_DATES, METEO_DATES
     KMAFCST_DATES = export_kmafcst(args.site_dir)
+    METEO_DATES = export_meteo(args.site_dir)
     nc = copy_nowcast(args.site_dir)
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에
