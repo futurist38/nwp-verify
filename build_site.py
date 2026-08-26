@@ -256,8 +256,7 @@ def export_kmafcst(site_dir: str) -> list[str]:
 
         with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-        dates.append(ymd)
-    return sorted(dates)
+    return _json_dates(out_dir, MAX_DAYS)
 
 
 def export_meteo(site_dir: str) -> list[str]:
@@ -305,8 +304,24 @@ def export_meteo(site_dir: str) -> list[str]:
                 data["series"][m][c] = {"t2m": t2m, "tcc": tcc}
         with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-        dates.append(ymd)
-    return sorted(dates)
+    return _json_dates(out_dir, MAX_DAYS)
+
+
+def _json_dates(out_dir: str, keep_days: int) -> list[str]:
+    """내보낸 JSON 폴더에서 날짜 목록을 만든다 + 보존기한 정리.
+
+    러너는 매번 새로 시작하므로 output/ 에는 그날 산출만 있다. 목록을 '이번에 만든 것'으로
+    잡으면 과거 날짜가 통째로 사라진다 (2026-08-27 실측: 미티오그램이 0건이 됨).
+    site-data 에서 복원된 파일까지 함께 세어야 한다."""
+    cut = (dt.date.today() - dt.timedelta(days=keep_days)).strftime("%Y%m%d")
+    out = []
+    for f in sorted(glob.glob(os.path.join(out_dir, "????????.json"))):
+        ymd = os.path.basename(f)[:-5]
+        if ymd < cut:
+            os.remove(f)
+        else:
+            out.append(ymd)
+    return out
 
 
 def export_obs(site_dir: str) -> list[str]:
@@ -375,8 +390,7 @@ def export_obs(site_dir: str) -> list[str]:
                                    for s, row in piv.iterrows()}
             with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
                 json.dump(data, f, separators=(",", ":"))
-            dates.append(ymd)
-    return sorted(dates)
+    return _json_dates(out_dir, OBS_MAX_DAYS)
 
 
 def prune_kmafcst(site_dir: str):
