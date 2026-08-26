@@ -128,12 +128,45 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
         plt.close(fig)
 
 
+def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str) -> bool:
+    """패널 목록[(라벨, 장 or None)] → 한 장으로. 첫 칸이 실제, 나머지가 과거 예측."""
+    import cartopy.feature as cfeature
+    proj = _gk2a_proj()
+    if sum(f is not None for _, f in panels) < 2:
+        print("[nowcast] 비교할 예측이 부족 — 검증 화면 생략")
+        return False
+    fig = plt.figure(figsize=(16.5, 8.6))
+    for n, (label, f) in enumerate(panels):
+        if f is None:   # 지도 축으로 만들면 투영 경계가 부채꼴로 그려져 흉하다 → 평면 축
+            ax = fig.add_subplot(2, 4, n + 1)
+            ax.set_xticks([]); ax.set_yticks([])
+            ax.set_facecolor("#f2f2f2")
+            ax.text(0.5, 0.5, "없음", ha="center", va="center",
+                    transform=ax.transAxes, fontsize=10, color="#888")
+            ax.set_title(label, fontsize=11)
+            continue
+        ax = fig.add_subplot(2, 4, n + 1, projection=proj)
+        ax.set_title(label, fontsize=11, weight="bold" if n == 0 else "normal")
+        ax.imshow(f, transform=proj, origin="upper",
+                  extent=[-899000, 899000, -899000, 899000],
+                  cmap="gray", vmin=0, vmax=100, interpolation="bilinear")
+        ax.coastlines(resolution="10m", color="yellow", linewidth=0.7)
+        ax.add_feature(cfeature.STATES.with_scale("10m"),
+                       edgecolor="yellow", linewidth=0.3, facecolor="none")
+    head = f"같은 시각을 언제 예측했나 - 유효 {valid_kst:%Y-%m-%d %H:%M} KST"
+    fig.suptitle(head + "\n왼쪽 위가 실제, 나머지는 그 시각을 1~6시간 전에 내다본 결과",
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path, dpi=100)
+    plt.close(fig)
+    return True
+
+
 def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
     """'지금 위성' vs '과거에 예측한 지금' — 리드 1~6h를 한 장에 (2026-08-26 사용자 요청).
     보관해 둔 과거 발령 예측장(FIELDS_DIR)에서 유효시각이 이번 발령과 맞는 것을 꺼내 쓴다
     — 추가 추론도 추가 수신도 없다."""
-    import cartopy.feature as cfeature
-    proj = _gk2a_proj()
     kst = issue + dt.timedelta(hours=9)
 
     stored = {}
@@ -156,35 +189,38 @@ def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
                     f = z[key].astype(np.float32)
         panels.append((f"{h}시간 전 예측", f))
 
-    if sum(f is not None for _, f in panels) < 2:
-        print("[nowcast] 과거 예측 보관분 부족 — 검증 화면 생략")
-        return False
+    return draw_verify(panels, kst, os.path.join(out_dir, "verify.png"))
 
-    fig = plt.figure(figsize=(16.5, 8.6))
-    for n, (label, f) in enumerate(panels):
-        if f is None:   # 지도 축으로 만들면 투영 경계가 부채꼴로 그려져 흉하다 → 평면 축
-            ax = fig.add_subplot(2, 4, n + 1)
-            ax.set_xticks([]); ax.set_yticks([])
-            ax.set_facecolor("#f2f2f2")
-            ax.text(0.5, 0.5, "보관 없음\n(운영 누적 후 표시)", ha="center", va="center",
-                    transform=ax.transAxes, fontsize=10, color="#888")
-            ax.set_title(label, fontsize=11)
-            continue
-        ax = fig.add_subplot(2, 4, n + 1, projection=proj)
-        ax.set_title(label, fontsize=11, weight="bold" if n == 0 else "normal")
-        ax.imshow(f, transform=proj, origin="upper",
-                  extent=[-899000, 899000, -899000, 899000],
-                  cmap="gray", vmin=0, vmax=100, interpolation="bilinear")
-        ax.coastlines(resolution="10m", color="yellow", linewidth=0.7)
-        ax.add_feature(cfeature.STATES.with_scale("10m"),
-                       edgecolor="yellow", linewidth=0.3, facecolor="none")
-    head = f"같은 시각을 언제 예측했나 - 유효 {kst:%m-%d %H:%M} KST"
-    fig.suptitle(head + "\n왼쪽 위가 실제, 나머지는 그 시각을 1~6시간 전에 내다본 결과",
-                 fontsize=13)
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
-    fig.savefig(os.path.join(out_dir, "verify.png"), dpi=100)
-    plt.close(fig)
-    return True
+
+def verify_case(valid_utc: dt.datetime, out_dir: str) -> bool:
+    """과거 임의 시각을 되짚어 본다 — 그 시각을 1~6시간 전에 각각 어떻게 예측했는지 재현.
+    보관분에 의존하지 않고 그 자리에서 추론하므로 위성 원자료가 있는 기간이면 언제든 가능.
+    사이트에는 올라가지 않는다(발행 대상은 output/nowcast/latest 뿐)."""
+    from dl_infer import DLNowcaster, load_ca_native
+    d = DLNowcaster()
+    obs_path = os.path.join(CLA_DIR, valid_utc.strftime("%Y%m%d%H%M") + ".nc")
+    obs = load_ca_native(obs_path) if os.path.exists(obs_path) else None
+    if obs is None:
+        print(f"[사례] 실황 위성 없음: {valid_utc} — 그 시각 자료를 먼저 받아야 함")
+
+    panels = [("실제 위성 관측", obs)]
+    for h in MAP_LEADS_H:
+        issue = valid_utc - dt.timedelta(hours=h)
+        f = None
+        if frames_ready(issue):
+            out = d.predict(issue, [h * 60], native=True)
+            if out:
+                f = out[h * 60]
+        else:
+            print(f"[사례] {h}시간 전({issue:%m-%d %H:%M}) 입력 프레임 부족")
+        panels.append((f"{h}시간 전 예측", f))
+
+    kst = valid_utc + dt.timedelta(hours=9)
+    out_path = os.path.join(out_dir, f"case_{valid_utc:%Y%m%d%H%M}.png")
+    ok = draw_verify(panels, kst, out_path)
+    if ok:
+        print(f"[사례] 저장 → {out_path}")
+    return ok
 
 
 def render_cities(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str):
@@ -268,7 +304,14 @@ def main():
     p.add_argument("--issue", default="", help="발령시각 YYYYMMDDHHMM(UTC), 생략=자동")
     p.add_argument("--no-score", action="store_true")
     p.add_argument("--no-plot", action="store_true")
+    p.add_argument("--case", default="",
+                   help="과거 유효시각 YYYYMMDDHHMM(UTC) 되짚어보기 — 사이트 미발행")
     args = p.parse_args()
+
+    if args.case:   # 과거 사례 조회 모드 — 운영 산출물을 건드리지 않는다
+        verify_case(dt.datetime.strptime(args.case, "%Y%m%d%H%M"),
+                    os.path.join(NOWCAST_OUT, "cases"))
+        return
 
     now_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     issue = (dt.datetime.strptime(args.issue, "%Y%m%d%H%M") if args.issue
