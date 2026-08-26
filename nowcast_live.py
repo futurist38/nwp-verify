@@ -98,14 +98,15 @@ def fetch_series_past(issue: dt.datetime):
                   (issue + dt.timedelta(minutes=m)).strftime("%Y%m%d%H%M"), CLA_DIR)
 
 
-def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str):
+def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str,
+                obs_native: np.ndarray | None = None):
     """위성영상 문법(plot_charts 전운량과 동일): gray 0어두움/100밝음 + 노란 지리선."""
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     proj = _gk2a_proj()
     kst = issue + dt.timedelta(hours=9)
     # lead 0 = 현재 위성 관측(비교 기준) — 사용자 요청 2026-08-25
-    panels = [(0, load_ca(issue.strftime("%Y%m%d%H%M")))]
+    panels = [(0, obs_native if obs_native is not None else load_ca(issue.strftime("%Y%m%d%H%M")))]
     panels += [(h, fields[h * 60]) for h in MAP_LEADS_H]
     for h, f in panels:
         if f is None:
@@ -215,12 +216,19 @@ def main():
     print(f"[nowcast] 발령 {issue} UTC")
     fetch_series_past(issue)
 
-    from dl_infer import DLNowcaster, MODEL_H5
+    from dl_infer import DLNowcaster, MODEL_H5, load_ca_native
     print(f"[nowcast] 모델: {MODEL_H5}")
     d = DLNowcaster()
-    fields = d.predict(issue, LEADS_ALL)
-    if fields is None:
+    # 표출은 원해상도(512), 채점·시계열은 벤치격자(450) — 축소가 만드는 맥놀이 격자 회피
+    native = d.predict(issue, LEADS_ALL, native=True)
+    if native is None:
         raise SystemExit("[nowcast] hist 결측 — 추론 불가")
+    import cv2
+    from nowcast_bench import N_PIX
+    fields = {m: cv2.resize(f, (N_PIX, N_PIX), interpolation=cv2.INTER_AREA)
+              for m, f in native.items()}
+    obs_path = os.path.join(CLA_DIR, issue.strftime("%Y%m%d%H%M") + ".nc")
+    obs_native = load_ca_native(obs_path) if os.path.exists(obs_path) else None
 
     os.makedirs(FIELDS_DIR, exist_ok=True)
     # uint8 저장 — Actions에선 site-data에 실려 런 간 왕복하므로 크기 최소화
@@ -231,7 +239,7 @@ def main():
     if not args.no_plot:
         latest = os.path.join(NOWCAST_OUT, "latest")
         os.makedirs(latest, exist_ok=True)
-        render_maps(issue, fields, latest)
+        render_maps(issue, native, latest, obs_native)
         render_cities(issue, fields, latest)
         with open(os.path.join(latest, "issue.txt"), "w") as f:
             f.write(f"{issue:%Y%m%d%H%M}")

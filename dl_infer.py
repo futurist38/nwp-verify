@@ -139,8 +139,12 @@ class DLNowcaster:
         y = self.model.predict(xb, verbose=0)[..., 0]
         return {k: np.clip(y[i].astype(np.float32), 0, 1) for i, k in enumerate(ks)}
 
-    def predict(self, issue: dt.datetime, leads_min: list[int]) -> dict[int, np.ndarray] | None:
-        """발령시각(UTC naive) → {lead: 벤치격자 %장}. hist 결측 시 None."""
+    def predict(self, issue: dt.datetime, leads_min: list[int],
+                native: bool = False) -> dict[int, np.ndarray] | None:
+        """발령시각(UTC naive) → {lead: %장}. hist 결측 시 None.
+        native=True면 모델 원해상도(512) 그대로. 표출에는 이쪽을 쓴다 —
+        512→450 축소(배율 1.138)가 전치합성곱의 2px 체커보드를 주기 14px 맥놀이로
+        키워 큰 격자무늬로 보이기 때문(2026-08-26 실측: 경계비 1.25).""" 
         hist = []
         for i in range(3, -1, -1):
             f = self._frame((issue - dt.timedelta(minutes=STEP * i)).strftime("%Y%m%d%H%M"))
@@ -165,5 +169,7 @@ class DLNowcaster:
             hist = [res[k] for k in range(self.n_lc - 4, self.n_lc)]
             base_t += dt.timedelta(minutes=span)
             base_off += span
+        if native:
+            return {m: f * 100.0 for m, f in out.items()}
         return {m: cv2.resize(f * 100.0, (N_PIX, N_PIX), interpolation=cv2.INTER_AREA)
                 for m, f in out.items()}
