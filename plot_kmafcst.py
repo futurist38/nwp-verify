@@ -141,6 +141,8 @@ def render(bdt: str, fc: dict, obs: pd.DataFrame, now: dt.datetime, out_dir: str
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--no-fetch", action="store_true", help="ASOS 재수신 생략")
+    p.add_argument("--no-plot", action="store_true",
+                   help="PNG 렌더 생략 — 사이트가 JSON으로 직접 그리므로 기본 운영 모드")
     args = p.parse_args()
 
     key = auth_key()
@@ -159,6 +161,10 @@ def main():
     # 창 = 가장 이른 발표 −6h ~ 가장 늦은 발표 +24h
     obs = load_obs_range(dt.datetime.combine(today - dt.timedelta(days=1), dt.time(11)),
                          now)
+
+    if args.no_plot:
+        print(f"[단기예보] 캐시 갱신만 ({len(bdts)}건) — 표출은 사이트가 JSON으로 그림")
+        return
 
     out_dir = os.path.join(OUT_DIR, f"{today:%Y%m%d}", "kmafcst")
     n = 0

@@ -33,6 +33,105 @@ document.addEventListener("keydown", (ev) => {
   if (btn) { btn.click(); ev.preventDefault(); }
 });
 
+
+// ── 예보-관측 인터랙티브 차트 ─────────────────────────────
+// 이미지 대신 데이터(JSON)를 받아 SVG로 그린다 — 같은 내용이 347KB → 11KB이고
+// 마우스를 올리면 그 시각의 실측·예보·차이를 바로 읽을 수 있다 (2026-08-26).
+let KMAF = { date: null, data: null };
+
+function kmafKeyToMs(key) {   // YYYYMMDDHH(KST) → epoch
+  return Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8), +key.slice(8, 10))
+         - 9 * 3600e3;
+}
+
+function drawKmafPanel(city, obs, fc, i0, i1, iIss, ylo, yhi, t0ms) {
+  const W = 400, H = 210, ML = 36, MR = 10, MT = 16, MB = 24;
+  const n = Math.max(1, i1 - i0);
+  const X = (i) => ML + ((i - i0) / n) * (W - ML - MR);
+  const Y = (v) => MT + ((yhi - v) / Math.max(1e-6, yhi - ylo)) * (H - MT - MB);
+  const seg = (arr) => {   // null 구간에서 선을 끊는다
+    let out = "", pen = false;
+    for (let i = i0; i <= i1; i++) {
+      const v = arr && arr[i];
+      if (v == null) { pen = false; continue; }
+      out += (pen ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1) + " ";
+      pen = true;
+    }
+    return out;
+  };
+  let g = "";
+  for (let v = Math.ceil(ylo / 5) * 5; v <= yhi; v += 5) {
+    g += `<line x1="${ML}" y1="${Y(v)}" x2="${W - MR}" y2="${Y(v)}" stroke="#eee"/>`
+       + `<text x="${ML - 4}" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="#888">${v}</text>`;
+  }
+  for (let i = i0; i <= i1; i++) {
+    const d = new Date(t0ms + i * 3600e3 + 9 * 3600e3);
+    if (d.getUTCHours() % 6) continue;
+    const lab = d.getUTCHours() === 0 ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : d.getUTCHours() + "시";
+    g += `<line x1="${X(i)}" y1="${MT}" x2="${X(i)}" y2="${H - MB}" stroke="#f2f2f2"/>`
+       + `<text x="${X(i)}" y="${H - MB + 14}" text-anchor="middle" font-size="10" fill="#888">${lab}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" data-city="${city}" data-ml="${ML}" data-mr="${MR}"
+    data-i0="${i0}" data-i1="${i1}" data-w="${W}">
+    ${g}
+    <line x1="${X(iIss)}" y1="${MT}" x2="${X(iIss)}" y2="${H - MB}" stroke="#1a5fb4" stroke-dasharray="3 3"/>
+    <path d="${seg(fc)}" fill="none" stroke="#1a5fb4" stroke-width="1.6" stroke-dasharray="5 3"/>
+    <path d="${seg(obs)}" fill="none" stroke="#111" stroke-width="1.8"/>
+    <text x="${ML + 2}" y="${MT - 4}" font-size="12" font-weight="bold">${city}</text>
+    <line class="cross" x1="0" y1="${MT}" x2="0" y2="${H - MB}" stroke="#e01b24" stroke-width="1" opacity="0"/>
+  </svg>`;
+}
+
+function renderKmaf() {
+  const d = KMAF.data, b = $("issueSelK").value;
+  if (!d || !d.fcst[b]) { $("kmafCharts").innerHTML = ""; return; }
+  const t0ms = kmafKeyToMs(d.t0);
+  const iIss = Math.round((kmafKeyToMs(b) - t0ms) / 3600e3);
+  const i0 = Math.max(0, iIss - 6), i1 = Math.min(d.hours - 1, iIss + 24);
+  let lo = Infinity, hi = -Infinity;
+  d.cities.forEach((c) => {
+    for (let i = i0; i <= i1; i++) {
+      [d.obs[c] && d.obs[c][i], d.fcst[b][c] && d.fcst[b][c][i]].forEach((v) => {
+        if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      });
+    }
+  });
+  if (!isFinite(lo)) { $("kmafCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
+  const pad = Math.max(1, (hi - lo) * 0.12);
+  lo -= pad; hi += pad;
+  $("kmafCharts").innerHTML = d.cities
+    .map((c) => drawKmafPanel(c, d.obs[c], d.fcst[b][c], i0, i1, iIss, lo, hi, t0ms)).join("");
+  bindKmafHover(t0ms, b);
+}
+
+function bindKmafHover(t0ms, b) {
+  const tip = $("kmafTip"), d = KMAF.data;
+  $("kmafCharts").querySelectorAll("svg").forEach((svg) => {
+    const city = svg.dataset.city, ML = +svg.dataset.ml, MR = +svg.dataset.mr;
+    const i0 = +svg.dataset.i0, i1 = +svg.dataset.i1, W = +svg.dataset.w;
+    const cross = svg.querySelector(".cross");
+    svg.onmousemove = (ev) => {
+      const r = svg.getBoundingClientRect();
+      const px = ((ev.clientX - r.left) / r.width) * W;
+      const frac = (px - ML) / (W - ML - MR);
+      const i = Math.round(i0 + frac * (i1 - i0));
+      if (i < i0 || i > i1) { tip.hidden = true; cross.setAttribute("opacity", 0); return; }
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px);
+      cross.setAttribute("opacity", 1);
+      const o = d.obs[city] && d.obs[city][i], f = d.fcst[b][city] && d.fcst[b][city][i];
+      const t = new Date(t0ms + i * 3600e3 + 9 * 3600e3);
+      const p2 = (x) => String(x).padStart(2, "0");
+      const diff = (o != null && f != null) ? `<br>차이 <b>${(f - o > 0 ? "+" : "") + (f - o).toFixed(1)}</b>℃` : "";
+      tip.innerHTML = `<b>${city}</b> ${p2(t.getUTCMonth() + 1)}-${p2(t.getUTCDate())} ${p2(t.getUTCHours())}시<br>`
+        + `실측 ${o == null ? "—" : o.toFixed(1) + "℃"} · 예보 ${f == null ? "—" : f.toFixed(1) + "℃"}${diff}`;
+      tip.hidden = false;
+      tip.style.left = Math.min(ev.clientX + 14, innerWidth - 190) + "px";
+      tip.style.top = (ev.clientY + 14) + "px";
+    };
+    svg.onmouseleave = () => { tip.hidden = true; cross.setAttribute("opacity", 0); };
+  });
+}
+
 // ── 유틸 ──
 function fmtDate(ymd) {
   return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
@@ -360,18 +459,18 @@ async function renderVerif() {
   renderVm();
 
   // 예보-관측 탭 — 날짜 + 발표시각 선택
-  const kdates = Object.keys(MF.dates).filter((d) =>
-    (MF.dates[d].kmafcst || []).length).sort().reverse();
+  const kdates = (MF.kmafcst_dates || []).slice().reverse();
   if (kdates.length) {
     $("dateSelK").innerHTML = kdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
     const fillIssues = () => {
-      const iss = (MF.dates[$("dateSelK").value].kmafcst || []).slice().sort().reverse();
+      const iss = Object.keys((KMAF.data && KMAF.data.fcst) || {}).sort().reverse();
       $("issueSelK").innerHTML = iss.map((b) =>
         `<option value="${b}">${b.slice(4, 6)}-${b.slice(6, 8)} ${b.slice(8)}시 발표</option>`).join("");
     };
-    const renderK = () => {
-      $("kmafImg").src =
-        `archive/${$("dateSelK").value}/kmafcst_${$("issueSelK").value}.webp?${Date.now()}`;
+    const loadK = async (d) => {   // 날짜 자료를 먼저 받아야 발표시각 목록을 채울 수 있다
+      if (KMAF.date === d) return;
+      KMAF.data = await (await fetch(`kmafcst/${d}.json?${Date.now()}`)).json();
+      KMAF.date = d;
     };
     // 예보 변화 지도 — 해당 날짜에 있으면 표시, 없으면 절 전체 숨김
     const renderFd = () => {
@@ -386,11 +485,15 @@ async function renderVerif() {
         $("fdTmn").src = `archive/${d}/fcstdiff_tmn_d1.webp?${Date.now()}`;
       }
     };
-    $("dateSelK").onchange = () => { fillIssues(); renderK(); renderFd(); };
-    $("issueSelK").onchange = renderK;
-    fillIssues();
-    renderK();
-    renderFd();
+    const onKDate = async () => {
+      await loadK($("dateSelK").value);
+      fillIssues();
+      renderKmaf();
+      renderFd();
+    };
+    $("dateSelK").onchange = onKDate;
+    $("issueSelK").onchange = renderKmaf;
+    onKDate();
   }
 
   // 나우캐스트 탭 — manifest.nowcast 있을 때만 노출

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 <header>
@@ -107,7 +107,8 @@
       (전일 11·17시 + 당일 05·11·17시 — 실무에서 보는 다섯 판만 남겼습니다).
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
     <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
-    <div class="imgwrap"><img id="kmafImg" alt="단기예보 vs 실측" loading="lazy"></div>
+    <div id="kmafCharts"></div>
+    <div id="kmafTip" class="tip" hidden></div>
 
     <h2 id="fdTitle">예보 변화 — 어제 발표 대비</h2>
     <p class="note" style="font-size:13px;color:#444">
@@ -174,6 +175,6 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

@@ -24,8 +24,9 @@ import shutil
 
 import pandas as pd
 
-from config import BASE_DIR, OUT_DIR, VERIF_DIR
+from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
+KMAFCST_DATES: list[str] = []
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
@@ -194,22 +195,78 @@ def copy_nowcast(site_dir: str) -> dict | None:
     return info
 
 
+KMAF_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉"]
+KMAF_PREV_H, KMAF_DAY_H = (11, 17), (5, 11, 17)
+
+
+def export_kmafcst(site_dir: str) -> list[str]:
+    """예보-관측 비교를 **이미지 대신 데이터**로 내보낸다 (2026-08-26 사용자 제안).
+
+    같은 내용이 WebP 5장 347KB → JSON 약 11KB (30배). 게다가 마우스로 값을 읽을 수 있고
+    폰트·글리프 문제에서도 자유롭다. 예보 캐시(verification/kmafcst)는 이미 커밋돼 있어
+    새로 받을 것도 없다.
+
+    구조: {cities, t0(YYYYMMDDHH), hours, obs:{city:[...]}, fcst:{발표:{city:[...]}}}
+          모든 계열을 t0 기준 1시간 격자에 정렬 — 없는 값은 null.
+    """
+    out_dir = os.path.join(site_dir, "kmafcst")
+    os.makedirs(out_dir, exist_ok=True)
+    dates = []
+    obs_cache: dict[str, pd.DataFrame] = {}
+
+    for src in sorted(glob.glob(os.path.join(VERIF_DIR, "kmafcst", "????????.json"))):
+        ymd = os.path.basename(src)[:-5]
+        day = dt.datetime.strptime(ymd, "%Y%m%d")
+        prev = day - dt.timedelta(days=1)
+        want = [f"{prev:%Y%m%d}{h:02d}" for h in KMAF_PREV_H] +                [f"{ymd}{h:02d}" for h in KMAF_DAY_H]
+        cache = json.load(open(src, encoding="utf-8"))
+        issues = [b for b in want if b in cache and cache[b]]
+        if not issues:
+            continue
+
+        t0 = dt.datetime.strptime(issues[0], "%Y%m%d%H") - dt.timedelta(hours=6)
+        t1 = dt.datetime.strptime(issues[-1], "%Y%m%d%H") + dt.timedelta(hours=24)
+        hours = int((t1 - t0).total_seconds() // 3600) + 1
+        grid = [t0 + dt.timedelta(hours=i) for i in range(hours)]
+        keys = [f"{g:%Y%m%d%H}" for g in grid]
+
+        data = {"cities": KMAF_CITIES, "t0": f"{t0:%Y%m%d%H}", "hours": hours,
+                "fcst": {}, "obs": {}}
+        for b in issues:
+            data["fcst"][b] = {c: [cache[b].get(c, {}).get(k) for k in keys]
+                               for c in KMAF_CITIES}
+
+        for mm in {f"{g:%Y-%m}" for g in grid}:
+            if mm not in obs_cache:
+                fp = os.path.join(VERIF_DIR, "obs", f"{mm}.csv")
+                obs_cache[mm] = (pd.read_csv(fp, parse_dates=["TM"])
+                                 if os.path.exists(fp) else pd.DataFrame())
+        frames = [obs_cache[mm] for mm in {f"{g:%Y-%m}" for g in grid}
+                  if len(obs_cache[mm])]
+        if frames:
+            ob = pd.concat(frames, ignore_index=True)
+            ob["key"] = ob["TM"].dt.strftime("%Y%m%d%H")
+            for c in KMAF_CITIES:
+                stn = CITY_OBS_STN.get(c)
+                ser = ob[ob["STN"] == stn].set_index("key")["TA"] if stn else pd.Series(dtype=float)
+                data["obs"][c] = [None if k not in ser.index or pd.isna(ser[k])
+                                  else round(float(ser[k]), 1) for k in keys]
+
+        with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        dates.append(ymd)
+    return sorted(dates)
+
+
 def prune_kmafcst(site_dir: str):
-    """표출 대상 밖 발표시각 그림 정리 — 전일 11·17시 + 당일 05·11·17시만 남긴다
-    (2026-08-26 사용자 확정). 이미 배포된 과거분도 여기서 함께 지워진다."""
-    keep_prev, keep_day = {11, 17}, {5, 11, 17}
+    """예보-관측 그림 전량 제거 — 이제 사이트가 JSON으로 직접 그린다(2026-08-26).
+    이미 배포된 과거분을 걷어내기 위한 정리 단계."""
     n = 0
-    for d in glob.glob(os.path.join(site_dir, "archive", "????????")):
-        ymd = os.path.basename(d)
-        for f in glob.glob(os.path.join(d, "kmafcst_??????????.*")):
-            stamp = os.path.basename(f).split("_")[1][:10]
-            hh = int(stamp[8:10])
-            ok = (stamp[:8] == ymd and hh in keep_day) or                  (stamp[:8] != ymd and hh in keep_prev)
-            if not ok:
-                os.remove(f)
-                n += 1
+    for f in glob.glob(os.path.join(site_dir, "archive", "????????", "kmafcst_*.*")):
+        os.remove(f)
+        n += 1
     if n:
-        print(f"[site] 예보-관측 정리: {n}장 삭제")
+        print(f"[site] 예보-관측 이미지 정리: {n}장 삭제(데이터 표출로 대체)")
 
 
 def to_webp(site_dir: str):
@@ -281,6 +338,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
     manifest["cases"] = sorted(
         os.path.basename(p) for p in
         glob.glob(os.path.join(site_dir, "verif", "cases", "*.md")))
+    manifest["kmafcst_dates"] = KMAFCST_DATES
     manifest["verif_dates"] = sorted(
         os.path.basename(p)[:-5] for p in
         glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
@@ -304,6 +362,8 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
+    global KMAFCST_DATES
+    KMAFCST_DATES = export_kmafcst(args.site_dir)
     nc = copy_nowcast(args.site_dir)
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에

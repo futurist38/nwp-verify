@@ -49,3 +49,12 @@ th { background: #f0f0f0; position: sticky; top: 0; }
 /* 검증표: 지점 블록 구분 두꺼운 테두리 */
 tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
 #caseList li { margin: 4px 0; font-size: 14px; }
+
+/* 예보-관측 인터랙티브 차트 (이미지 대신 데이터로 그린다 — 2026-08-26) */
+#kmafCharts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+              gap: 6px; }
+#kmafCharts svg { width: 100%; height: auto; background: #fff; border: 1px solid #e0e0e0;
+                  border-radius: 6px; }
+.tip { position: fixed; z-index: 20; background: rgba(255,255,255,.97); border: 1px solid #bbb;
+       border-radius: 6px; padding: 6px 9px; font-size: 13px; pointer-events: none;
+       box-shadow: 0 2px 8px rgba(0,0,0,.15); white-space: nowrap; }
