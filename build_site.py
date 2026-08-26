@@ -26,12 +26,12 @@ import pandas as pd
 
 from config import BASE_DIR, OUT_DIR, VERIF_DIR
 
-MAX_DAYS = 90          # 모델 지도 PNG 보존 일수
-OBS_MAX_DAYS = 30      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
+MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
+OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
 
-PNG_RE = re.compile(r"^(?P<model>[a-z]+)_(?P<run>\d{10})_f(?P<step>\d{3})_(?P<panel>\w+)\.png$")
-OBS_RE = re.compile(r"^obs_(?P<var>\w+)_(?P<hour>\d{2})\.png$")
+PNG_RE = re.compile(r"^(?P<model>[a-z]+)_(?P<run>\d{10})_f(?P<step>\d{3})_(?P<panel>\w+)\.webp$")
+OBS_RE = re.compile(r"^obs_(?P<var>\w+)_(?P<hour>\d{2})\.webp$")
 
 
 def copy_outputs(site_dir: str):
@@ -69,7 +69,7 @@ def copy_outputs(site_dir: str):
             shutil.rmtree(d)
             removed += 1
         elif ymd < cutoff_obs:
-            for f in glob.glob(os.path.join(d, "obs_*.png")):
+            for f in glob.glob(os.path.join(d, "obs_*.png")) + glob.glob(os.path.join(d, "obs_*.webp")):
                 os.remove(f)
                 n_obs += 1
     if removed or n_obs:
@@ -143,8 +143,9 @@ def copy_nowcast(site_dir: str) -> dict | None:
         return None
     nd = os.path.join(site_dir, "nowcast")
     os.makedirs(nd, exist_ok=True)
-    for old in glob.glob(os.path.join(nd, "*.png")):
-        os.remove(old)          # 미러 — 리드 축소 시 옛 지도(map_6h 등) 잔존 방지
+    for pat in ("*.png", "*.webp"):   # 미러 — 리드 축소 시 옛 지도 잔존 방지
+        for old in glob.glob(os.path.join(nd, pat)):
+            os.remove(old)
     for png in glob.glob(os.path.join(src, "*.png")):
         shutil.copy2(png, nd)   # 무조건 복사(mtime 함정 — copy_outputs 참조)
 
@@ -193,6 +194,30 @@ def copy_nowcast(site_dir: str) -> dict | None:
     return info
 
 
+def to_webp(site_dir: str):
+    """아카이브 이미지를 WebP로 변환 — PNG 대비 약 1/5 (실측: 모델지도 290KB→54KB).
+
+    GitHub Pages 게시 상한이 1GB인데 PNG로는 하루 40~57MB가 쌓여 3주면 초과한다
+    (2026-08-26 실측: 13일치 493MB). 이미 배포된 PNG도 여기서 함께 변환된다.
+    verif/ 는 1MB 남짓이라 손대지 않는다."""
+    from PIL import Image
+    n = saved = 0
+    for root in (os.path.join(site_dir, "archive"), os.path.join(site_dir, "nowcast")):
+        for png in glob.glob(os.path.join(root, "**", "*.png"), recursive=True):
+            webp = png[:-4] + ".webp"
+            try:
+                before = os.path.getsize(png)
+                Image.open(png).convert("RGB").save(webp, format="WEBP",
+                                                    quality=82, method=4)
+                saved += before - os.path.getsize(webp)
+                os.remove(png)
+                n += 1
+            except Exception as e:
+                print(f"[site] WebP 변환 실패 {os.path.basename(png)}: {e}")
+    if n:
+        print(f"[site] WebP 변환 {n}장 — {saved / 2**20:.0f}MB 절감")
+
+
 def build_manifest(site_dir: str, nowcast: dict | None = None):
     """archive/ 를 스캔해 manifest.json 생성 — 파일명이 유일한 진실."""
     manifest = {"generated_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
@@ -223,7 +248,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
             elif fn.startswith("fcstdiff_"):
                 entry.setdefault("fcstdiff", []).append(fn)
             elif fn.startswith("kmafcst_"):
-                mk = re.match(r"^kmafcst_(\d{10})\.png$", fn)
+                mk = re.match(r"^kmafcst_(\d{10})\.webp$", fn)
                 if mk:
                     entry.setdefault("kmafcst", []).append(mk.group(1))
         for e in entry["models"].values():
@@ -261,7 +286,9 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
-    build_manifest(args.site_dir, copy_nowcast(args.site_dir))
+    nc = copy_nowcast(args.site_dir)
+    to_webp(args.site_dir)          # 반드시 manifest 생성 전에
+    build_manifest(args.site_dir, nc)
     print(f"[site] 완료: {args.site_dir}")
 
 

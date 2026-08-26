@@ -156,7 +156,7 @@ function renderPanelBtns() {
 }
 function imgPathFor(model, stepH) {
   const run = runOf(model);
-  return `archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.png`;
+  return `archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
 }
 function renderChart() {
   $("stepSlider").value = state.stepIdx;
@@ -238,7 +238,7 @@ function renderObsVarBtns() {
 }
 function obsPath(i) {
   const h = String(obsEntry()[obsState.v][i]).padStart(2, "0");
-  return `archive/${obsState.date}/obs_${obsState.v}_${h}.png`;
+  return `archive/${obsState.date}/obs_${obsState.v}_${h}.webp`;
 }
 function renderObs() {
   const hours = obsEntry()[obsState.v];
@@ -371,7 +371,7 @@ async function renderVerif() {
     };
     const renderK = () => {
       $("kmafImg").src =
-        `archive/${$("dateSelK").value}/kmafcst_${$("issueSelK").value}.png?${Date.now()}`;
+        `archive/${$("dateSelK").value}/kmafcst_${$("issueSelK").value}.webp?${Date.now()}`;
     };
     // 예보 변화 지도 — 해당 날짜에 있으면 표시, 없으면 절 전체 숨김
     const renderFd = () => {
@@ -382,8 +382,8 @@ async function renderVerif() {
       $("fdTitle").nextElementSibling.hidden = !on;   // 설명 문단
       $("fdPair").hidden = !on;
       if (on) {
-        $("fdTmx").src = `archive/${d}/fcstdiff_tmx_d1.png?${Date.now()}`;
-        $("fdTmn").src = `archive/${d}/fcstdiff_tmn_d1.png?${Date.now()}`;
+        $("fdTmx").src = `archive/${d}/fcstdiff_tmx_d1.webp?${Date.now()}`;
+        $("fdTmn").src = `archive/${d}/fcstdiff_tmn_d1.webp?${Date.now()}`;
       }
     };
     $("dateSelK").onchange = () => { fillIssues(); renderK(); renderFd(); };
@@ -411,9 +411,9 @@ async function renderVerif() {
       const vt = ep + h * 3600e3;
       $("ncLeadLabel").textContent =
         `+${h}시간 → 유효 ${p(new Date(vt + 9 * 3600e3).getUTCHours())}시 KST (${relNow(vt)})`;
-      $("ncMap").src = `nowcast/map_${h}h.png?${Date.now()}`;
+      $("ncMap").src = `nowcast/map_${h}h.webp?${Date.now()}`;
       [ncIdx - 1, ncIdx + 1].forEach((i) => {   // 인접 스텝만 프리로드
-        if (i >= 0 && i < ncLeads.length) new Image().src = `nowcast/map_${ncLeads[i]}h.png`;
+        if (i >= 0 && i < ncLeads.length) new Image().src = `nowcast/map_${ncLeads[i]}h.webp`;
       });
     };
     $("ncSlider").max = ncLeads.length - 1;
@@ -421,11 +421,11 @@ async function renderVerif() {
     $("ncPrev").onclick = () => { if (ncIdx > 0) { ncIdx--; renderNc(); } };
     $("ncNext").onclick = () => { if (ncIdx < ncLeads.length - 1) { ncIdx++; renderNc(); } };
     renderNc();
-    if (nc.has_now) $("ncNow").src = `nowcast/map_0h.png?${Date.now()}`;
+    if (nc.has_now) $("ncNow").src = `nowcast/map_0h.webp?${Date.now()}`;
     else $("ncNow").closest(".imgwrap").hidden = true;
-    $("ncCities").src = `nowcast/cities.png?${Date.now()}`;
+    $("ncCities").src = `nowcast/cities.webp?${Date.now()}`;
     ["ncVerifyTitle", "ncVerifyNote", "ncVerify"].forEach((id) => { $(id).hidden = !nc.has_verify; });
-    if (nc.has_verify) $("ncVerify").src = `nowcast/verify.png?${Date.now()}`;
+    if (nc.has_verify) $("ncVerify").src = `nowcast/verify.webp?${Date.now()}`;
     // 과거 검증 패널 — 3시간 간격 보관분에서 선택
     const past = (nc.past || []).slice().reverse();
     if (past.length) {
@@ -435,8 +435,8 @@ async function renderVerif() {
       ).join("");
       const showPast = () => {
         const v = $("ncPastSel").value;
-        $("ncVerify").src = v ? `nowcast/archive/${v}.png?${Date.now()}`
-                              : `nowcast/verify.png?${Date.now()}`;
+        $("ncVerify").src = v ? `nowcast/archive/${v}.webp?${Date.now()}`
+                              : `nowcast/verify.webp?${Date.now()}`;
       };
       $("ncPastSel").onchange = showPast;
       $("ncPastNow").onclick = () => { $("ncPastSel").value = ""; showPast(); };
