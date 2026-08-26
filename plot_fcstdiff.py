@@ -124,7 +124,7 @@ def draw(diff: pd.DataFrame, var: str, day: dt.date, lead: int,
                                f"{name} {val[stn]:+.1f}", tf)
 
     ax.set_title(f"{title} 예보 변화  {day:%m-%d}(+{lead}일)\n"
-                 f"{bdt_prev[4:6]}-{bdt_prev[6:8]} {bdt_prev[8:]}시 발표 → "
+                 f"{bdt_prev[4:6]}-{bdt_prev[6:8]} {bdt_prev[8:]}시 발표 대비 "
                  f"{bdt_now[4:6]}-{bdt_now[6:8]} {bdt_now[8:]}시 발표  "
                  f"(지점 {len(pts)}개)", fontsize=11)
     fig.subplots_adjust(top=0.94, bottom=0.04, left=0.06, right=0.98)
