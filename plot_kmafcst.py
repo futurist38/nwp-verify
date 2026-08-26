@@ -33,6 +33,9 @@ from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
 CITY_GRID = {"서울": (60, 127), "대전": (67, 100), "대구": (89, 90),
              "부산": (98, 76), "광주": (58, 74), "강릉": (92, 131)}
 CACHE_DIR = os.path.join(VERIF_DIR, "kmafcst")
+# 표출할 발표시각 (2026-08-26 사용자 확정) — 전일 11·17시 + 당일 05·11·17시.
+# 8회 전부는 화면·API·저장 모두 과했고, 실무에서 보는 판은 이 다섯이다.
+PREV_HOURS, DAY_HOURS = (11, 17), (5, 11, 17)
 
 from matplotlib import font_manager as _fm
 _inst = {f.name for f in _fm.fontManager.ttflist}
@@ -151,7 +154,7 @@ def main():
                                  no_cache=True)
         kma_asos.save_monthly(df)
 
-    bdts = issuances_for(today, now)
+    bdts = issuances_for(today, now, PREV_HOURS, DAY_HOURS)
     cache = load_fcst_cached(today, bdts, key)
     # 창 = 가장 이른 발표 −6h ~ 가장 늦은 발표 +24h
     obs = load_obs_range(dt.datetime.combine(today - dt.timedelta(days=1), dt.time(11)),
@@ -163,7 +166,14 @@ def main():
         if bdt in cache and cache[bdt]:
             render(bdt, cache[bdt], obs, now, out_dir)
             n += 1
-    print(f"[단기예보] 발표 {n}건 렌더 → {out_dir}")
+    # 표출 대상 밖 발표분은 지운다 — 남겨두면 계속 사이트로 복사된다
+    keep = {f"kmafcst_{b}.png" for b in bdts}
+    gone = 0
+    for f in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
+        if f.startswith("kmafcst_") and f not in keep:
+            os.remove(os.path.join(out_dir, f))
+            gone += 1
+    print(f"[단기예보] 발표 {n}건 렌더 → {out_dir}" + (f" (구 발표분 {gone}장 삭제)" if gone else ""))
 
 
 if __name__ == "__main__":

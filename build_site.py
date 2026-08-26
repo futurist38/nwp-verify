@@ -194,6 +194,24 @@ def copy_nowcast(site_dir: str) -> dict | None:
     return info
 
 
+def prune_kmafcst(site_dir: str):
+    """표출 대상 밖 발표시각 그림 정리 — 전일 11·17시 + 당일 05·11·17시만 남긴다
+    (2026-08-26 사용자 확정). 이미 배포된 과거분도 여기서 함께 지워진다."""
+    keep_prev, keep_day = {11, 17}, {5, 11, 17}
+    n = 0
+    for d in glob.glob(os.path.join(site_dir, "archive", "????????")):
+        ymd = os.path.basename(d)
+        for f in glob.glob(os.path.join(d, "kmafcst_??????????.*")):
+            stamp = os.path.basename(f).split("_")[1][:10]
+            hh = int(stamp[8:10])
+            ok = (stamp[:8] == ymd and hh in keep_day) or                  (stamp[:8] != ymd and hh in keep_prev)
+            if not ok:
+                os.remove(f)
+                n += 1
+    if n:
+        print(f"[site] 예보-관측 정리: {n}장 삭제")
+
+
 def to_webp(site_dir: str):
     """아카이브 이미지를 WebP로 변환 — PNG 대비 약 1/5 (실측: 모델지도 290KB→54KB).
 
@@ -287,6 +305,7 @@ def main():
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
     nc = copy_nowcast(args.site_dir)
+    prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에
     build_manifest(args.site_dir, nc)
     print(f"[site] 완료: {args.site_dir}")

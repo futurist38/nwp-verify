@@ -58,12 +58,15 @@ def latlon_to_grid(lat: float, lon: float) -> tuple[int, int]:
             int(ro - ra * math.cos(theta) + YO + 0.5))
 
 
-def issuances_for(day: dt.date, now: dt.datetime) -> list[str]:
-    """대상일 D의 선택지: 전일 17/20/23시 + 당일 발표분(가용 시각까지). 'YYYYMMDDHH'"""
+def issuances_for(day: dt.date, now: dt.datetime,
+                  prev_hours: tuple[int, ...] = (17, 20, 23),
+                  day_hours: tuple[int, ...] | None = None) -> list[str]:
+    """대상일 D의 발표시각 목록 'YYYYMMDDHH'. 전일분 + 당일 가용분.
+    day_hours 를 주면 그 시각만(생략 시 발표 8회 전부)."""
     y = day - dt.timedelta(days=1)
-    out = [f"{y:%Y%m%d}{h:02d}" for h in (17, 20, 23)]
+    out = [f"{y:%Y%m%d}{h:02d}" for h in prev_hours]
     avail = now - dt.timedelta(minutes=15)
-    for h in BASE_HOURS:
+    for h in (day_hours if day_hours is not None else BASE_HOURS):
         if dt.datetime.combine(day, dt.time(h)) <= avail:
             out.append(f"{day:%Y%m%d}{h:02d}")
     return out
