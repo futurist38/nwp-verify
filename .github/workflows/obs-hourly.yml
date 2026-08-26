@@ -46,7 +46,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 관측 수신·지도 생성 (어제+오늘)
-        run: timeout 600 python plot_obsmap.py
+        run: timeout 600 python plot_obsmap.py --no-plot
 
       - name: 단기예보 vs 실측 시계열
         # KMA API가 붐비면 발표시각 수신이 10분+ (2026-08-25 실측: 이 단계가 잡 상한을

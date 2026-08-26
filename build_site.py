@@ -28,6 +28,7 @@ from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
 KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
+OBS_DATES: list[str] = []
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
@@ -47,7 +48,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "obsmaps", "kmafcst", "fcstdiff"):
+        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
@@ -308,15 +309,86 @@ def export_meteo(site_dir: str) -> list[str]:
     return sorted(dates)
 
 
+def export_obs(site_dir: str) -> list[str]:
+    """관측 실황을 이미지 대신 데이터로 (2026-08-27 사용자 확정 A안).
+
+    96지점을 보간해 면으로 칠하던 그림(WebP 63장 2.3MB/일)을, 지점 값 자체(36KB/일)로
+    바꾼다. 64배 작고 **모든 지점의 값을 마우스로 읽을 수 있다** — 지금은 6개 도시만
+    숫자가 보였다. 지점 사이는 원래 관측이 없는 구간이라 점 표출이 더 정직하기도 하다.
+
+    산출: site/obs/stations.json (지점·색눈금, 1회) · site/obs/{YYYYMMDD}.json (일별 값)
+    """
+    import matplotlib as mpl
+    from plot_obsmap import VARS, feel_temp
+
+    out_dir = os.path.join(site_dir, "obs")
+    os.makedirs(out_dir, exist_ok=True)
+    bm = json.load(open(os.path.join(SITE_SRC, "basemap.json"), encoding="utf-8"))
+    pj, view = bm["proj"], bm["view"]
+
+    from pyproj import CRS, Transformer
+    lcc = CRS.from_proj4("+proj=lcc +lat_1=30 +lat_2=60 +lat_0=36 +lon_0=127.5 "
+                         "+x_0=0 +y_0=0 +ellps=WGS84")
+    tr = Transformer.from_crs(CRS.from_epsg(4326), lcc, always_xy=True)
+
+    st = pd.read_csv(os.path.join(VERIF_DIR, "obs", "stations.csv"))
+    sx, sy = tr.transform(st["lon"].values, st["lat"].values)
+    st["vx"] = (sx - pj["x0"]) / pj["span"] * view
+    st["vy"] = (pj["y1"] - sy) / pj["span"] * view
+
+    scales = {}
+    for k, (_col, cmap, vmin, vmax, label, unit) in VARS.items():
+        m = mpl.colormaps[cmap]   # matplotlib 3.9+: cm.get_cmap 제거됨
+        scales[k] = {"vmin": vmin, "vmax": vmax, "label": label, "unit": unit,
+                     "colors": ["#%02x%02x%02x" % tuple(int(c * 255) for c in m(i / 31)[:3])
+                                for i in range(32)]}
+    with open(os.path.join(out_dir, "stations.json"), "w", encoding="utf-8") as f:
+        # 대표 6도시는 지도에 값을 함께 적는다(L=1) — 나머지는 마우스로 확인
+        label_stn = {CITY_OBS_STN[c] for c in
+                     ("서울", "대전", "대구", "부산", "광주", "강릉")
+                     if CITY_OBS_STN.get(c)}
+        json.dump({"stations": [{"s": int(r.STN), "n": r.name_,
+                                 "x": round(r.vx, 1), "y": round(r.vy, 1),
+                                 "L": 1 if int(r.STN) in label_stn else 0}
+                                for r in st.rename(columns={"name": "name_"}).itertuples()],
+                   "scales": scales}, f, ensure_ascii=False, separators=(",", ":"))
+
+    dates = []
+    cutoff = (dt.date.today() - dt.timedelta(days=OBS_MAX_DAYS)).strftime("%Y%m%d")
+    for src in sorted(glob.glob(os.path.join(VERIF_DIR, "obs", "????-??.csv"))):
+        df = pd.read_csv(src, parse_dates=["TM"])
+        if df.empty:
+            continue
+        df["FEEL"] = feel_temp(df["TA"], df["HM"], df["WS"])
+        for day, g in df.groupby(df["TM"].dt.date):
+            ymd = day.strftime("%Y%m%d")
+            if ymd < cutoff:
+                continue
+            data = {"vars": {}}
+            for k, (col, *_rest) in VARS.items():
+                if col not in g.columns:
+                    continue
+                piv = g.pivot_table(index="STN", columns=g["TM"].dt.hour,
+                                    values=col, aggfunc="first").reindex(columns=range(24))
+                data["vars"][k] = {str(int(s)): [None if pd.isna(v) else round(float(v), 1)
+                                                 for v in row]
+                                   for s, row in piv.iterrows()}
+            with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
+                json.dump(data, f, separators=(",", ":"))
+            dates.append(ymd)
+    return sorted(dates)
+
+
 def prune_kmafcst(site_dir: str):
     """예보-관측 그림 전량 제거 — 이제 사이트가 JSON으로 직접 그린다(2026-08-26).
     이미 배포된 과거분을 걷어내기 위한 정리 단계."""
     n = 0
-    for f in glob.glob(os.path.join(site_dir, "archive", "????????", "kmafcst_*.*")):
-        os.remove(f)
-        n += 1
+    for pat in ("kmafcst_*.*", "obs_*.*", "meteogram_*.*"):
+        for f in glob.glob(os.path.join(site_dir, "archive", "????????", pat)):
+            os.remove(f)
+            n += 1
     if n:
-        print(f"[site] 예보-관측 이미지 정리: {n}장 삭제(데이터 표출로 대체)")
+        print(f"[site] 이미지 정리: {n}장 삭제(예보-관측·관측·미티오그램은 데이터 표출로 대체)")
 
 
 def to_webp(site_dir: str):
@@ -390,6 +462,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         glob.glob(os.path.join(site_dir, "verif", "cases", "*.md")))
     manifest["kmafcst_dates"] = KMAFCST_DATES
     manifest["meteo_dates"] = METEO_DATES
+    manifest["obs_dates"] = OBS_DATES
     manifest["verif_dates"] = sorted(
         os.path.basename(p)[:-5] for p in
         glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
@@ -413,9 +486,10 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
-    global KMAFCST_DATES, METEO_DATES
+    global KMAFCST_DATES, METEO_DATES, OBS_DATES
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     METEO_DATES = export_meteo(args.site_dir)
+    OBS_DATES = export_obs(args.site_dir)
     nc = copy_nowcast(args.site_dir)
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에

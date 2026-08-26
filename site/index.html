@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 <header>
@@ -50,8 +50,8 @@
       <button id="obsNext">▶</button>
     </div>
     <div id="obsLabel" class="step-label"></div>
-    <div class="imgwrap"><img id="obsImg" alt="관측 실황" loading="lazy"></div>
-    <p class="note">ASOS 전 지점(~97개) 보간 실황, 1시간 간격. 북한 지역은 지점이 없어 공백(추정으로 채우지 않음).
+    <div id="obsMap"></div>
+    <p class="note">ASOS 전 지점(~97개) <b>실측값</b>을 그대로 찍습니다 — 지점 사이는 관측이 없어 채우지 않습니다.
        색축은 절대 고정 — 오늘의 20℃와 내일의 20℃는 항상 같은 색.</p>
   </section>
 
@@ -183,6 +183,6 @@
   </section>
 </main>
 <div id="chartTip" class="tip" hidden></div>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

@@ -380,17 +380,67 @@ let firstObs = true;
 function obsEpoch(ymd, hour) {  // 관측일(KST)+시 → UTC epoch
   return Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), hour) - 9 * 3600e3;
 }
-let obsState = { date: null, v: null, idx: 0 };
+// 관측 실황을 이미지가 아니라 지점 값으로 그린다 (2026-08-27).
+// 하루 2.3MB(WebP 63장) → 31KB. 모든 지점의 값을 마우스/터치로 읽을 수 있다.
+// 지점 사이는 원래 관측이 없는 구간이라 점 표출이 보간 면보다 정직하다.
+let obsState = { date: null, v: null, idx: 0, data: null, meta: null };
 
-function obsEntry() { return MF.dates[obsState.date].obs || {}; }
+// 색을 구간으로 끊는다 — 연속 그라데이션은 '이 색이 몇 도인지'를 알 수 없다.
+// 눈금과 원의 색이 정확히 같은 구간을 쓰도록 여기서 한 번에 정의한다 (2026-08-27).
+function obsBins(sc) {
+  const span = sc.vmax - sc.vmin;
+  const step = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20].find((p) => p >= span / 11) || 20;
+  const lo = Math.floor(sc.vmin / step) * step;
+  const edges = [];
+  for (let e = lo; e <= sc.vmax + 1e-9; e += step) edges.push(+e.toFixed(3));
+  const colors = edges.slice(0, -1).map((e, i) => {
+    const t = Math.max(0, Math.min(1, ((e + step / 2) - sc.vmin) / span));
+    return sc.colors[Math.round(t * (sc.colors.length - 1))];
+  });
+  return { edges: edges, colors: colors, step: step };
+}
+// 색은 연속으로(칸 안에서도 값 차이가 보이도록), 눈금은 칸으로(값대를 읽도록).
+// 두 가지를 같은 색함수로 묶어 두어야 원과 눈금이 어긋나지 않는다.
+function lerpColor(sc, t) {
+  const cs = sc.colors;
+  const x = Math.max(0, Math.min(1, t)) * (cs.length - 1);
+  const i = Math.min(cs.length - 2, Math.floor(x)), f = x - i;
+  const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const a = hex(cs[i]), b = hex(cs[i + 1]);
+  const m = a.map((v, k) => Math.round(v + (b[k] - v) * f));
+  return `rgb(${m[0]},${m[1]},${m[2]})`;
+}
+function obsColor(v, sc) {
+  if (v == null) return null;
+  return lerpColor(sc, (v - sc.vmin) / (sc.vmax - sc.vmin));
+}
+
+async function loadObs(ymd) {
+  if (!obsState.meta) {
+    obsState.meta = await (await fetch("obs/stations.json")).json();
+    obsState.base = await (await fetch("basemap.json")).json();
+  }
+  if (obsState.date === ymd && obsState.data) return;
+  obsState.data = await (await fetch(`obs/${ymd}.json?${Date.now()}`)).json();
+  obsState.date = ymd;
+}
+
+function obsHours() {
+  const vv = obsState.data && obsState.data.vars[obsState.v];
+  if (!vv) return [];
+  const set = new Set();
+  Object.values(vv).forEach((arr) => arr.forEach((x, h) => { if (x != null) set.add(h); }));
+  return [...set].sort((a, b) => a - b);
+}
+
 function renderObsVarBtns() {
-  const present = Object.keys(obsEntry());
+  const present = Object.keys((obsState.data && obsState.data.vars) || {});
   const vars = OBS_ORDER.filter((v) => present.includes(v))
     .concat(present.filter((v) => !OBS_ORDER.includes(v)));
   if (!vars.length) {
     $("obsVarBtns").innerHTML = "";
-    $("obsImg").removeAttribute("src");
-    $("obsLabel").textContent = "이 날짜엔 관측 지도 없음";
+    $("obsMap").innerHTML = "";
+    $("obsLabel").textContent = "이 날짜엔 관측 자료 없음";
     return;
   }
   if (!vars.includes(obsState.v)) obsState.v = vars.includes("ta") ? "ta" : vars[0];
@@ -399,38 +449,96 @@ function renderObsVarBtns() {
   $("obsVarBtns").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { obsState.v = b.dataset.v; renderObsVarBtns(); };
   });
-  const hours = obsEntry()[obsState.v];
-  $("obsSlider").max = hours.length - 1;
+  const hours = obsHours();
+  $("obsSlider").max = Math.max(0, hours.length - 1);
   if (firstObs && hours.length) {
-    // 첫 진입: 현재 시각에 가장 가까운 관측 시각으로
     const now = Date.now();
     obsState.idx = hours.reduce((bi, h, i) =>
       Math.abs(obsEpoch(obsState.date, h) - now) <
       Math.abs(obsEpoch(obsState.date, hours[bi]) - now) ? i : bi, 0);
     firstObs = false;
   }
-  if (obsState.idx > hours.length - 1) obsState.idx = hours.length - 1;
+  if (obsState.idx > hours.length - 1) obsState.idx = Math.max(0, hours.length - 1);
   renderObs();
 }
-function obsPath(i) {
-  const h = String(obsEntry()[obsState.v][i]).padStart(2, "0");
-  return `archive/${obsState.date}/obs_${obsState.v}_${h}.webp`;
-}
+
 function renderObs() {
-  const hours = obsEntry()[obsState.v];
+  const hours = obsHours();
+  if (!hours.length) { $("obsMap").innerHTML = ""; return; }
   $("obsSlider").value = obsState.idx;
   const h = hours[obsState.idx];
+  const sc = obsState.meta.scales[obsState.v];
+  const vv = obsState.data.vars[obsState.v];
+  const bm = obsState.base;
+  const bins = obsBins(sc);
   $("obsLabel").textContent =
-    `${fmtDate(obsState.date)} ${String(h).padStart(2, "0")}시 KST 실황 (${relNow(obsEpoch(obsState.date, h))})`;
-  $("obsImg").src = obsPath(obsState.idx);
-  [obsState.idx - 1, obsState.idx + 1].forEach((i) => {
-    if (i >= 0 && i < hours.length) new Image().src = obsPath(i);
+    `${fmtDate(obsState.date)} ${String(h).padStart(2, "0")}시 KST 실황 — ${sc.label} (${relNow(obsEpoch(obsState.date, h))})`;
+
+  let pts = "", lbl = "", n = 0;
+  obsState.meta.stations.forEach((st) => {
+    const arr = vv[String(st.s)];
+    const v = arr && arr[h];
+    const col = obsColor(v, sc);
+    if (col == null) return;
+    n++;
+    pts += `<circle cx="${st.x}" cy="${st.y}" r="${st.L ? 8 : 7}" fill="${col}"`
+         + ` stroke="${st.L ? "#000" : "#333"}" stroke-width="${st.L ? 1.4 : 0.7}"`
+         + ` data-n="${st.n}" data-v="${v}"/>`;
+    // 대표 도시는 값을 지도에 직접 — 흰 테두리로 어떤 배경색 위에서도 읽히게
+    if (st.L) {
+      const txt = `${st.n} ${v.toFixed(1)}`;
+      lbl += `<text x="${st.x + 11}" y="${st.y + 5}" font-size="15" font-weight="bold"`
+           + ` paint-order="stroke" stroke="#fff" stroke-width="3.5" fill="#111">${txt}</text>`;
+    }
   });
+  // 구간별 칸 + 경계 눈금 — 색이 어느 값대인지 바로 읽히도록
+  const CW = 620, SW = CW / bins.colors.length;
+  const span = sc.vmax - sc.vmin;
+  const defs = bins.colors.map((_c, i) => {
+    const a = lerpColor(sc, (bins.edges[i] - sc.vmin) / span);
+    const b = lerpColor(sc, (bins.edges[i + 1] - sc.vmin) / span);
+    return `<linearGradient id="cb${i}"><stop offset="0%" stop-color="${a}"/><stop offset="100%" stop-color="${b}"/></linearGradient>`;
+  }).join("");
+  const cells = bins.colors.map((_c, i) =>
+    `<rect x="${(i * SW).toFixed(1)}" y="0" width="${SW.toFixed(1)}" height="22" fill="url(#cb${i})" stroke="#fff" stroke-width="0.8"/>`).join("");
+  const ticks = bins.edges.map((e, i) =>
+    `<line x1="${(i * SW).toFixed(1)}" y1="22" x2="${(i * SW).toFixed(1)}" y2="27" stroke="#666"/>`
+    + `<text x="${(i * SW).toFixed(1)}" y="38" text-anchor="middle" font-size="12" fill="#444">${e}</text>`).join("");
+  $("obsMap").innerHTML =
+    `<svg id="obsSvg" viewBox="0 0 ${bm.w} ${bm.h}">
+      <rect width="${bm.w}" height="${bm.h}" fill="#f7f9fb"/>
+      <path d="${bm.paths.admin}" fill="none" stroke="#c9c9c9" stroke-width="0.8"/>
+      <path d="${bm.paths.coast}" fill="none" stroke="#5a5a5a" stroke-width="1.2"/>
+      ${pts}${lbl}
+    </svg>
+    <div class="cbar">
+      <svg viewBox="-6 0 ${CW + 12} 44"><defs>${defs}</defs>${cells}${ticks}</svg>
+      <div class="cbar-lab">${sc.label} (${sc.unit}) — 칸 하나 ${bins.step}${sc.unit === "℃" ? "℃" : ""}</div>
+    </div>
+    <p class="note">지점 ${n}곳 실측 — 원 색이 값. 마우스를 올리거나(휴대폰은 짚으면) 지점명과 값이 표시됩니다.</p>`;
+
+  const tip = $("chartTip"), svg = $("obsSvg");
+  const show = (t, cx, cy) => {
+    if (!t || t.tagName !== "circle") { tip.hidden = true; return; }
+    const unit = sc.unit === "℃" ? "℃" : " " + sc.unit;
+    tip.innerHTML = `<b>${t.dataset.n}</b> ${String(h).padStart(2, "0")}시<br>${sc.label} ${(+t.dataset.v).toFixed(1)}${unit}`;
+    tip.hidden = false;
+    tip.style.left = Math.min(Math.max(8, cx + 14), innerWidth - 200) + "px";
+    tip.style.top = Math.max(8, cy - 60) + "px";
+  };
+  svg.onmousemove = (ev) => show(ev.target, ev.clientX, ev.clientY);
+  svg.onmouseleave = () => { tip.hidden = true; };
+  svg.addEventListener("touchstart", (ev) => {
+    const t0 = ev.touches[0];
+    show(document.elementFromPoint(t0.clientX, t0.clientY), t0.clientX, t0.clientY);
+  }, { passive: true });
+  svg.addEventListener("touchend", () => setTimeout(() => { tip.hidden = true; }, 2500));
 }
+
 $("obsSlider").oninput = (ev) => { obsState.idx = +ev.target.value; renderObs(); };
 $("obsPrev").onclick = () => { if (obsState.idx > 0) { obsState.idx--; renderObs(); } };
 $("obsNext").onclick = () => {
-  if (obsState.idx < obsEntry()[obsState.v].length - 1) { obsState.idx++; renderObs(); }
+  if (obsState.idx < obsHours().length - 1) { obsState.idx++; renderObs(); }
 };
 
 // ── 검증 탭: 오차 지도 ──
@@ -529,9 +637,11 @@ function renderVerif() {
     };
   });
 
-  obsState.date = dates[0];
-  fillDateSel($("dateSelO"), (ev) => { obsState.date = ev.target.value; renderObsVarBtns(); });
-  renderObsVarBtns();
+  const odates = (MF.obs_dates || []).slice().reverse();
+  $("dateSelO").innerHTML = odates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
+  const onObsDate = async () => { await loadObs($("dateSelO").value); renderObsVarBtns(); };
+  $("dateSelO").onchange = onObsDate;
+  if (odates.length) onObsDate();
   renderVm();
 
   // 예보-관측 탭 — 날짜 + 발표시각 선택

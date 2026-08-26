@@ -157,6 +157,8 @@ def make_day(day: dt.date) -> int:
 
 def main():
     p = argparse.ArgumentParser()
+    p.add_argument("--no-plot", action="store_true",
+                   help="PNG 생성 생략 — 사이트가 지점값 JSON으로 직접 그린다(기본 운영 모드)")
     p.add_argument("--date", default=None, help="관측일 YYYY-MM-DD (생략 시 어제+오늘)")
     p.add_argument("--no-fetch", action="store_true", help="API 수신 생략(기존 CSV만)")
     args = p.parse_args()
@@ -174,6 +176,9 @@ def main():
             kma_asos.save_monthly(df)
         except Exception as e:
             print(f"[관측지도] 실황 수신 실패({e}) — 기존 CSV로 진행")
+    if args.no_plot:   # 수신만 하고 그림은 생략 — 표출은 사이트가 지점값으로 직접 그린다
+        print("[관측지도] 실황 수신만 — 표출은 사이트가 JSON으로 그림")
+        return
     make_day(yday)
     make_day(dt.date.today())
 

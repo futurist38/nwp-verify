@@ -60,3 +60,11 @@ tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
 .tip { position: fixed; z-index: 20; background: rgba(255,255,255,.97); border: 1px solid #bbb;
        border-radius: 6px; padding: 6px 9px; font-size: 13px; pointer-events: none;
        box-shadow: 0 2px 8px rgba(0,0,0,.15); white-space: nowrap; }
+
+/* 관측 실황 — 지점 값을 지도에 직접 (이미지 대체, 2026-08-27) */
+#obsMap svg#obsSvg { width: 100%; max-width: 760px; height: auto; display: block; margin: 0 auto;
+                     border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; }
+#obsMap circle { cursor: pointer; }
+.cbar { max-width: 700px; margin: 10px auto 2px; }
+.cbar svg { width: 100%; height: auto; display: block; }
+.cbar-lab { text-align: center; font-size: 13px; color: #555; margin-top: 2px; }
