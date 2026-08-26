@@ -3,8 +3,8 @@
 예보 변화 지도 — 어제 발표 대비 오늘 발표의 일 최고/최저기온 변화(℃).
 
 "예보가 얼마나 바뀌었나"를 한눈에 보기 위한 표출 (2026-08-26 사용자 요청).
-같은 발표시각끼리(어제 05시 vs 오늘 05시) 비교해야 사과 대 사과가 되므로
-발표시각을 맞춰 두 판을 가져온 뒤, 대상일별 일최고·일최저를 각각 뽑아 뺀다.
+비교 짝은 **어제 17시 발표 → 오늘 05시 발표** (사용자 확정) — 실무에서 저녁에 본
+예보와 아침에 새로 나온 예보를 견주는 방식이다. 밤사이 얼마나 바뀌었는지가 보인다.
 
 대상일은 **내일**만. 오늘은 이미 지난 시각이 예보에서 빠져 일최저(주로 새벽)가
 잘리고, 모레는 어제 발표가 8시간밖에 담지 못한다(단기예보 3일 한계, 2026-08-26 실측:
@@ -31,12 +31,13 @@ import matplotlib.pyplot as plt
 
 import sslfix  # noqa: F401
 import mapviz
-from kma_vilage import auth_key, fetch, latest_issuance, latlon_to_grid
+from kma_vilage import auth_key, fetch, latlon_to_grid
 from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
 CACHE_DIR = os.path.join(VERIF_DIR, "fcstdiff")
 STN_CSV = os.path.join(VERIF_DIR, "obs", "stations.csv")
 CACHE_KEEP_DAYS = 4     # 어제·오늘만 쓰므로 그 이상은 버림(발표당 ~130KB)
+PREV_HOUR, NOW_HOUR = 17, 5   # 어제 17시 발표 → 오늘 05시 발표 (사용자 확정 짝)
 MIN_HOURS = 20          # 대상일 커버리지가 이보다 적으면 그 날은 비교하지 않음
 TARGET_DAYS = [1]       # 내일만 — 아래 주석 참조
 VARS = {"tmx": ("일 최고기온", np.max), "tmn": ("일 최저기온", np.min)}
@@ -140,10 +141,17 @@ def main():
     args = p.parse_args()
 
     now = dt.datetime.now()
-    bdt_now = args.issue or latest_issuance(now)
-    t = dt.datetime.strptime(bdt_now, "%Y%m%d%H")
-    bdt_prev = f"{t - dt.timedelta(days=1):%Y%m%d%H}"
-    print(f"[예보변화] {bdt_now} vs {bdt_prev}")
+    if args.issue:
+        bdt_now = args.issue
+        t = dt.datetime.strptime(bdt_now, "%Y%m%d%H")
+    else:
+        t = dt.datetime.combine(now.date(), dt.time(NOW_HOUR))
+        if now < t + dt.timedelta(minutes=15):     # 아직 안 나온 발표면 전날 짝으로
+            t -= dt.timedelta(days=1)
+        bdt_now = f"{t:%Y%m%d%H}"
+    prev_t = dt.datetime.combine(t.date() - dt.timedelta(days=1), dt.time(PREV_HOUR))
+    bdt_prev = f"{prev_t:%Y%m%d%H}"
+    print(f"[예보변화] {bdt_prev}(어제 {PREV_HOUR}시) → {bdt_now}(오늘 {NOW_HOUR}시)")
 
     key, stns = auth_key(), stations()
     cur, prev = load_issue(bdt_now, stns, key), load_issue(bdt_prev, stns, key)
