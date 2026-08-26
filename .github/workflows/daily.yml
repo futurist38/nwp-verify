@@ -55,6 +55,7 @@ jobs:
           python verify.py report  || echo "::warning::report 실패 — 계속"
           python plot_obsmap.py    || echo "::warning::관측지도 실패 — 계속"
           python plot_kmafcst.py --no-fetch || echo "::warning::단기예보 비교 실패 — 계속"
+          python plot_fcstdiff.py  || echo "::warning::예보변화 지도 실패 — 계속"
           python plot_verifmap.py  || echo "::warning::오차지도 실패 — 계속"
           python send_summary.py   || echo "::warning::메일 실패 — 계속"
 

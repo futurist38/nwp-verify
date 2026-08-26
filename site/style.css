@@ -25,7 +25,7 @@ select { padding: 7px 10px; font-size: 14px; border: 1px solid #ccc; border-radi
 .run-label { font-size: 13px; color: #555; display: inline-flex; align-items: center; gap: 4px; }
 .run-label select { padding: 5px 8px; font-size: 13px; }
 /* 나우캐스트: 현재 관측 | 예측 나란히 (좁으면 자동 1단) */
-#ncPair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+#ncPair, #fdPair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
           gap: 10px; }
 .imgwrap { text-align: center; }
 .imgwrap img { max-width: 100%; height: auto; border: 1px solid #e0e0e0; border-radius: 6px;

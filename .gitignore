@@ -13,3 +13,4 @@ site_build/
 site_build*/
 dl/*
 !dl/*.ipynb
+verification/fcstdiff/

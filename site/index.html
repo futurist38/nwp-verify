@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <header>
@@ -91,6 +91,17 @@
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
     <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
     <div class="imgwrap"><img id="kmafImg" alt="단기예보 vs 실측" loading="lazy"></div>
+
+    <h2 id="fdTitle">예보 변화 — 어제 발표 대비</h2>
+    <p class="note" style="font-size:13px;color:#444">
+      같은 발표시각끼리(어제 11시 vs 오늘 11시) <b>내일의 일 최고·최저기온 예보가 몇 도 바뀌었는지</b>를
+      전국 지도로 봅니다. <b style="color:#c22">빨강 = 예보 상향</b> · <b style="color:#1a5fb4">파랑 = 하향</b>.
+      ASOS 97지점 위치의 동네예보를 보간했고, 지점에서 먼 곳은 칠하지 않습니다.
+      모레는 어제 발표가 하루를 다 담지 못해(단기예보 3일) 비교에서 제외합니다.</p>
+    <div id="fdPair">
+      <div class="imgwrap"><img id="fdTmx" alt="최고기온 예보 변화" loading="lazy"></div>
+      <div class="imgwrap"><img id="fdTmn" alt="최저기온 예보 변화" loading="lazy"></div>
+    </div>
   </section>
 
   <section id="tab-verif" class="tab">
@@ -146,6 +157,6 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

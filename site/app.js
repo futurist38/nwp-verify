@@ -358,10 +358,24 @@ async function renderVerif() {
       $("kmafImg").src =
         `archive/${$("dateSelK").value}/kmafcst_${$("issueSelK").value}.png?${Date.now()}`;
     };
-    $("dateSelK").onchange = () => { fillIssues(); renderK(); };
+    // 예보 변화 지도 — 해당 날짜에 있으면 표시, 없으면 절 전체 숨김
+    const renderFd = () => {
+      const d = $("dateSelK").value;
+      const has = (MF.dates[d].fcstdiff || []);
+      const on = has.length > 0;
+      $("fdTitle").hidden = !on;
+      $("fdTitle").nextElementSibling.hidden = !on;   // 설명 문단
+      $("fdPair").hidden = !on;
+      if (on) {
+        $("fdTmx").src = `archive/${d}/fcstdiff_tmx_d1.png?${Date.now()}`;
+        $("fdTmn").src = `archive/${d}/fcstdiff_tmn_d1.png?${Date.now()}`;
+      }
+    };
+    $("dateSelK").onchange = () => { fillIssues(); renderK(); renderFd(); };
     $("issueSelK").onchange = renderK;
     fillIssues();
     renderK();
+    renderFd();
   }
 
   // 나우캐스트 탭 — manifest.nowcast 있을 때만 노출

@@ -19,22 +19,19 @@ import argparse
 import datetime as dt
 import json
 import os
-import re
 
 import pandas as pd
-import requests
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import sslfix  # noqa: F401
-from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
+from kma_vilage import auth_key, fetch, issuances_for
+from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
-API = "https://apihub-pub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst"
 CITY_GRID = {"서울": (60, 127), "대전": (67, 100), "대구": (89, 90),
              "부산": (98, 76), "광주": (58, 74), "강릉": (92, 131)}
-BASE_HOURS = [2, 5, 8, 11, 14, 17, 20, 23]
 CACHE_DIR = os.path.join(VERIF_DIR, "kmafcst")
 
 from matplotlib import font_manager as _fm
@@ -44,42 +41,6 @@ for _font in ["Malgun Gothic", "NanumGothic", "Noto Sans CJK KR"]:
         matplotlib.rc("font", family=_font)
         break
 matplotlib.rcParams["axes.unicode_minus"] = False
-
-
-def _auth_key() -> str:
-    key = os.environ.get("KMA_AUTH_KEY")
-    if key:
-        return key.strip()
-    m = re.search(r"KMA_AUTH_KEY\s*=\s*(\S+)",
-                  open(os.path.join(BASE_DIR, ".env"), encoding="utf-8").read())
-    return m.group(1)
-
-
-def issuances_for(day: dt.date, now: dt.datetime) -> list[str]:
-    """대상일 D의 선택지: 전일 17/20/23시 + 당일 발표분(가용 시각까지). 'YYYYMMDDHH'"""
-    y = day - dt.timedelta(days=1)
-    out = [f"{y:%Y%m%d}{h:02d}" for h in (17, 20, 23)]
-    avail = now - dt.timedelta(minutes=15)
-    for h in BASE_HOURS:
-        t = dt.datetime.combine(day, dt.time(h))
-        if t <= avail:
-            out.append(f"{day:%Y%m%d}{h:02d}")
-    return out
-
-
-def fetch_tmp(nx: int, ny: int, bdt: str, key: str) -> dict:
-    """발표 bdt('YYYYMMDDHH')의 TMP 시계열 {ISO시각: 값}."""
-    r = requests.get(API, params={"pageNo": 1, "numOfRows": 1300, "dataType": "JSON",
-                                  "base_date": bdt[:8], "base_time": bdt[8:] + "00",
-                                  "nx": nx, "ny": ny, "authKey": key}, timeout=60)
-    j = r.json()
-    if j["response"]["header"]["resultCode"] != "00":
-        raise RuntimeError(f"단기예보 오류({bdt}): {j['response']['header']}")
-    out = {}
-    for it in j["response"]["body"]["items"]["item"]:
-        if it["category"] == "TMP":
-            out[it["fcstDate"] + it["fcstTime"][:2]] = float(it["fcstValue"])
-    return out
 
 
 def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
@@ -94,7 +55,7 @@ def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
             if city in got:
                 continue
             try:
-                got[city] = fetch_tmp(nx, ny, bdt, key)
+                got[city] = fetch(nx, ny, bdt, key)["TMP"]
                 changed = True
             except Exception as e:
                 print(f"[단기예보] {bdt} {city} 수신 실패: {e}")
@@ -179,7 +140,7 @@ def main():
     p.add_argument("--no-fetch", action="store_true", help="ASOS 재수신 생략")
     args = p.parse_args()
 
-    key = _auth_key()
+    key = auth_key()
     now = dt.datetime.now()
     today = now.date()
 
