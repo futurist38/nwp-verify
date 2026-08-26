@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 <header>
@@ -57,10 +57,10 @@
 
   <section id="tab-nowcast" class="tab">
     <p class="note" style="font-size:13px;color:#444">
-      <b>위성 기반 운량 나우캐스트 — GK2A 천리안2A 구름분석(CLA)을 딥러닝(U-Net)으로 +3시간 외삽.</b><br>
-      매시 갱신 · 자체 학습 모델(사전학습 가중치 미사용) · 지도 문법은 전운량과 동일
-      (0=어두움 · 100=밝음, 노란 등치선 50/75). 3시간 너머 전망은 NWP 탭의 수치모델 예측을 참조하세요
-      (위성 외삽의 유효 구간이 ~3시간까지라 역할을 나눴습니다).</p>
+      <b>위성 기반 운량 나우캐스트 — GK2A 천리안2A 구름분석(CLA)을 딥러닝(U-Net)으로 +6시간 외삽.</b><br>
+      매시 갱신 · 자체 학습 모델(사전학습 가중치 미사용) · 위성영상 문법(0=어두움 · 100=밝음, 노란 지리선).
+      ASOS 실측으로 채점하면 +6시간까지 수치모델보다 오차가 작아(나우캐스트 14.9 vs ECMWF 19.4 %),
+      이 구간은 나우캐스트가 맡습니다. 그 너머 전망은 NWP 탭을 참조하세요.</p>
     <div id="ncIssue" class="step-label"></div>
     <div class="controls"><div id="ncLeadBtns" class="btns"></div></div>
     <div id="ncPair">
@@ -73,7 +73,7 @@
     <div class="imgwrap"><img id="ncCities" alt="도시별 운량 시계열" loading="lazy"></div>
     <h2>최근 7일 검증 (persistence 대비 skill)</h2>
     <div id="ncSkill" class="tablewrap"></div>
-    <p class="note">skill = 1 − MAE(DL)/MAE(persistence), 위성 자기검증(발령 +3h 경과 후 자동 채점).
+    <p class="note">skill = 1 − MAE(DL)/MAE(persistence), 위성 자기검증(발령 +6h 경과 후 자동 채점).
        양(+)이면 "마지막 위성 화면 유지"보다 나음.</p>
   </section>
 
@@ -157,6 +157,6 @@
     <p class="note" id="genInfo"></p>
   </section>
 </main>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

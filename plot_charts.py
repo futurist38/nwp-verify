@@ -170,7 +170,7 @@ def _valid_kst(run, step_h):
 # ══════════════════════════════════════════════════════════
 
 def _make_ax(fig, pos, line_color="black"):
-    """line_color: 해안선·경계선 색 — 전운량(어두운 배경)은 노란색 사용."""
+    """line_color: 해안선·경계선 색 — 전운량은 위성영상처럼 노란 지리선."""
     if HAS_CARTOPY:
         ax = fig.add_subplot(*pos, projection=ccrs.PlateCarree())
         try:
@@ -233,7 +233,7 @@ def plot_maps(model_name, data, out_dir):
         # (2026-08-20 실측: 105px 폭 PNG). tight_layout도 금지(GEOSException) — 수동 여백만.
         fig = plt.figure(figsize=(7.4, 5.9))
         # 전운량은 위성영상풍(어두운 배경) — 해안·행정경계는 청록(노랑=등치선과 구분)
-        ax = _make_ax(fig, (1, 1, 1), line_color="#00cfff" if panel == "tcc" else "black")
+        ax = _make_ax(fig, (1, 1, 1), line_color="yellow" if panel == "tcc" else "black")
         draw(fig, ax)
         vkst = _valid_kst(run, step_h)
         ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
@@ -273,10 +273,8 @@ def plot_maps(model_name, data, out_dir):
                                extent=[float(_c.longitude.min()), float(_c.longitude.max()),
                                        float(_c.latitude.min()), float(_c.latitude.max())],
                                **kw)
-                # 전운량 등치선 — 노란색, 50% 이상만 (사용자 확정: 50·75)
-                cs = ax.contour(_lo, _la, _c.values, levels=[50, 75],
-                                colors="yellow", linewidths=0.9)
-                ax.clabel(cs, fmt="%d", fontsize=9, colors="yellow")
+                # 등치선 없음 — 위성영상 문법에 맞춰 구름 테두리를 빼고 지리선만 노란색
+                # (2026-08-26 사용자 확정: 이전의 50·75 등치선 표출을 대체)
                 fig.colorbar(pm, ax=ax, shrink=0.8, label="전운량 (%)")
             _save(step_h, "tcc", draw_tcc)
 

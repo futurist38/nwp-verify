@@ -4,7 +4,7 @@
 
 흐름 (Actions obs-hourly 매시 20분, 2026-08-24 운영 편입):
   1. GK2A CLA 최신 4프레임(t-30~t, 10분 간격) 수신 — 지연 ~8분 고려해 발령시각 자동 선정
-  2. M4 추론 → 지도 PNG(+1~+6h, 전운량 표출 문법: 0어두움·100밝음 + 노란 등치선 50/75)
+  2. M4 추론 → 지도 PNG(+1~+6h, 위성영상 문법: 0어두움·100밝음 + 노란 지리선)
      + 도시 6곳 시계열(과거 3h 위성 실측 + 예측 6h)
   3. 예측장 npz 보관(채점용, +6h 지나면 삭제)
   4. 지속 채점: 만기 도래 과거 발령을 실제 CLA와 대조 → verification/nowcast/YYYY-MM.csv
@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 import sslfix  # noqa: F401
 from config import OUT_DIR, VERIF_DIR
 from fetch_gk2a import fetch_one, data_list
-from nowcast_bench import CLA_DIR, load_ca, city_pixels, grid_lonlat
+from nowcast_bench import CLA_DIR, load_ca, city_pixels
 
 
 def _gk2a_proj():
@@ -43,11 +43,13 @@ def _gk2a_proj():
 NOWCAST_OUT = os.path.join(OUT_DIR, "nowcast")
 FIELDS_DIR = os.path.join(NOWCAST_OUT, "fields")
 SCORE_DIR = os.path.join(VERIF_DIR, "nowcast")
-# 운영 리드 +3h 제한 (2026-08-25 판정: from-scratch는 +2h까지 전승, 여름 장리드 붕괴
-#  — 문헌 표준도 "0~3h 위성, 그 너머 NWP". +6h 확장은 롤아웃 안정화 라운드 후)
-MAP_LEADS_H = [1, 2, 3]
+# 운영 리드 +6h (2026-08-26 확장). 근거 둘:
+#  · 계절별 5기간에서 v5가 +6h까지 지속성 대비 +15~23% 유지 (V5_판정.md)
+#  · ASOS 실측 대비 NWP와 직접 대결에서 +6h까지 교차점 없음 — 나우캐스트 14.9 vs
+#    ECMWF 19.4 (VS_NWP_판정.md). 문헌의 2.75~4.5h 교차점이 우리 조건엔 오지 않았다
+MAP_LEADS_H = [1, 2, 3, 4, 5, 6]
 SERIES_STEP_MIN = 30          # 도시 시계열 해상도
-LEADS_ALL = list(range(30, 181, 30))
+LEADS_ALL = list(range(30, 361, 30))
 
 from matplotlib import font_manager as _fm
 _inst = {f.name for f in _fm.fontManager.ttflist}
@@ -97,10 +99,9 @@ def fetch_series_past(issue: dt.datetime):
 
 
 def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str):
-    """전운량 표출 문법(plot_charts와 동일): gray 0어두움/100밝음 + 노란 등치선 50/75."""
+    """위성영상 문법(plot_charts 전운량과 동일): gray 0어두움/100밝음 + 노란 지리선."""
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    lons, lats = grid_lonlat()
     proj = _gk2a_proj()
     kst = issue + dt.timedelta(hours=9)
     # lead 0 = 현재 위성 관측(비교 기준) — 사용자 요청 2026-08-25
@@ -114,14 +115,10 @@ def render_maps(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: str)
         ax.imshow(f, transform=proj, origin="upper",   # row0=북 실측 확정
                   extent=[-899000, 899000, -899000, 899000],
                   cmap="gray", vmin=0, vmax=100, interpolation="bilinear")
-        # 등치선은 평활장에서 — 관측 원장은 화소 잡음이 심해 얼룩이 됨(그림은 원본 유지)
-        from scipy.ndimage import gaussian_filter
-        ax.contour(lons, lats, gaussian_filter(np.nan_to_num(f, nan=0.0), 3.0),
-                   levels=[50, 75], colors="yellow",
-                   linewidths=[0.9, 1.4], transform=ccrs.PlateCarree())
-        ax.coastlines(resolution="10m", color="#00cfff", linewidth=0.9)
+        # 위성영상 문법: 구름 등치선 없이 지리선만 노란색 (2026-08-26 사용자 확정)
+        ax.coastlines(resolution="10m", color="yellow", linewidth=0.9)
         ax.add_feature(cfeature.STATES.with_scale("10m"),
-                       edgecolor="#00cfff", linewidth=0.35, facecolor="none")
+                       edgecolor="yellow", linewidth=0.35, facecolor="none")
         vt = kst + dt.timedelta(hours=h)
         ax.set_title(f"현재 위성 관측  {kst:%m-%d %H:%M} KST" if h == 0 else
                      f"운량 나우캐스트 +{h}h  유효 {vt:%m-%d %H시} KST (발령 {kst:%H:%M})",

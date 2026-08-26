@@ -71,7 +71,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dl
-          if gh release download nowcast-weights -p "gk2a_scratch.h5" -D dl --clobber; then
+          if gh release download nowcast-weights -p "gk2a_v5*" -D dl --clobber; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::나우캐스트 가중치 릴리스 없음 — 단계 건너뜀"
