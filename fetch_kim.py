@@ -100,7 +100,9 @@ def fetch(tmfc: str | None = None, max_minutes: float = 0.0) -> str:
 
     os.makedirs(DATA_DIR, exist_ok=True)
     target = os.path.join(DATA_DIR, f"kim_{NWP}_{tmfc}.grib2")
-    if os.path.exists(target) and os.path.getsize(target) > 0:
+    # 부분 수신본을 "완료"로 오인하면 영영 반쪽 자료를 쓰게 된다 → 완료 표식으로 구분
+    done_mark = target + ".done"
+    if os.path.exists(target) and os.path.getsize(target) > 0 and os.path.exists(done_mark):
         print(f"[KIM] 이미 수신됨: {target}")
         return target
 
@@ -151,6 +153,10 @@ def fetch(tmfc: str | None = None, max_minutes: float = 0.0) -> str:
         os.remove(tmp_out)
         raise RuntimeError("KIM 스텝을 하나도 받지 못했습니다")
     os.replace(tmp_out, target)
+    if n_skip == 0 and n_fail == 0:
+        open(done_mark, "w").close()          # 전 스텝 확보 시에만 완료 표식
+    elif os.path.exists(done_mark):
+        os.remove(done_mark)
     print(f"[KIM] 수신 완료: {target} ({os.path.getsize(target)/1e6:.1f} MB, "
           f"성공 {n_ok} / 실패 {n_fail} / 미수신 {n_skip} 스텝)")
     return target
