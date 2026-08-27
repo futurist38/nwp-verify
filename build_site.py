@@ -162,13 +162,17 @@ def copy_nowcast(site_dir: str) -> dict | None:
     for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
         shutil.copy2(npz, fdst)
 
-    # 과거 검증 패널 보관분 미러
+    # 과거 검증 패널은 **쌓아 간다** — 통째로 미러하면 러너(그날 산출만 있음)에서
+    # 배포본이 매번 지워진다 (2026-08-27 실측: past 0건). 새 것만 더하고 기한만 정리.
     adst = os.path.join(nd, "archive")
-    if os.path.exists(adst):
-        shutil.rmtree(adst)
     os.makedirs(adst, exist_ok=True)
     for png in glob.glob(os.path.join(OUT_DIR, "nowcast", "archive", "*.png")):
         shutil.copy2(png, adst)
+    cut = (dt.date.today() - dt.timedelta(days=30)).strftime("%Y%m%d%H")
+    for f in glob.glob(os.path.join(adst, "*.*")):
+        stem = os.path.splitext(os.path.basename(f))[0]
+        if stem.isdigit() and stem < cut:
+            os.remove(f)
 
     all_leads = sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
                        for p in glob.glob(os.path.join(nd, "map_*h.png")))
