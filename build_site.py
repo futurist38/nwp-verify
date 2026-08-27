@@ -153,26 +153,22 @@ def copy_nowcast(site_dir: str) -> dict | None:
     for png in glob.glob(os.path.join(src, "*.png")):
         shutil.copy2(png, nd)   # 무조건 복사(mtime 함정 — copy_outputs 참조)
 
-    # 채점 대기 예측장 미러 — Actions 러너는 휘발성이라 site-data에 실어 왕복
-    # (워크플로가 런 시작 시 site_build/nowcast/fields → output 으로 복원)
-    fdst = os.path.join(nd, "fields")
-    if os.path.exists(fdst):
-        shutil.rmtree(fdst)     # 채점 완료로 로컬에서 삭제된 것을 반영(미러)
-    os.makedirs(fdst, exist_ok=True)
-    for npz in glob.glob(os.path.join(OUT_DIR, "nowcast", "fields", "*.npz")):
-        shutil.copy2(npz, fdst)
-
     # 과거 검증 패널은 **쌓아 간다** — 통째로 미러하면 러너(그날 산출만 있음)에서
-    # 배포본이 매번 지워진다 (2026-08-27 실측: past 0건). 새 것만 더하고 기한만 정리.
+    # 배포본이 매번 지워진다. 새 것만 더하고 기한(7일)만 정리한다.
+    # 7일 뒤에는 그림을 지우고 검증 채점표(텍스트)만 남긴다 (2026-08-28 사용자 지시).
     adst = os.path.join(nd, "archive")
     os.makedirs(adst, exist_ok=True)
     for png in glob.glob(os.path.join(OUT_DIR, "nowcast", "archive", "*.png")):
         shutil.copy2(png, adst)
-    cut = (dt.date.today() - dt.timedelta(days=30)).strftime("%Y%m%d%H")
+    acut = (dt.date.today() - dt.timedelta(days=7)).strftime("%Y%m%d%H")
+    gone = 0
     for f in glob.glob(os.path.join(adst, "*.*")):
         stem = os.path.splitext(os.path.basename(f))[0]
-        if stem.isdigit() and stem < cut:
+        if stem.isdigit() and stem < acut:
             os.remove(f)
+            gone += 1
+    if gone:
+        print(f"[site] 검증패널 보관 정리: {gone}장 삭제(7일 경과)")
 
     all_leads = sorted(int(re.match(r"map_(\d+)h", os.path.basename(p)).group(1))
                        for p in glob.glob(os.path.join(nd, "map_*h.png")))

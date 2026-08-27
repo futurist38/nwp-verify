@@ -41,11 +41,10 @@ def _gk2a_proj():
                                  standard_parallels=(30, 60))
 
 NOWCAST_OUT = os.path.join(OUT_DIR, "nowcast")
-FIELDS_DIR = os.path.join(NOWCAST_OUT, "fields")
 SCORE_DIR = os.path.join(VERIF_DIR, "nowcast")
 ARCHIVE_DIR = os.path.join(NOWCAST_OUT, "archive")   # 과거 조회용 검증 패널
 ARCHIVE_EVERY_H = 3    # 3시간마다 한 장만 보관 — 매시 보관하면 site-data가 감당 못 함
-ARCHIVE_KEEP_DAYS = 30
+ARCHIVE_KEEP_DAYS = 7    # 그 뒤엔 검증 채점표(텍스트)만 남긴다 — 장당 170KB
 # 운영 리드 +6h (2026-08-26 확장). 근거 둘:
 #  · 계절별 5기간에서 v5가 +6h까지 지속성 대비 +15~23% 유지 (V5_판정.md)
 #  · ASOS 실측 대비 NWP와 직접 대결에서 +6h까지 교차점 없음 — 나우캐스트 14.9 vs
@@ -202,35 +201,17 @@ def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str,
 def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str,
                   model=None):
     """'지금 위성' vs '과거에 예측한 지금' — 리드 1~6h를 한 장에 (2026-08-26 사용자 요청).
-    보관해 둔 과거 발령 예측장(FIELDS_DIR)에서 유효시각이 이번 발령과 맞는 것을 꺼내 쓴다.
-    보관분은 채점(+6h20m) 후 삭제되므로, 실행이 뜸했던 뒤에는 비어 있을 수 있다
-    (2026-08-28 실측: 예약 실행이 줄자 보관 1개만 남아 화면이 통째로 사라졌다).
-    그런 칸은 **그 자리에서 다시 추론해 채운다** — 평소 매시 운영에서는 보관분이 다 있어
-    추가 계산이 없고, 공백 뒤에만 비용이 든다."""
+    각 칸은 그 시각 발령을 **그 자리에서 재현 추론**해 그린다. 예측은 같은 입력이면
+    결정적이라 저장해 둔 것과 결과가 같고, 예측장을 보관·왕복시킬 필요가 없다
+    (2026-08-28 사용자 지시). 리드당 ~7초."""
     from dl_infer import load_ca_native
     kst = issue + dt.timedelta(hours=9)
-
-    stored = {}
-    for path in glob.glob(os.path.join(FIELDS_DIR, "*.npz")):
-        try:
-            stored[dt.datetime.strptime(os.path.basename(path)[:-4], "%Y%m%d%H%M")] = path
-        except ValueError:
-            continue
 
     panels = [("현재 위성 관측", obs)]
     for h in MAP_LEADS_H:
         want = issue - dt.timedelta(hours=h)
-        cand = [t for t in stored if abs((t - want).total_seconds()) <= 1200]
         f = None
-        if cand:
-            t = min(cand, key=lambda t: abs((t - want).total_seconds()))
-            with np.load(stored[t]) as z:
-                key = f"m{h * 60}"
-                if key in z.files:
-                    f = z[key].astype(np.float32)
-                    rq = z["ref"] if "ref" in z.files else None
-                    f = pmm(f, rq if rq is not None and rq.size else None)
-        if f is None and model is not None:      # 보관 없음 → 재현
+        if model is not None:
             want10 = want.replace(minute=want.minute // 10 * 10, second=0, microsecond=0)
             if frames_ready(want10):
                 out = model.predict(want10, [h * 60], native=True)
@@ -339,49 +320,54 @@ def render_cities(issue: dt.datetime, fields: dict[int, np.ndarray], out_dir: st
     plt.close(fig)
 
 
-def score_due(now_utc: dt.datetime):
-    """만기(+6h 경과) 발령 npz를 실제 CLA와 대조 채점 후 삭제. M0 병행."""
+def score_due(now_utc: dt.datetime, model=None):
+    """+6h 지난 발령을 **그 자리에서 재현해** 실제 위성과 대조 채점한다. M0 병행.
+
+    예전에는 발령 때 예측장(npz ~1.1MB)을 저장해 site-data로 왕복시켰다.
+    같은 입력이면 예측은 결정적이라 다시 계산해도 결과가 같으므로, 보관을 없애고
+    필요할 때 재현한다 (2026-08-28 사용자 지시: 원본 이미지는 남길 필요 없음).
+    저장·왕복이 사라지고 미러링 관련 버그도 함께 없어진다. 비용은 발령당 ~7초.
+    """
+    if model is None:
+        return
     os.makedirs(SCORE_DIR, exist_ok=True)
+    target = (now_utc - dt.timedelta(minutes=LEADS_ALL[-1] + 20))
+    target = target.replace(minute=target.minute // 10 * 10, second=0, microsecond=0)
+
+    path = os.path.join(SCORE_DIR, f"{target:%Y-%m}.csv")
+    done = pd.read_csv(path, parse_dates=["issue_utc"]) if os.path.exists(path) else pd.DataFrame()
+    if len(done) and (done["issue_utc"] == pd.Timestamp(target)).any():
+        return                                   # 이미 채점함
+    if not frames_ready(target):
+        print(f"[nowcast] 채점 건너뜀(입력 부족): {target:%Y%m%d%H%M}")
+        return
+
+    preds = model.predict(target, LEADS_ALL)     # 채점 격자(벤치)로
+    if preds is None:
+        return
+    base = load_ca(target.strftime("%Y%m%d%H%M"))
     rows = []
-    for path in sorted(glob.glob(os.path.join(FIELDS_DIR, "*.npz"))):
-        stamp = os.path.basename(path)[:-4]
-        issue = dt.datetime.strptime(stamp, "%Y%m%d%H%M")
-        if now_utc < issue + dt.timedelta(minutes=LEADS_ALL[-1] + 20):
+    for m in LEADS_ALL:
+        vt = target + dt.timedelta(minutes=m)
+        fetch_one("CLA", "KO", vt.strftime("%Y%m%d%H%M"), CLA_DIR)
+        actual = load_ca(vt.strftime("%Y%m%d%H%M"))
+        if actual is None:
             continue
-        with np.load(path) as z:   # 핸들 열린 채 remove 불가(WinError 32) — 즉시 닫기
-            preds = {k: z[k].astype(np.float32) for k in z.files}
-        base = load_ca(stamp)
-        for m in LEADS_ALL:
-            vt = issue + dt.timedelta(minutes=m)
-            # 검증 프레임이 없으면 수신 시도(과거분 보충)
-            fetch_one("CLA", "KO", vt.strftime("%Y%m%d%H%M"), CLA_DIR)
-            actual = load_ca(vt.strftime("%Y%m%d%H%M"))
-            if actual is None or f"m{m}" not in preds:
-                continue
-            pred = preds[f"m{m}"]
-            if pred.shape != actual.shape:      # 원해상도 보관본 → 채점 격자로
-                import cv2
-                pred = cv2.resize(pred, actual.shape[::-1], interpolation=cv2.INTER_AREA)
-            valid = np.isfinite(actual)
-            rows.append({"issue_utc": issue, "lead_min": m, "method": "M4",
-                         "mae": float(np.mean(np.abs(pred[valid] - actual[valid])))})
-            if base is not None:
-                rows.append({"issue_utc": issue, "lead_min": m, "method": "M0",
-                             "mae": float(np.mean(np.abs(base[valid] - actual[valid])))})
-        os.remove(path)
-        print(f"[nowcast] 채점 완료: {stamp}")
+        valid = np.isfinite(actual)
+        rows.append({"issue_utc": target, "lead_min": m, "method": "M4",
+                     "mae": float(np.mean(np.abs(preds[m][valid] - actual[valid])))})
+        if base is not None:
+            rows.append({"issue_utc": target, "lead_min": m, "method": "M0",
+                         "mae": float(np.mean(np.abs(base[valid] - actual[valid])))})
     if not rows:
         return
-    df = pd.DataFrame(rows)
-    for mm, grp in df.groupby(df["issue_utc"].map(lambda x: f"{x:%Y-%m}")):
-        path = os.path.join(SCORE_DIR, f"{mm}.csv")
-        if os.path.exists(path):
-            old = pd.read_csv(path, parse_dates=["issue_utc"])
-            grp = pd.concat([old, grp]).drop_duplicates(
-                subset=["issue_utc", "lead_min", "method"], keep="last")
-        grp.sort_values(["issue_utc", "lead_min", "method"]).to_csv(
-            path, index=False, encoding="utf-8-sig")
-        print(f"[nowcast] 채점 기록: {path}")
+    grp = pd.DataFrame(rows)
+    if len(done):
+        grp = pd.concat([done, grp]).drop_duplicates(
+            subset=["issue_utc", "lead_min", "method"], keep="last")
+    grp.sort_values(["issue_utc", "lead_min", "method"]).to_csv(
+        path, index=False, encoding="utf-8-sig")
+    print(f"[nowcast] 채점: {target:%Y%m%d%H%M} → {path}")
 
 
 def main():
@@ -443,14 +429,6 @@ def main():
     obs_native = load_ca_native(obs_path) if os.path.exists(obs_path) else None
     ref_q = ref_quantiles(obs_native)      # 표출 대비 보정용(발령시각 실황 분포)
 
-    os.makedirs(FIELDS_DIR, exist_ok=True)
-    # uint8 저장 — Actions에선 site-data에 실려 런 간 왕복하므로 크기 최소화.
-    # 원해상도(512)로 보관: 채점은 축소해 쓰고, "과거 예측 vs 지금" 표출에 재사용한다
-    # (450으로 저장하면 표출 때 맥놀이 격자가 되살아남 — 2026-08-26)
-    np.savez_compressed(os.path.join(FIELDS_DIR, f"{issue:%Y%m%d%H%M}.npz"),
-                        ref=(ref_q if ref_q is not None else np.zeros(0, np.float32)),
-                        **{f"m{m}": np.round(v).astype(np.uint8)
-                           for m, v in native.items()})
 
     if not args.no_plot:
         latest = os.path.join(NOWCAST_OUT, "latest")
@@ -464,7 +442,7 @@ def main():
         print(f"[nowcast] 표출 → {latest}")
 
     if not args.no_score:
-        score_due(now_utc)
+        score_due(now_utc, d)
 
 
 if __name__ == "__main__":

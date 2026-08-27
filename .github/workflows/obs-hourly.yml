@@ -60,17 +60,12 @@ jobs:
         # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
         run: timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
 
-      - name: site-data 복원 (나우캐스트 채점 대기분 포함)
+      - name: site-data 복원
         run: |
           mkdir -p site_build
           git fetch origin site-data
           git --work-tree=site_build checkout FETCH_HEAD -- .
           git reset > /dev/null
-          # 이전 런의 채점 대기 예측장 복원 (러너 휘발성 대응)
-          if [ -d site_build/nowcast/fields ]; then
-            mkdir -p output/nowcast/fields
-            cp site_build/nowcast/fields/*.npz output/nowcast/fields/ 2>/dev/null || true
-          fi
 
       - name: 나우캐스트 가중치 (Release 자산)
         id: ncw
