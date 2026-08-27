@@ -207,10 +207,46 @@ def load_asos_ca(days: list[dt.date]) -> pd.DataFrame:
     return df.dropna(subset=["CA_TOT"])
 
 
+# ── FSS (Fractions Skill Score) ──
+# MAE/RMSE는 뭉갠 예측에 유리하다(이중 벌점): 구름대가 조금 어긋난 선명한 예측은
+# 놓침+오경보로 두 번 벌점을 받는데, 회색으로 흐리게 칠하면 둘 다 피한다.
+# FSS는 임계값으로 흐림/맑음을 가른 뒤 **반경 안의 흐림 비율**끼리 비교한다.
+# 반경을 넓혀가며 재면 "몇 km 규모에서 쓸 만한가"가 드러난다 (Roberts & Lean 2008).
+FSS_THR = 50.0                      # 흐림 판정 기준(운량 %)
+FSS_SCALES = [1, 3, 9, 21, 51]      # 이웃 한 변(격자). 4km 격자 → 4·12·36·84·204km
+
+
+def fss_scores(pred: np.ndarray, obs: np.ndarray, valid: np.ndarray,
+               thr: float = FSS_THR, scales=FSS_SCALES) -> dict[int, float]:
+    """반경별 FSS. 1=완벽, 0=무의미. 결측 격자는 제외한다."""
+    from scipy.ndimage import uniform_filter
+    m = valid.astype(np.float32)
+    P = np.where(valid, pred >= thr, 0).astype(np.float32)
+    O = np.where(valid, obs >= thr, 0).astype(np.float32)
+    out = {}
+    for n in scales:
+        if n == 1:
+            pf, of, w = P, O, m
+        else:
+            kw = dict(size=n, mode="constant", cval=0.0)
+            w = uniform_filter(m, **kw)
+            # 유효 격자 비율로 나눠 가장자리·결측 주변의 희석을 보정
+            pf = np.divide(uniform_filter(P, **kw), w, out=np.zeros_like(P), where=w > 0.3)
+            of = np.divide(uniform_filter(O, **kw), w, out=np.zeros_like(O), where=w > 0.3)
+        use = (w > 0.3) & valid
+        if use.sum() < 100:
+            out[n] = np.nan
+            continue
+        num = np.mean((pf[use] - of[use]) ** 2)
+        den = np.mean(pf[use] ** 2) + np.mean(of[use] ** 2)
+        out[n] = float(1 - num / den) if den > 0 else np.nan
+    return out
+
+
 # ── 벤치마크 본체 ──
 
 def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = "",
-              use_dl: bool = False):
+              use_dl: bool = False, fss_on: bool = False):
     os.makedirs(OUT_DIR, exist_ok=True)
     dl = None
     if use_dl:
@@ -252,7 +288,7 @@ def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = "",
                          for k in range((t1 - t0).days + 2)])
     asos_idx = asos.set_index(["TM", "STN"])["CA_TOT"]
 
-    rows, arows = [], []
+    rows, arows, frows = [], [], []
     for n, issue in enumerate(issues, 1):
         f_prev = load_ca((issue - dt.timedelta(minutes=STEP_MIN)).strftime("%Y%m%d%H%M"))
         f_now = load_ca(issue.strftime("%Y%m%d%H%M"))
@@ -283,6 +319,10 @@ def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = "",
                              "mae": float(np.mean(np.abs(err))),
                              "rmse": float(np.sqrt(np.mean(err ** 2))),
                              "n_px": int(valid.sum())})
+                if fss_on:   # 선명도까지 보려면 — MAE만으로는 뭉갠 예측을 걸러낼 수 없다
+                    for sc, v in fss_scores(p, actual, valid).items():
+                        frows.append({"issue_utc": issue, "lead_min": lead,
+                                      "method": m, "scale": sc, "fss": v})
                 # ASOS 보조 (정시 리드만)
                 if lead % 60 == 0:
                     vt = issue + dt.timedelta(minutes=lead, hours=9)  # KST
@@ -303,6 +343,14 @@ def run_bench(issues_per_day: int, tag: str = "", t0f: str = "", t1f: str = "",
     sc.to_csv(os.path.join(OUT_DIR, f"scores{suf}.csv"), index=False, encoding="utf-8-sig")
     pd.DataFrame(arows).to_csv(os.path.join(OUT_DIR, f"scores_asos{suf}.csv"),
                                index=False, encoding="utf-8-sig")
+    if frows:
+        fdf = pd.DataFrame(frows)
+        fdf.to_csv(os.path.join(OUT_DIR, f"scores_fss{suf}.csv"),
+                   index=False, encoding="utf-8-sig")
+        piv = fdf.pivot_table(index="lead_min", columns=["method", "scale"],
+                              values="fss", aggfunc="mean")
+        print("FSS (임계 50%, 반경 격자수 — 1=완벽):")
+        print(piv.round(3).to_string())
     report(sc, pd.DataFrame(arows), tag)
 
 
@@ -349,10 +397,12 @@ def main():
     p.add_argument("--tag", default="")
     p.add_argument("--t0", default="", help="YYYYMMDDHHMM 필터 시작")
     p.add_argument("--t1", default="", help="YYYYMMDDHHMM 필터 끝")
+    p.add_argument("--fss", action="store_true",
+                   help="FSS(선명도 반영) 동시 채점 — 반경별")
     p.add_argument("--dl", action="store_true",
                    help="M4(파인튜닝 CloudCast) 포함 — dl/gk2a_finetuned 필요")
     args = p.parse_args()
-    run_bench(args.issues_per_day, args.tag, args.t0, args.t1, args.dl)
+    run_bench(args.issues_per_day, args.tag, args.t0, args.t1, args.dl, args.fss)
 
 
 if __name__ == "__main__":
