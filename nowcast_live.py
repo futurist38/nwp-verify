@@ -199,10 +199,15 @@ def draw_verify(panels: list, valid_kst: dt.datetime, out_path: str,
     return True
 
 
-def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
+def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str,
+                  model=None):
     """'지금 위성' vs '과거에 예측한 지금' — 리드 1~6h를 한 장에 (2026-08-26 사용자 요청).
-    보관해 둔 과거 발령 예측장(FIELDS_DIR)에서 유효시각이 이번 발령과 맞는 것을 꺼내 쓴다
-    — 추가 추론도 추가 수신도 없다."""
+    보관해 둔 과거 발령 예측장(FIELDS_DIR)에서 유효시각이 이번 발령과 맞는 것을 꺼내 쓴다.
+    보관분은 채점(+6h20m) 후 삭제되므로, 실행이 뜸했던 뒤에는 비어 있을 수 있다
+    (2026-08-28 실측: 예약 실행이 줄자 보관 1개만 남아 화면이 통째로 사라졌다).
+    그런 칸은 **그 자리에서 다시 추론해 채운다** — 평소 매시 운영에서는 보관분이 다 있어
+    추가 계산이 없고, 공백 뒤에만 비용이 든다."""
+    from dl_infer import load_ca_native
     kst = issue + dt.timedelta(hours=9)
 
     stored = {}
@@ -225,6 +230,14 @@ def render_verify(issue: dt.datetime, obs: np.ndarray | None, out_dir: str):
                     f = z[key].astype(np.float32)
                     rq = z["ref"] if "ref" in z.files else None
                     f = pmm(f, rq if rq is not None and rq.size else None)
+        if f is None and model is not None:      # 보관 없음 → 재현
+            want10 = want.replace(minute=want.minute // 10 * 10, second=0, microsecond=0)
+            if frames_ready(want10):
+                out = model.predict(want10, [h * 60], native=True)
+                if out:
+                    ip = os.path.join(CLA_DIR, want10.strftime("%Y%m%d%H%M") + ".nc")
+                    rq = ref_quantiles(load_ca_native(ip)) if os.path.exists(ip) else None
+                    f = pmm(out[h * 60], rq)
         panels.append((f"{h}시간 전 예측", f))
 
     return draw_verify(panels, kst, os.path.join(out_dir, "verify.png"))
@@ -254,6 +267,14 @@ def verify_case(valid_utc: dt.datetime, out_dir: str,
                 f = pmm(out[h * 60], rq)
         else:
             print(f"[사례] {h}시간 전({issue:%m-%d %H:%M}) 입력 프레임 부족")
+        if f is None and model is not None:      # 보관 없음 → 재현
+            want10 = want.replace(minute=want.minute // 10 * 10, second=0, microsecond=0)
+            if frames_ready(want10):
+                out = model.predict(want10, [h * 60], native=True)
+                if out:
+                    ip = os.path.join(CLA_DIR, want10.strftime("%Y%m%d%H%M") + ".nc")
+                    rq = ref_quantiles(load_ca_native(ip)) if os.path.exists(ip) else None
+                    f = pmm(out[h * 60], rq)
         panels.append((f"{h}시간 전 예측", f))
 
     kst = valid_utc + dt.timedelta(hours=9)
@@ -435,7 +456,7 @@ def main():
         latest = os.path.join(NOWCAST_OUT, "latest")
         os.makedirs(latest, exist_ok=True)
         render_maps(issue, native, latest, obs_native, ref_q)
-        if render_verify(issue, obs_native, latest):
+        if render_verify(issue, obs_native, latest, d):
             archive_verify(issue, latest)
         render_cities(issue, fields, latest)
         with open(os.path.join(latest, "issue.txt"), "w") as f:
