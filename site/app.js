@@ -117,15 +117,24 @@ function bindHover(container, lookup) {
     };
     svg.onmousemove = (ev) => at(ev.clientX, ev.clientY);
     svg.onmouseleave = () => { tip.hidden = true; cross.setAttribute("opacity", 0); };
-    // 터치 기기: 손가락으로 짚어도 값이 보이게
-    const touch = (ev) => {
-      const t = ev.touches && ev.touches[0];
-      if (!t) return;
+    // 터치: 짚은 채 좌우로 움직이면 값을 훑을 수 있게. 다만 **세로로 긋는 동작은
+    // 페이지 스크롤로 넘긴다** — 안 그러면 휴대폰에서 아래로 내려갈 수가 없다(2026-08-27).
+    let t0x = 0, t0y = 0, mode = 0;   // 0=미정 1=값읽기 2=스크롤
+    svg.addEventListener("touchstart", (ev) => {
+      const t = ev.touches[0];
+      t0x = t.clientX; t0y = t.clientY; mode = 0;
       at(t.clientX, t.clientY);
-      ev.preventDefault();
-    };
-    svg.addEventListener("touchstart", touch, { passive: false });
-    svg.addEventListener("touchmove", touch, { passive: false });
+    }, { passive: true });
+    svg.addEventListener("touchmove", (ev) => {
+      const t = ev.touches[0];
+      if (!mode) {
+        const dx = Math.abs(t.clientX - t0x), dy = Math.abs(t.clientY - t0y);
+        if (dx + dy < 8) return;
+        mode = dx > dy ? 1 : 2;
+        if (mode === 2) { tip.hidden = true; cross.setAttribute("opacity", 0); }
+      }
+      if (mode === 1) { at(t.clientX, t.clientY); ev.preventDefault(); }
+    }, { passive: false });
     svg.addEventListener("touchend", () => {
       setTimeout(() => { tip.hidden = true; cross.setAttribute("opacity", 0); }, 2500);
     });
@@ -149,7 +158,12 @@ function renderKmaf() {
   if (!d || !d.fcst[b]) { $("kmafCharts").innerHTML = ""; return; }
   const t0ms = keyToMs(d.t0);
   const iIss = Math.round((keyToMs(b) - t0ms) / 3600e3);
-  const i0 = Math.max(0, iIss - 6), i1 = Math.min(d.hours - 1, iIss + 24);
+  // 창은 발표 -6h ~ **대상일 23시**까지 (2026-08-27 사용자 요청).
+  // +24h로 끊으면 이른 발표(어제 11시)가 오늘 낮에서 잘려 하루를 다 못 본다.
+  const ymd = $("dateSelK").value;
+  const endMs = keyToMs(ymd + "23");
+  const i0 = Math.max(0, iIss - 6);
+  const i1 = Math.min(d.hours - 1, Math.max(iIss + 6, Math.round((endMs - t0ms) / 3600e3)));
   let lo = Infinity, hi = -Infinity;
   d.cities.forEach((c) => {
     for (let i = i0; i <= i1; i++) {
@@ -173,6 +187,127 @@ function renderKmaf() {
     if (o != null && f != null) rows.push(["차이", (f - o > 0 ? "+" : "") + (f - o).toFixed(1) + "℃"]);
     return { when: fmtWhen(t0ms + i * 3600e3), rows: rows };
   });
+}
+
+// ── 예보 변화 (지점값 표출) ─────────────────────────────
+// 관측 지도와 같은 밑그림·지점망을 쓴다. 값은 '어제 발표 대비 오늘 발표'의 차이(℃).
+const FD_SCALE = { vmin: -3, vmax: 3, step: 0.5, label: "예보 변화", unit: "℃" };
+let FD = { date: null, data: null, v: "tmx" };
+
+function fdColor(d) {   // 빨강=상향 · 파랑=하향 (0 근처는 흰색)
+  const t = Math.max(-1, Math.min(1, d / FD_SCALE.vmax));
+  const mix = (a, b, f) => a.map((x, i) => Math.round(x + (b[i] - x) * f));
+  const W = [247, 247, 247], R = [176, 24, 43], B = [33, 102, 172];
+  const c = t >= 0 ? mix(W, R, t) : mix(W, B, -t);
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+async function renderFd() {
+  const d = $("dateSelK").value;
+  const on = (MF.fd_dates || []).includes(d);
+  $("fdTitle").hidden = !on;
+  $("fdTitle").nextElementSibling.hidden = !on;
+  $("fdPair").hidden = !on;
+  if (!on) return;
+  if (FD.date !== d) {
+    FD.data = await (await fetch(`fcstdiff/${d}.json?${Date.now()}`)).json();
+    FD.date = d;
+  }
+  if (!obsState.meta) {
+    obsState.meta = await (await fetch("obs/stations.json")).json();
+    obsState.base = await (await fetch("basemap.json")).json();
+  }
+  const vv = FD.data.vars[FD.v] || {}, bm = obsState.base;
+  let pts = "", lbl = "", n = 0;
+  obsState.meta.stations.forEach((st) => {
+    const v = vv[String(st.s)];
+    if (v == null) return;
+    n++;
+    pts += `<circle cx="${st.x}" cy="${st.y}" r="${st.L ? 8 : 7}" fill="${fdColor(v)}"`
+         + ` stroke="${st.L ? "#000" : "#333"}" stroke-width="${st.L ? 1.4 : 0.7}"`
+         + ` data-n="${st.n}" data-v="${v}"/>`;
+    if (st.L) {
+      lbl += `<text x="${st.x + 11}" y="${st.y + 5}" font-size="15" font-weight="bold"`
+           + ` paint-order="stroke" stroke="#fff" stroke-width="3.5" fill="#111">`
+           + `${st.n} ${v > 0 ? "+" : ""}${v.toFixed(1)}</text>`;
+    }
+  });
+  const nb = Math.round((FD_SCALE.vmax - FD_SCALE.vmin) / FD_SCALE.step);
+  const CW = 620, SW = CW / nb;
+  let defs = "", cells = "", ticks = "";
+  for (let i = 0; i < nb; i++) {
+    const a = FD_SCALE.vmin + i * FD_SCALE.step, b = a + FD_SCALE.step;
+    defs += `<linearGradient id="fg${i}"><stop offset="0%" stop-color="${fdColor(a)}"/>`
+          + `<stop offset="100%" stop-color="${fdColor(b)}"/></linearGradient>`;
+    cells += `<rect x="${(i * SW).toFixed(1)}" y="0" width="${SW.toFixed(1)}" height="22" fill="url(#fg${i})" stroke="#fff" stroke-width="0.8"/>`;
+  }
+  for (let i = 0; i <= nb; i++) {
+    const e = FD_SCALE.vmin + i * FD_SCALE.step;
+    if (i % 2) continue;
+    ticks += `<line x1="${(i * SW).toFixed(1)}" y1="22" x2="${(i * SW).toFixed(1)}" y2="27" stroke="#666"/>`
+           + `<text x="${(i * SW).toFixed(1)}" y="38" text-anchor="middle" font-size="12" fill="#444">${e > 0 ? "+" : ""}${e}</text>`;
+  }
+  const p2 = (x) => x.slice(4, 6) + "-" + x.slice(6, 8) + " " + x.slice(8) + "시";
+  $("fdMap").innerHTML =
+    `<div class="step-label">${p2(FD.data.prev)} 발표 대비 ${p2(FD.data.now)} 발표 · 대상 ${fmtDate(FD.data.target)}</div>
+     <svg id="fdSvg" viewBox="0 0 ${bm.w} ${bm.h}">
+      <rect width="${bm.w}" height="${bm.h}" fill="#f7f9fb"/>
+      <path d="${bm.paths.admin}" fill="none" stroke="#c9c9c9" stroke-width="0.8"/>
+      <path d="${bm.paths.coast}" fill="none" stroke="#5a5a5a" stroke-width="1.2"/>
+      ${pts}${lbl}
+     </svg>
+     <div class="cbar"><svg viewBox="-6 0 ${CW + 12} 44"><defs>${defs}</defs>${cells}${ticks}</svg>
+       <div class="cbar-lab">예보 변화 (℃) — 빨강 상향 · 파랑 하향, 칸 하나 ${FD_SCALE.step}℃</div></div>
+     <p class="note">지점 ${n}곳 — 마우스를 올리거나(휴대폰은 짚은 채 움직이면) 지점명과 변화량이 표시됩니다.</p>`;
+
+  bindDotHover("fdSvg", (t) => {
+    const v = +t.dataset.v;
+    return `<b>${t.dataset.n}</b><br>예보 변화 ${v > 0 ? "+" : ""}${v.toFixed(1)}℃`;
+  });
+  $("fdVarBtns").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      FD.v = b.dataset.v;
+      $("fdVarBtns").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      renderFd();
+    };
+  });
+}
+
+// 지점 원 위 마우스/터치 — 짚은 채 옮겨 다니며 값을 훑을 수 있다.
+// 세로로 긋는 동작은 페이지 스크롤로 넘긴다(휴대폰에서 아래로 못 내려가면 안 되니까).
+function bindDotHover(svgId, fmt) {
+  const tip = $("chartTip"), svg = $(svgId);
+  if (!svg) return;
+  const show = (t, cx, cy) => {
+    if (!t || t.tagName !== "circle") return;   // 빈 곳에서는 직전 값을 유지
+    tip.innerHTML = fmt(t);
+    tip.hidden = false;
+    tip.style.left = Math.min(Math.max(8, cx + 14), innerWidth - 200) + "px";
+    tip.style.top = Math.max(8, cy - 60) + "px";
+  };
+  svg.onmousemove = (ev) => show(ev.target, ev.clientX, ev.clientY);
+  svg.onmouseleave = () => { tip.hidden = true; };
+  let t0x = 0, t0y = 0, mode = 0;
+  svg.addEventListener("touchstart", (ev) => {
+    const t = ev.touches[0];
+    t0x = t.clientX; t0y = t.clientY; mode = 0;
+    show(document.elementFromPoint(t.clientX, t.clientY), t.clientX, t.clientY);
+  }, { passive: true });
+  svg.addEventListener("touchmove", (ev) => {
+    const t = ev.touches[0];
+    if (!mode) {
+      const dx = Math.abs(t.clientX - t0x), dy = Math.abs(t.clientY - t0y);
+      if (dx + dy < 8) return;
+      const onDot = document.elementFromPoint(t0x, t0y);
+      mode = ((onDot && onDot.tagName === "circle") || dx > dy) ? 1 : 2;
+      if (mode === 2) tip.hidden = true;
+    }
+    if (mode === 1) {
+      show(document.elementFromPoint(t.clientX, t.clientY), t.clientX, t.clientY);
+      ev.preventDefault();
+    }
+  }, { passive: false });
+  svg.addEventListener("touchend", () => setTimeout(() => { tip.hidden = true; }, 2500));
 }
 
 // ── 미티오그램 ──
@@ -517,22 +652,10 @@ function renderObs() {
     </div>
     <p class="note">지점 ${n}곳 실측 — 원 색이 값. 마우스를 올리거나(휴대폰은 짚으면) 지점명과 값이 표시됩니다.</p>`;
 
-  const tip = $("chartTip"), svg = $("obsSvg");
-  const show = (t, cx, cy) => {
-    if (!t || t.tagName !== "circle") { tip.hidden = true; return; }
+  bindDotHover("obsSvg", (t) => {
     const unit = sc.unit === "℃" ? "℃" : " " + sc.unit;
-    tip.innerHTML = `<b>${t.dataset.n}</b> ${String(h).padStart(2, "0")}시<br>${sc.label} ${(+t.dataset.v).toFixed(1)}${unit}`;
-    tip.hidden = false;
-    tip.style.left = Math.min(Math.max(8, cx + 14), innerWidth - 200) + "px";
-    tip.style.top = Math.max(8, cy - 60) + "px";
-  };
-  svg.onmousemove = (ev) => show(ev.target, ev.clientX, ev.clientY);
-  svg.onmouseleave = () => { tip.hidden = true; };
-  svg.addEventListener("touchstart", (ev) => {
-    const t0 = ev.touches[0];
-    show(document.elementFromPoint(t0.clientX, t0.clientY), t0.clientX, t0.clientY);
-  }, { passive: true });
-  svg.addEventListener("touchend", () => setTimeout(() => { tip.hidden = true; }, 2500));
+    return `<b>${t.dataset.n}</b> ${String(h).padStart(2, "0")}시<br>${sc.label} ${(+t.dataset.v).toFixed(1)}${unit}`;
+  });
 }
 
 $("obsSlider").oninput = (ev) => { obsState.idx = +ev.target.value; renderObs(); };
@@ -657,19 +780,6 @@ function renderVerif() {
       if (KMAF.date === d) return;
       KMAF.data = await (await fetch(`kmafcst/${d}.json?${Date.now()}`)).json();
       KMAF.date = d;
-    };
-    // 예보 변화 지도 — 해당 날짜에 있으면 표시, 없으면 절 전체 숨김
-    const renderFd = () => {
-      const d = $("dateSelK").value;
-      const has = (MF.dates[d].fcstdiff || []);
-      const on = has.length > 0;
-      $("fdTitle").hidden = !on;
-      $("fdTitle").nextElementSibling.hidden = !on;   // 설명 문단
-      $("fdPair").hidden = !on;
-      if (on) {
-        $("fdTmx").src = `archive/${d}/fcstdiff_tmx_d1.webp?${Date.now()}`;
-        $("fdTmn").src = `archive/${d}/fcstdiff_tmn_d1.webp?${Date.now()}`;
-      }
     };
     const onKDate = async () => {
       await loadK($("dateSelK").value);

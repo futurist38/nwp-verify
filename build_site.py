@@ -29,6 +29,7 @@ from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
 KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
 OBS_DATES: list[str] = []
+FD_DATES: list[str] = []
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
@@ -393,11 +394,21 @@ def export_obs(site_dir: str) -> list[str]:
     return _json_dates(out_dir, OBS_MAX_DAYS)
 
 
+def export_fcstdiff(site_dir: str) -> list[str]:
+    """예보 변화도 지점값으로 (2026-08-27). 이미지 2장 대신 JSON 한 개(~2KB)."""
+    out_dir = os.path.join(site_dir, "fcstdiff")
+    os.makedirs(out_dir, exist_ok=True)
+    for src in glob.glob(os.path.join(OUT_DIR, "????????", "fcstdiff", "data.json")):
+        ymd = os.path.basename(os.path.dirname(os.path.dirname(src)))
+        shutil.copy2(src, os.path.join(out_dir, f"{ymd}.json"))
+    return _json_dates(out_dir, MAX_DAYS)
+
+
 def prune_kmafcst(site_dir: str):
     """예보-관측 그림 전량 제거 — 이제 사이트가 JSON으로 직접 그린다(2026-08-26).
     이미 배포된 과거분을 걷어내기 위한 정리 단계."""
     n = 0
-    for pat in ("kmafcst_*.*", "obs_*.*", "meteogram_*.*"):
+    for pat in ("kmafcst_*.*", "obs_*.*", "meteogram_*.*", "fcstdiff_*.*"):
         for f in glob.glob(os.path.join(site_dir, "archive", "????????", pat)):
             os.remove(f)
             n += 1
@@ -477,6 +488,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
     manifest["kmafcst_dates"] = KMAFCST_DATES
     manifest["meteo_dates"] = METEO_DATES
     manifest["obs_dates"] = OBS_DATES
+    manifest["fd_dates"] = FD_DATES
     manifest["verif_dates"] = sorted(
         os.path.basename(p)[:-5] for p in
         glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
@@ -500,10 +512,11 @@ def main():
     copy_outputs(args.site_dir)
     copy_verif(args.site_dir)
     export_verif_daily(args.site_dir)
-    global KMAFCST_DATES, METEO_DATES, OBS_DATES
+    global KMAFCST_DATES, METEO_DATES, OBS_DATES, FD_DATES
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     METEO_DATES = export_meteo(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
+    FD_DATES = export_fcstdiff(args.site_dir)
     nc = copy_nowcast(args.site_dir)
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에

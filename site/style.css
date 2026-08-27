@@ -51,10 +51,11 @@ tr.city-sep th, tr.city-sep td { border-top: 3px solid #555; }
 #caseList li { margin: 4px 0; font-size: 14px; }
 
 /* 예보-관측 인터랙티브 차트 (이미지 대신 데이터로 그린다 — 2026-08-26) */
+/* 패널 사이를 넉넉히 — 휴대폰에서 차트 위가 아닌 여백을 잡고 스크롤할 수 있어야 한다 */
 #kmafCharts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
-              gap: 6px; }
+              gap: 22px; }
 /* 미티오그램은 한 줄에 하나 — 3×2로는 x축 시각 라벨이 뭉개진다 (2026-08-26) */
-#meteoCharts { display: grid; grid-template-columns: 1fr; gap: 6px; }
+#meteoCharts { display: grid; grid-template-columns: 1fr; gap: 22px; }
 #kmafCharts svg, #meteoCharts svg { width: 100%; height: auto; background: #fff; border: 1px solid #e0e0e0;
                   border-radius: 6px; }
 .tip { position: fixed; z-index: 20; background: rgba(255,255,255,.97); border: 1px solid #bbb;

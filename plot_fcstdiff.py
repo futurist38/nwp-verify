@@ -138,6 +138,8 @@ def draw(diff: pd.DataFrame, var: str, day: dt.date, lead: int,
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--issue", default="", help="기준 발표시각 YYYYMMDDHH (생략=최신)")
+    p.add_argument("--no-plot", action="store_true",
+                   help="PNG 생략 — 사이트가 지점값 JSON으로 직접 그린다(기본 운영 모드)")
     args = p.parse_args()
 
     now = dt.datetime.now()
@@ -159,9 +161,12 @@ def main():
         raise SystemExit("[예보변화] 발표 자료 부족 — 중단")
 
     out_dir = os.path.join(OUT_DIR, f"{t.date():%Y%m%d}", "fcstdiff")
+    os.makedirs(out_dir, exist_ok=True)
     n = 0
+    export = {"prev": bdt_prev, "now": bdt_now, "vars": {}}
     for lead in TARGET_DAYS:
         day = t.date() + dt.timedelta(days=lead)
+        export["target"] = f"{day:%Y%m%d}"
         for var, (_, fn) in VARS.items():
             rows = []
             for r in stns.itertuples():
@@ -169,9 +174,16 @@ def main():
                 b = daily_stat(prev.get(str(r.STN), {}), day, fn)
                 rows.append({"STN": r.STN, "lon": r.lon, "lat": r.lat,
                              "d": None if (a is None or b is None) else a - b})
-            n += draw(pd.DataFrame(rows), var, day, lead, bdt_now, bdt_prev, out_dir)
+            df = pd.DataFrame(rows)
+            # 표출은 사이트가 지점값으로 직접 (2026-08-27) — 지점 사이는 근거가 없는 구간
+            export["vars"][var] = {str(int(r.STN)): round(r.d, 1)
+                                   for r in df.itertuples() if r.d is not None}
+            if not args.no_plot:
+                n += draw(df, var, day, lead, bdt_now, bdt_prev, out_dir)
+    with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
+        json.dump(export, f, ensure_ascii=False, separators=(",", ":"))
     prune_cache(t.date())
-    print(f"[예보변화] {n}장 생성 → {out_dir}")
+    print(f"[예보변화] 자료 저장 -> {out_dir}" + (f" (그림 {n}장)" if n else ""))
 
 
 if __name__ == "__main__":

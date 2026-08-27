@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 <header>
@@ -126,8 +126,11 @@
       ASOS 97지점 위치의 동네예보를 보간했고, 지점에서 먼 곳은 칠하지 않습니다.
       모레는 어제 발표가 하루를 다 담지 못해(단기예보 3일) 비교에서 제외합니다.</p>
     <div id="fdPair">
-      <div class="imgwrap"><img id="fdTmx" alt="최고기온 예보 변화" loading="lazy"></div>
-      <div class="imgwrap"><img id="fdTmn" alt="최저기온 예보 변화" loading="lazy"></div>
+      <div class="controls"><div id="fdVarBtns" class="btns">
+        <button data-v="tmx" class="on">일 최고기온</button>
+        <button data-v="tmn">일 최저기온</button>
+      </div></div>
+      <div id="fdMap"></div>
     </div>
   </section>
 
@@ -183,6 +186,6 @@
   </section>
 </main>
 <div id="chartTip" class="tip" hidden></div>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
