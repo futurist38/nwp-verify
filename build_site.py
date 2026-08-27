@@ -321,6 +321,8 @@ def _json_dates(out_dir: str, keep_days: int) -> list[str]:
     out = []
     for f in sorted(glob.glob(os.path.join(out_dir, "????????.json"))):
         ymd = os.path.basename(f)[:-5]
+        if not ymd.isdigit():      # stations.json 등 8글자 비날짜 파일 제외
+            continue
         if ymd < cut:
             os.remove(f)
         else:

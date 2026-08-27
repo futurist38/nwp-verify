@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }   /* display 명시 요소에서도 hidden 적용 */
 * { box-sizing: border-box; margin: 0; }
 body { font-family: "Malgun Gothic", "NanumGothic", sans-serif; background: #fafafa;
        color: #222; max-width: 1240px; margin: 0 auto; padding: 0 10px 40px; }
