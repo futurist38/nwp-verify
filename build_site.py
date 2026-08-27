@@ -270,11 +270,14 @@ def export_meteo(site_dir: str) -> list[str]:
     out_dir = os.path.join(site_dir, "meteo")
     os.makedirs(out_dir, exist_ok=True)
     dates = []
+    # 검증 폴더(커밋 대상) 우선 — 러너의 output/ 은 그날 것만 있어 과거가 사라진다
+    srcs = {os.path.basename(f)[:-4]: f
+            for f in glob.glob(os.path.join(VERIF_DIR, "city_forecast", "????????.csv"))}
     for day_dir in sorted(glob.glob(os.path.join(OUT_DIR, "????????"))):
-        csv = os.path.join(day_dir, "city_forecast.csv")
-        if not os.path.exists(csv):
-            continue
-        ymd = os.path.basename(day_dir)
+        c = os.path.join(day_dir, "city_forecast.csv")
+        if os.path.exists(c):
+            srcs.setdefault(os.path.basename(day_dir), c)
+    for ymd, csv in sorted(srcs.items()):
         df = pd.read_csv(csv)
         df = df[df["city"].isin(KMAF_CITIES)]
         if df.empty:
@@ -398,9 +401,8 @@ def export_fcstdiff(site_dir: str) -> list[str]:
     """예보 변화도 지점값으로 (2026-08-27). 이미지 2장 대신 JSON 한 개(~2KB)."""
     out_dir = os.path.join(site_dir, "fcstdiff")
     os.makedirs(out_dir, exist_ok=True)
-    for src in glob.glob(os.path.join(OUT_DIR, "????????", "fcstdiff", "data.json")):
-        ymd = os.path.basename(os.path.dirname(os.path.dirname(src)))
-        shutil.copy2(src, os.path.join(out_dir, f"{ymd}.json"))
+    for src in glob.glob(os.path.join(VERIF_DIR, "fcstdiff_data", "????????.json")):
+        shutil.copy2(src, os.path.join(out_dir, os.path.basename(src)))
     return _json_dates(out_dir, MAX_DAYS)
 
 

@@ -180,8 +180,14 @@ def main():
                                    for r in df.itertuples() if r.d is not None}
             if not args.no_plot:
                 n += draw(df, var, day, lead, bdt_now, bdt_prev, out_dir)
-    with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
-        json.dump(export, f, ensure_ascii=False, separators=(",", ":"))
+    # 산출 폴더와 **검증 폴더(커밋 대상)** 양쪽에 — 러너는 매번 새로 시작하므로
+    # 저장소에 남겨야 과거 날짜가 사이트에서 사라지지 않는다 (2026-08-27 실측)
+    keep = os.path.join(VERIF_DIR, "fcstdiff_data")
+    os.makedirs(keep, exist_ok=True)
+    for path in (os.path.join(out_dir, "data.json"),
+                 os.path.join(keep, f"{t.date():%Y%m%d}.json")):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(export, f, ensure_ascii=False, separators=(",", ":"))
     prune_cache(t.date())
     print(f"[예보변화] 자료 저장 -> {out_dir}" + (f" (그림 {n}장)" if n else ""))
 

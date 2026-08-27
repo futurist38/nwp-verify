@@ -29,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from config import (CITIES, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX,
-                    MAP_STEPS, KST_OFFSET_H, OUT_DIR, DATA_DIR)
+                    MAP_STEPS, KST_OFFSET_H, OUT_DIR, DATA_DIR, VERIF_DIR)
 
 warnings.filterwarnings("ignore")
 
@@ -427,6 +427,12 @@ def main():
     df = pd.concat(frames, ignore_index=True)
     csv_path = os.path.join(out_dir, "city_forecast.csv")
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    # 검증 폴더에도 사본(커밋 대상) — 러너는 매번 새로 시작하므로 저장소에 남겨야
+    # 미티오그램 과거 날짜가 사이트에서 사라지지 않는다. 원본 GRIB과 달리 이건 영구 보존 가능
+    keep = os.path.join(VERIF_DIR, "city_forecast")
+    os.makedirs(keep, exist_ok=True)
+    df.to_csv(os.path.join(keep, os.path.basename(out_dir) + ".csv"),
+              index=False, encoding="utf-8-sig")
     print(f"[CSV] 도시별 시계열 저장: {csv_path}")
 
     plot_meteograms(df, os.path.join(out_dir, "meteograms"))
