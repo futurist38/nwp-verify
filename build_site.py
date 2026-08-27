@@ -180,8 +180,11 @@ def copy_nowcast(site_dir: str) -> dict | None:
             "leads": [h for h in all_leads if h > 0],   # 0=현재 관측(별도 표출)
             "has_now": 0 in all_leads,
             "has_verify": os.path.exists(os.path.join(nd, "verify.png")),
-            "past": sorted(os.path.basename(p)[:-4]
-                           for p in glob.glob(os.path.join(nd, "archive", "*.png")))}
+            # 확장자는 to_webp 이후 .webp 가 된다 — .png 만 찾으면 목록이 비어 과거가
+            # 통째로 사라진다 (2026-08-27 실측: past 0건)
+            "past": sorted({os.path.splitext(os.path.basename(p))[0]
+                            for p in glob.glob(os.path.join(nd, "archive", "*.png"))
+                            + glob.glob(os.path.join(nd, "archive", "*.webp"))})}
 
     frames = [pd.read_csv(f, parse_dates=["issue_utc"])
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]
