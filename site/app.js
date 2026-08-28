@@ -826,7 +826,13 @@ function renderVerif() {
     ["ncVerifyTitle", "ncVerifyNote", "ncVerify"].forEach((id) => { $(id).hidden = !nc.has_verify; });
     if (nc.has_verify) $("ncVerify").src = `nowcast/verify.webp?${Date.now()}`;
     // 과거 검증 패널 — 3시간 간격 보관분에서 선택
-    const past = (nc.past || []).slice().reverse();
+    // 7일 이전은 서버에서 지워지지만, 캐시된 목록이 남을 수 있어 화면에서도 잘라낸다
+    const cutKey = (() => {
+      const d = new Date(Date.now() + 9 * 3600e3 - 7 * 864e5);
+      const p2 = (n) => String(n).padStart(2, "0");
+      return `${d.getUTCFullYear()}${p2(d.getUTCMonth() + 1)}${p2(d.getUTCDate())}00`;
+    })();
+    const past = (nc.past || []).filter((t) => t >= cutKey).reverse();
     if (past.length) {
       $("ncPastRow").hidden = false;
       $("ncPastSel").innerHTML = ['<option value="">지금 (최신)</option>'].concat(
