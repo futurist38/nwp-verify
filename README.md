@@ -67,7 +67,8 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 # ASOS 단독 수신
 .venv\Scripts\python kma_asos.py --from 2026-08-10 --to 2026-08-12
 
-# 일일 요약 메일 (②) — 첨부 없음, 본문 표·문구만
+# 일일 요약 메일 (②) — 2026-08-28 발송 중단(daily.yml에서 주석 처리).
+# 같은 내용을 웹 검증 탭에서 볼 수 있게 되어 껐다. 아래 명령은 수동 실행용으로 남아 있다.
 .venv\Scripts\python send_summary.py --dry-run   # summary_mail.html 로 미리보기
 .venv\Scripts\python send_summary.py             # 실발송 (배치 마지막 단계에 포함)
 ```

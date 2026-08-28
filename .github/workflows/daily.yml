@@ -57,7 +57,10 @@ jobs:
           python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패 — 계속"
           python plot_fcstdiff.py --no-plot || echo "::warning::예보변화 지도 실패 — 계속"
           python plot_verifmap.py  || echo "::warning::오차지도 실패 — 계속"
-          python send_summary.py   || echo "::warning::메일 실패 — 계속"
+          # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청).
+          # 같은 내용(모델 발산·수렴)을 웹 검증 탭에서 볼 수 있게 되어 메일이 중복됐다.
+          # send_summary.py 는 그대로 두었으니 되살리려면 아래 한 줄의 주석만 풀면 된다.
+          # python send_summary.py   || echo "::warning::메일 실패 — 계속"
 
       - name: 검증 누적을 main에 커밋
         run: |
