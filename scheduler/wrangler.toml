@@ -1,0 +1,7 @@
+name = "nwp-verify-scheduler"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# 시각은 UTC. KST = UTC+9.
+[triggers]
+crons = ["25 * * * *", "10 21 * * *", "40 1 * * *"]

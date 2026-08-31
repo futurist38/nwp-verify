@@ -3,18 +3,24 @@ name: obs-hourly
 # 관측·나우캐스트 시간별 갱신 (2026-08-21 사용자 요청 — "8시인데 6시 관측만 보임").
 # ASOS 시간자료는 정시 후 10~15분께 확정.
 #
-# 매시 1회 유지 (2026-08-28 실측 근거).
-# 8/27에 "누락이 심하다"고 판단해 20분 간격(하루 72회)으로 늘렸다가 실행이 오히려
-# 하루 5회로 급감했다. 날짜별 실행 횟수를 세어 보니:
-#   하루 24회 예약 → 실제 18회(75%)  |  하루 72회 예약 → 실제 ~5회(7%)
-# 빈도를 올리면 더 받는 게 아니라 임계를 넘는 순간 대부분 차단된다.
-# 참고: daily.yml(하루 2회)은 83%. 저빈도일수록 잘 뜬다.
+# 실행 주체는 외부 스케줄러(Cloudflare Worker)의 workflow_dispatch 다 (2026-09-01).
+# 아래 cron 은 그것이 죽었을 때를 위한 보조일 뿐 믿을 수 없다:
+#   8/25 23회, 8/26 21회 → 8/27부터 5일 연속 하루 1~6회 (매시 예약, 기대 24회).
+#   발동 분도 :25 가 아니라 :06~:59 로 제멋대로였다.
+# 공식 문서가 "부하가 높으면 대기 중인 작업 일부가 버려질 수 있다"고 명시한 동작이며,
+# 빈도를 올리면 제재한다는 규칙은 문서·커뮤니티 어디에도 없다(예전 이 주석의 추정은
+# 근거가 없어 삭제). 커뮤니티는 같은 증상을 '새 저장소'와 연결한다(본 저장소 8/19 생성).
 # 전체 파이프라인(daily.yml)과 site-data 발행이 겹치지 않게 concurrency 그룹 공유.
 
 on:
   schedule:
     - cron: "25 * * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "최소 간격을 무시하고 강제 실행"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,7 +35,37 @@ env:
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
 
 jobs:
+  # 외부 스케줄러의 토큰이 유출되더라도 workflow_dispatch 를 연타해 기상청 API 를
+  # 두들기지 못하게 막는다. 정상 운영(매시 1회)에는 걸리지 않는 간격이다.
+  # 막힌 실행은 실패가 아니라 'skipped' 로 남는다.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_GAP_MIN: "20"
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          PREV=$(gh run list -w obs-hourly.yml -L 5 --json databaseId,createdAt                  -q "[.[] | select(.databaseId != $GITHUB_RUN_ID)] | .[0].createdAt")
+          if [ -z "$PREV" ]; then
+            echo "직전 실행 없음 — 진행"; echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          AGE=$(( ($(date -u +%s) - $(date -u -d "$PREV" +%s)) / 60 ))
+          if [ "$AGE" -lt "$MIN_GAP_MIN" ]; then
+            echo "::warning::직전 실행 ${AGE}분 전 — 최소 간격 ${MIN_GAP_MIN}분 미만이라 건너뜀"
+            echo "go=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "직전 실행 ${AGE}분 전 — 진행"; echo "go=1" >> "$GITHUB_OUTPUT"
+          fi
+
   obs:
+    needs: gate
+    if: needs.gate.outputs.go == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
