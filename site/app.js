@@ -158,10 +158,11 @@ function renderKmaf() {
   if (!d || !d.fcst[b]) { $("kmafCharts").innerHTML = ""; return; }
   const t0ms = keyToMs(d.t0);
   const iIss = Math.round((keyToMs(b) - t0ms) / 3600e3);
-  // 창은 발표 -6h ~ **대상일 23시**까지 (2026-08-27 사용자 요청).
-  // +24h로 끊으면 이른 발표(어제 11시)가 오늘 낮에서 잘려 하루를 다 못 본다.
+  // 창은 발표 -6h 부터, 끝은 발표일에 따라 다르다.
+  //   전날 발표(11·17시) → 대상일 23시   (+24h로 끊으면 오늘 낮에서 잘려 하루를 다 못 본다)
+  //   당일 발표(05·11·17시) → 내일 23시  (2026-09-01 사용자 요청 — 앞을 내다보는 구간이 본질)
   const ymd = $("dateSelK").value;
-  const endMs = keyToMs(ymd + "23");
+  const endMs = keyToMs(ymd + "23") + (b.slice(0, 8) === ymd ? 24 * 3600e3 : 0);
   const i0 = Math.max(0, iIss - 6);
   const i1 = Math.min(d.hours - 1, Math.max(iIss + 6, Math.round((endMs - t0ms) / 3600e3)));
   let lo = Infinity, hi = -Infinity;

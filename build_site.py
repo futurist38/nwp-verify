@@ -231,7 +231,10 @@ def export_kmafcst(site_dir: str) -> list[str]:
             continue
 
         t0 = dt.datetime.strptime(issues[0], "%Y%m%d%H") - dt.timedelta(hours=6)
-        t1 = dt.datetime.strptime(issues[-1], "%Y%m%d%H") + dt.timedelta(hours=24)
+        # 당일 발표(05·11·17시)는 뷰어가 **내일 23시**까지 보여준다(2026-09-01 사용자 요청).
+        # 격자를 그 시각까지 깔아두지 않으면 자료 끝에서 잘린다.
+        t1 = max(dt.datetime.strptime(issues[-1], "%Y%m%d%H") + dt.timedelta(hours=24),
+                 day + dt.timedelta(days=1, hours=23))
         hours = int((t1 - t0).total_seconds() // 3600) + 1
         grid = [t0 + dt.timedelta(hours=i) for i in range(hours)]
         keys = [f"{g:%Y%m%d%H}" for g in grid]
