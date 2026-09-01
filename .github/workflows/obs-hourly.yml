@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  actions: read      # gate 잡의 `gh run list` 에 필요 (명시하면 나머지는 none 이 된다)
 
 concurrency:
   group: nwp-site-publish
@@ -51,9 +52,11 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "${{ inputs.force }}" = "true" ]; then
             echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          PREV=$(gh run list -w obs-hourly.yml -L 5 --json databaseId,createdAt                  -q "[.[] | select(.databaseId != $GITHUB_RUN_ID)] | .[0].createdAt")
+          # 조회가 실패하면 막지 말고 통과시킨다. 가드는 남용을 늦추는 장치일 뿐,
+          # 이것 때문에 정상 운영이 멈추는 쪽이 훨씬 나쁘다.
+          PREV=$(gh run list -w obs-hourly.yml -L 5 --json databaseId,createdAt                  -q "[.[] | select(.databaseId != $GITHUB_RUN_ID)] | .[0].createdAt" || true)
           if [ -z "$PREV" ]; then
-            echo "직전 실행 없음 — 진행"; echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+            echo "직전 실행 조회 불가 또는 없음 — 진행"; echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
           AGE=$(( ($(date -u +%s) - $(date -u -d "$PREV" +%s)) / 60 ))
           if [ "$AGE" -lt "$MIN_GAP_MIN" ]; then
