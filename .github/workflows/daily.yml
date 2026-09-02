@@ -1,9 +1,11 @@
 name: daily-nwp
 
+# 실행 주체는 Cloudflare Worker 의 workflow_dispatch 다 (06:10·10:40 KST 정시).
+# 아래 cron 은 그것이 죽었을 때를 위한 하루 1회 심장박동일 뿐 정시성은 기대하지 않는다
+# (9/2 실측: 예약분은 08:15 대기열 취소, 15:24 — 예정보다 4~5시간 지연).
 on:
   schedule:
-    - cron: "10 21 * * *"   # 06:10 KST (전일 12z 런 위주)
-    - cron: "40 1 * * *"    # 10:40 KST (당일 00z 런 — ECMWF 00z는 09~10 KST 배포)
+    - cron: "40 1 * * *"    # 10:40 KST — 당일 00z 런까지 나온 뒤라 한 번 돌 때 가장 많이 채운다
   workflow_dispatch:
 
 permissions:
