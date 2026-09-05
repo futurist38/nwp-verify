@@ -70,6 +70,8 @@ function makePlayer(btnId, next, atEnd, rewind, ms = 700) {
 // ── 하늘 상태 색 문법 (Meteogram 띠 · 예보-관측 띠 · 관측 전운량 공통) ──
 // 1 맑음(흰) · 2 구름많음(연회) · 3 흐림(진회) · 4 강수(하늘색). 기상청 구분(운량 0~5 / 6~8 / 9~10)에 맞춤.
 const SKY_COLOR = { 1: "#ffffff", 2: "#c8c8c8", 3: "#7d7d7d", 4: "#8ec9ff" };
+// 그래프 배경용(선 뒤에 깔리므로 옅게). 맑음은 칠하지 않는다(흰 배경 그대로).
+const SKY_BG = { 1: null, 2: "rgba(200,200,200,.45)", 3: "rgba(125,125,125,.42)", 4: "rgba(142,201,255,.6)" };
 const SKY_NAME = { 1: "맑음", 2: "구름많음", 3: "흐림", 4: "강수" };
 function skyFromModel(tcc, tp, win) {
   // 3h 창 0.5mm(6h 창이면 1mm) 이상이면 강수
@@ -109,6 +111,23 @@ function drawPanel(o) {
   const f1 = (x) => x.toFixed(1);
   let g = "";
 
+  // 플롯 안쪽 배경 띠 (2026-09-06 사용자 지정): y축을 행 수만큼 나눠 위→아래 순서로 깔고,
+  // 시간 칸마다 하늘 상태 색을 채운다. 선이 그 위에 그려지므로 색은 옅게.
+  const bgs = o.bgStrips || [];
+  if (bgs.length) {
+    const rowH = (PB - MT) / bgs.length;
+    bgs.forEach((sp, r) => {
+      const y0 = MT + r * rowH;
+      for (let i = o.i0; i <= o.i1; i++) {
+        const c = sp.cells[i];
+        if (!c) continue;
+        const x0 = Math.max(ML, X(i) - half), x1 = Math.min(W - MR, X(i) + half);
+        g += `<rect x="${f1(x0)}" y="${f1(y0)}" width="${f1(x1 - x0)}" height="${f1(rowH)}" fill="${c}"/>`;
+      }
+      if (r) g += `<line x1="${ML}" y1="${f1(y0)}" x2="${W - MR}" y2="${f1(y0)}" stroke="#999" stroke-dasharray="2 3"/>`;
+      g += `<text x="${W - MR - 3}" y="${f1(y0 + 11)}" text-anchor="end" font-size="10" font-weight="bold" fill="${sp.color || "#555"}" opacity=".8">${sp.label}</text>`;
+    });
+  }
   // 야간 음영 (18~06 KST) — 낮/밤 리듬이 보이면 일최고·일최저 위치가 바로 읽힌다
   if (o.night && stepH < 24) {
     for (let i = o.i0; i <= o.i1; i++) {
@@ -614,15 +633,23 @@ function renderMeteoCharts() {
       STRIP_ORDER.filter((m) => d.models.includes(m)).forEach((m) => {
         const s = d.series[m][c], w = (d.wins && d.wins[m]) || [];
         const cells = [];
-        for (let i = 0; i <= i1; i++) cells.push(SKY_COLOR[skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i])] || null);
+        for (let i = 0; i <= i1; i++) {
+          const cls = skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i]);
+          cells.push(cls ? SKY_BG[cls] : null);
+        }
         // 6h 창(ECMWF 144h 이후)은 3h 격자 두 칸에 걸친다 — 앞 칸이 비면 같은 색으로 채운다
-        for (let i = 1; i <= i1; i++) if (cells[i] && !cells[i - 1] && w[i] === 6) cells[i - 1] = cells[i];
-        strips.push({ label: MODEL_SHORT[m], cells: cells });
+        for (let i = 1; i <= i1; i++) {
+          if (w[i] === 6 && cells[i - 1] == null) {
+            const cls = skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i]);
+            if (cls) cells[i - 1] = SKY_BG[cls];
+          }
+        }
+        strips.push({ label: MODEL_SHORT[m], cells: cells, color: MODEL_COLOR[m] });
       });
     }
     return drawPanel({ title: c, i0: 0, i1: i1, ylo: lo - pad, yhi: hi + pad, t0ms: t0ms, stepMs: 3 * 3600e3,
-                       w: 1160, h: 210, night: true, now: Date.now(), series: series, bands: bands,
-                       whiskers: whiskers, strips: strips });
+                       w: 1160, h: 250, night: !METEO.strips, now: Date.now(), series: series, bands: bands,
+                       whiskers: whiskers, bgStrips: strips });
   }).join("");
 
   const runTxt = (r) => `${r.slice(4, 6)}-${r.slice(6, 8)} ${r.slice(8)}z`;

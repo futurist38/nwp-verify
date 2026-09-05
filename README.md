@@ -83,7 +83,7 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 | 탭 | 추가된 것 | 자료·스크립트 |
 |---|---|---|
 | NWP | **일사**(3h 평균 하향 단파복사)·**강수**(3h 누적) 지도 패널, 3모델 | `plot_charts.py` `_read_windows` — EC `ssrd`·`tp`, GFS `DSWRF`·`APCP`, KIM `avg_sdswrf`·`lswp+cwp+snol+snoc` |
-| Meteogram | 일사·강수 변수 / **이전 런 띠·선**(최대 4런) / **EC 앙상블 10~90% 막대**(06·15 KST, D+1~6) / **하늘 띠**(EC·KIM·GFS) / 야간 음영·지금 선 | `build_site.py export_meteo` (아카이브 `verification/forecast`), `fetch_ens.py` |
+| Meteogram | 일사·강수 변수 / **이전 런 띠·선**(최대 4런) / **EC 앙상블 10~90% 막대**(06·15 KST, D+1~6) / **하늘 띠**(그래프 배경을 y축 3단으로 — 상 EC·중 KIM·하 GFS) / 야간 음영·지금 선 | `build_site.py export_meteo` (아카이브 `verification/forecast`), `fetch_ens.py` |
 | 예보-관측 | **예보 하늘 띠**(SKY·PTY, 강수확률은 마우스) · **실측 하늘 띠**(전운량) · 예보−실측 **오차 면** · **중기예보 섹션**(D+3~10 최고·최저 vs 실측, 1~3일 전 발표 겹침, 예보 범위 막대) | `plot_kmafcst.py`(SKY·PTY·POP 캐시), `kma_midfcst.py` |
 | 관측 | **전운량** 지도 · **일최고/일최저 평년편차** 지도 · **위성 일사 하루 적산** 지도 | `plot_obsmap.py VARS`, `tools/build_normals.py`(자체 평년), `gk2a_swrad_daily.py` |
 | 검증 | 일별 검증표에 **일사** · 일사 MAE 곡선 | `verify.py`(`win_h` 창 규약), `export_verif_daily` |
