@@ -13,8 +13,13 @@ name: obs-hourly
 # 빈도를 올리면 제재한다는 규칙은 문서·커뮤니티 어디에도 없다(예전 이 주석의 추정은
 # 근거가 없어 삭제). 커뮤니티는 같은 증상을 '새 저장소'와 연결한다(본 저장소 8/19 생성).
 # 매시로 두면 하루 5회쯤 중복 실행돼 기상청 API 를 헛되이 두들기고 대기열 충돌로
-# 취소까지 유발했다(9/2 실측) → 하루 1회로 줄였다.
-# 전체 파이프라인(daily.yml)과 site-data 발행이 겹치지 않게 concurrency 그룹 공유.
+# 취소까지 유발했다(9/2 실측) → 하루 1회로 줄였다. 지연 발동이 정상 실행과 겹치면
+# gate 가 걸러낸다(최근 2시간 안에 성공한 실행이 있으면 건너뜀).
+#
+# 2026-09-06: daily.yml 과 concurrency 그룹을 **분리**했다. 공유하던 시절 이 워크플로가
+# daily 전체(기상청 API 가 막히는 날 80~100분)를 기다리다 다음 시간분에 밀려 취소됐다 →
+# 관측·예보-관측이 2~3시간씩 멈춤(9/5 실측: 21:26Z 취소, 22:26Z 대기). 발행 경합은
+# tools/publish_site.sh 의 낙관적 잠금 + build_site.py 의 무회귀 가드가 막는다.
 
 on:
   schedule:
@@ -31,12 +36,13 @@ permissions:
   actions: read      # gate 잡의 `gh run list` 에 필요 (명시하면 나머지는 none 이 된다)
 
 concurrency:
-  group: nwp-site-publish
+  group: obs-hourly
   cancel-in-progress: false
 
 env:
   TZ: Asia/Seoul
   PYTHONIOENCODING: utf-8
+  PYTHONUNBUFFERED: "1"
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
 
 jobs:
@@ -52,8 +58,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MIN_GAP_MIN: "20"
+          RECENT_OK_MIN: "120"
         run: |
-          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "${{ inputs.force }}" = "true" ]; then
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            # 심장박동은 Worker 가 죽었을 때만 의미가 있다. 최근에 성공한 실행이 있으면 건너뛴다
+            # (예약은 4~5시간 늦게 발동하는 일이 잦아 정상 실행과 겹친다). 조회 실패 시 진행.
+            PREV=$(gh run list -w obs-hourly.yml --status success -L 3 --json databaseId,createdAt \
+                   -q "[.[] | select(.databaseId != $GITHUB_RUN_ID)] | .[0].createdAt" || true)
+            if [ -n "$PREV" ]; then
+              AGE=$(( ($(date -u +%s) - $(date -u -d "$PREV" +%s)) / 60 ))
+              if [ "$AGE" -lt "$RECENT_OK_MIN" ]; then
+                echo "::notice::${AGE}분 전에 성공한 실행이 있음 — 심장박동 건너뜀"
+                echo "go=0" >> "$GITHUB_OUTPUT"; exit 0
+              fi
+            fi
             echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
           fi
           # 조회가 실패하면 막지 말고 통과시킨다. 가드는 남용을 늦추는 장치일 뿐,
@@ -103,13 +124,6 @@ jobs:
         # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
         run: timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
 
-      - name: site-data 복원
-        run: |
-          mkdir -p site_build
-          git fetch origin site-data
-          git --work-tree=site_build checkout FETCH_HEAD -- .
-          git reset > /dev/null
-
       - name: 나우캐스트 가중치 (Release 자산)
         id: ncw
         env:
@@ -129,17 +143,11 @@ jobs:
           pip install -q -r requirements-nowcast.txt
           timeout 600 python nowcast_live.py || echo "::warning::나우캐스트 실패/시간초과 — 계속"
 
-      - name: 사이트 조립·발행
+      - name: 사이트 조립·발행 (관측·예보-관측·나우캐스트만 갱신)
         run: |
-          python build_site.py --site-dir site_build
           git config user.name "nwp-bot"
           git config user.email "actions@users.noreply.github.com"
-          export GIT_INDEX_FILE="$(pwd)/.git/site-index"
-          git --work-tree=site_build add -A
-          TREE=$(git write-tree)
-          unset GIT_INDEX_FILE
-          COMMIT=$(git commit-tree "$TREE" -m "obs $(date '+%Y-%m-%d %H:%M KST')")
-          git push --force origin "$COMMIT:refs/heads/site-data"
+          tools/publish_site.sh "obs $(date '+%Y-%m-%d %H:%M KST')" --hourly
 
       # 검증 CSV 커밋은 사이트 발행 뒤에 — 실패해도 관측/나우캐스트 표출은 이미 배포됨.
       # (2026-08-25: 이 단계가 앞에 있다가 실패해 관측 갱신이 4시간 멈춤. 작업트리에
@@ -151,6 +159,8 @@ jobs:
           git add verification/nowcast 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "nowcast 검증 $(date '+%Y-%m-%d %H:%M KST')"
-            git -c rebase.autoStash=true pull --rebase origin main
-            git push origin main
+            for i in 1 2 3; do
+              git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && break
+              echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
+            done
           fi

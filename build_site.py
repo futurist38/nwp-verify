@@ -261,8 +261,9 @@ def export_kmafcst(site_dir: str) -> list[str]:
                 data["obs"][c] = [None if k not in ser.index or pd.isna(ser[k])
                                   else round(float(ser[k]), 1) for k in keys]
 
-        with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        # 발표 수가 같으면 관측이 더 찬 쪽이 새것
+        _write_unless_older(os.path.join(out_dir, f"{ymd}.json"), data,
+                            lambda d: (len(d["fcst"]), _n_values(d["obs"])), "예보-관측")
     return _json_dates(out_dir, MAX_DAYS)
 
 
@@ -315,6 +316,37 @@ def export_meteo(site_dir: str) -> list[str]:
         with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     return _json_dates(out_dir, MAX_DAYS)
+
+
+def _n_values(obj) -> int:
+    """JSON 트리의 숫자 잎 개수 — '자료가 얼마나 찼나' 의 단조 척도."""
+    if isinstance(obj, dict):
+        return sum(_n_values(v) for v in obj.values())
+    if isinstance(obj, list):
+        return sum(_n_values(v) for v in obj)
+    return 1 if isinstance(obj, (int, float)) and not isinstance(obj, bool) else 0
+
+
+def _write_unless_older(path: str, data: dict, key, label: str) -> bool:
+    """무회귀 가드 (2026-09-06): 배포본보다 **덜 찬** 파일은 쓰지 않는다.
+
+    러너마다 관측 CSV 의 시점이 다르다 — daily 는 시작 시각(예: 06:12)의 관측을 종료
+    시각(07:40)에 발행하는데, 그 사이 obs-hourly 가 07:25 관측을 이미 올렸다면 daily 의
+    발행이 사이트를 한 시간 뒤로 되돌린다. 두 워크플로가 서로 기다리지 않게 된 뒤로는
+    (tools/publish_site.sh) 이 가드가 순서를 보장하는 유일한 장치다.
+    key(data) 는 클수록 새것인 비교 가능한 값(정수 또는 튜플)."""
+    new = key(data)
+    if os.path.exists(path):
+        try:
+            old = key(json.load(open(path, encoding="utf-8")))
+        except Exception:
+            old = None
+        if old is not None and new < old:
+            print(f"[site] {label} {os.path.basename(path)}: 배포본이 더 참({old} > {new}) — 유지")
+            return False
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    return True
 
 
 def _json_dates(out_dir: str, keep_days: int) -> list[str]:
@@ -400,8 +432,8 @@ def export_obs(site_dir: str) -> list[str]:
                 data["vars"][k] = {str(int(s)): [None if pd.isna(v) else round(float(v), 1)
                                                  for v in row]
                                    for s, row in piv.iterrows()}
-            with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
-                json.dump(data, f, separators=(",", ":"))
+            _write_unless_older(os.path.join(out_dir, f"{ymd}.json"), data,
+                                _n_values, "관측")
     return _json_dates(out_dir, OBS_MAX_DAYS)
 
 
@@ -511,6 +543,9 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--site-dir", default=os.path.join(BASE_DIR, "site_build"))
+    p.add_argument("--hourly", action="store_true",
+                   help="시간별 잡 모드: 관측·예보-관측·나우캐스트만 갱신하고 daily 소유물"
+                        "(모델 지도·미티오그램·검증·예보변화)은 배포본을 그대로 둔다")
     args = p.parse_args()
 
     os.makedirs(args.site_dir, exist_ok=True)
@@ -519,14 +554,21 @@ def main():
         shutil.copy2(os.path.join(SITE_SRC, fn), args.site_dir)
     open(os.path.join(args.site_dir, ".nojekyll"), "w").close()
 
-    copy_outputs(args.site_dir)
-    copy_verif(args.site_dir)
-    export_verif_daily(args.site_dir)
     global KMAFCST_DATES, METEO_DATES, OBS_DATES, FD_DATES
+    if args.hourly:
+        # obs-hourly 러너의 checkout 은 daily 가 마지막으로 커밋한 검증 자료라 배포본보다
+        # 오래됐을 수 있다(daily 커밋→발행 사이에 끼어든 경우). 그걸로 verif/·meteo/ 를
+        # 다시 쓰면 검증 탭이 하루 뒤로 간다 → daily 소유물은 목록만 세고 손대지 않는다.
+        METEO_DATES = _json_dates(os.path.join(args.site_dir, "meteo"), MAX_DAYS)
+        FD_DATES = _json_dates(os.path.join(args.site_dir, "fcstdiff"), MAX_DAYS)
+    else:
+        copy_outputs(args.site_dir)
+        copy_verif(args.site_dir)
+        export_verif_daily(args.site_dir)
+        METEO_DATES = export_meteo(args.site_dir)
+        FD_DATES = export_fcstdiff(args.site_dir)
     KMAFCST_DATES = export_kmafcst(args.site_dir)
-    METEO_DATES = export_meteo(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
-    FD_DATES = export_fcstdiff(args.site_dir)
     nc = copy_nowcast(args.site_dir)
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에

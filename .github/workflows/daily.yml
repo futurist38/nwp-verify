@@ -2,7 +2,8 @@ name: daily-nwp
 
 # 실행 주체는 Cloudflare Worker 의 workflow_dispatch 다 (06:10·10:40 KST 정시).
 # 아래 cron 은 그것이 죽었을 때를 위한 하루 1회 심장박동일 뿐 정시성은 기대하지 않는다
-# (9/2 실측: 예약분은 08:15 대기열 취소, 15:24 — 예정보다 4~5시간 지연).
+# (9/2~9/5 실측: 예정 10:40 이 15:18~15:31 KST 에 발동 — 4~5시간 지연). 지연 발동이
+# 정상 실행과 겹치면 gate 가 걸러낸다(최근 8시간 안에 성공한 실행이 있으면 건너뜀).
 on:
   schedule:
     - cron: "40 1 * * *"    # 10:40 KST — 당일 00z 런까지 나온 뒤라 한 번 돌 때 가장 많이 채운다
@@ -10,22 +11,58 @@ on:
 
 permissions:
   contents: write
+  actions: read      # gate 잡의 `gh run list` 에 필요 (명시하면 나머지는 none 이 된다)
 
+# 2026-09-06: obs-hourly 와 그룹을 **분리**했다. 공유하던 시절 시간별 관측 갱신이 이 워크플로
+# 전체(기상청 API 가 막히는 날 80~100분)를 기다리다 다음 시간분에 밀려 취소됐다 → 관측·
+# 예보-관측이 2~3시간씩 멈춤(9/5 실측). 발행 경합은 tools/publish_site.sh 의 낙관적 잠금과
+# build_site.py 의 무회귀 가드가 막는다.
 concurrency:
-  group: nwp-site-publish   # obs-hourly와 공유 — site-data 발행 경합 방지
+  group: daily-nwp
   cancel-in-progress: false
 
 env:
   TZ: Asia/Seoul            # 중요: 스크립트의 '오늘/어제/내일'이 전부 KST 기준
   PYTHONIOENCODING: utf-8
+  PYTHONUNBUFFERED: "1"     # 로그 시각이 실제 진행과 맞게 — 단계별 소요를 나중에 잴 수 있다
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
   GMAIL_ADDR: ${{ secrets.GMAIL_ADDR }}
   GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
 jobs:
-  run:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECENT_OK_MIN: "480"
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # 심장박동(schedule)은 Worker 가 죽었을 때만 의미가 있다. 최근에 성공한 실행이 있으면
+          # Worker 가 살아 있다는 뜻이므로 건너뛴다. 조회 실패 시에는 막지 않는다.
+          PREV=$(gh run list -w daily.yml --status success -L 3 --json databaseId,createdAt \
+                 -q "[.[] | select(.databaseId != $GITHUB_RUN_ID)] | .[0].createdAt" || true)
+          if [ -z "$PREV" ]; then
+            echo "최근 성공 실행 없음 — 심장박동 진행"; echo "go=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          AGE=$(( ($(date -u +%s) - $(date -u -d "$PREV" +%s)) / 60 ))
+          if [ "$AGE" -lt "$RECENT_OK_MIN" ]; then
+            echo "::notice::${AGE}분 전에 성공한 실행이 있음 — 심장박동 건너뜀"
+            echo "go=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "마지막 성공 ${AGE}분 전 — 심장박동 진행"; echo "go=1" >> "$GITHUB_OUTPUT"
+          fi
+
+  run:
+    needs: gate
+    if: needs.gate.outputs.go == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -43,25 +80,32 @@ jobs:
       - name: Python 의존성
         run: pip install -r requirements.txt
 
-      - name: 수신·표출·오답노트·메일
+      # 단계마다 `timeout` 을 건다 (2026-09-06). 어느 한 수신이 API 사정으로 늘어져도
+      # 나머지와 발행은 제 시간에 나가야 한다. 9/5 실측: 예보변화 단계 하나가 70분을
+      # 넘겨 잡 전체가 100분 상한에 취소됐고, 그날 NWP 지도가 오후까지 안 나갔다.
+      - name: 1단계 — NWP 수신·표출
         run: |
-          python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패 — 계속"
-          python fetch_gfs.py   || echo "::warning::GFS 수신 실패 — 계속"
-          # KIM은 25스텝×76MB. API허브가 느린 날 50분+ 걸려 전체 타임아웃을 유발했다.
-          # 외부 timeout으로 죽이면 조립 중이던 파일이 통째로 버려져 KIM 표출이 사라지므로
-          # (2026-08-26 실측) 스크립트 내부 상한을 써서 받은 스텝까지는 살린다
-          python fetch_kim.py --max-minutes 28 || echo "::warning::KIM 수신 실패 — 계속"
+          timeout 900  python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패/시간초과 — 계속"
+          timeout 600  python fetch_gfs.py   || echo "::warning::GFS 수신 실패/시간초과 — 계속"
+          # KIM은 25스텝×76MB. 스크립트 내부 상한(--max-minutes)이 받은 스텝까지 살린다;
+          # 바깥 timeout 은 그 상한이 안 먹을 때의 마지막 안전판
+          timeout 2100 python fetch_kim.py --max-minutes 28 || echo "::warning::KIM 수신 실패/시간초과 — 계속"
           python plot_charts.py
           python verify.py archive || echo "::warning::archive 실패 — 계속"
-          python verify.py score   || echo "::warning::score 실패 — 계속"
-          python verify.py report  || echo "::warning::report 실패 — 계속"
-          python plot_obsmap.py --no-plot || echo "::warning::관측지도 실패 — 계속"
-          python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패 — 계속"
-          python plot_fcstdiff.py --no-plot || echo "::warning::예보변화 지도 실패 — 계속"
-          python plot_verifmap.py  || echo "::warning::오차지도 실패 — 계속"
-          # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청).
-          # 같은 내용(모델 발산·수렴)을 웹 검증 탭에서 볼 수 있게 되어 메일이 중복됐다.
-          # send_summary.py 는 그대로 두었으니 되살리려면 아래 한 줄의 주석만 풀면 된다.
+
+      # 지도가 나오는 즉시 발행 — 검증·관측 단계(길면 30분+)를 기다리지 않는다
+      - name: 1차 발행 — NWP 지도·미티오그램
+        run: tools/publish_site.sh "site nwp $(date '+%Y-%m-%d %H:%M KST')"
+
+      - name: 2단계 — 검증·관측·단기예보
+        run: |
+          timeout 600 python verify.py score   || echo "::warning::score 실패/시간초과 — 계속"
+          timeout 300 python verify.py report  || echo "::warning::report 실패/시간초과 — 계속"
+          timeout 600 python plot_obsmap.py --no-plot || echo "::warning::관측 수신 실패/시간초과 — 계속"
+          timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 캐시 실패/시간초과 — 계속"
+          timeout 900 python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
+          timeout 300 python plot_verifmap.py  || echo "::warning::오차지도 실패/시간초과 — 계속"
+          # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청) — 되살리려면 아래 주석만 풀면 된다.
           # python send_summary.py   || echo "::warning::메일 실패 — 계속"
 
       - name: 검증 누적을 main에 커밋
@@ -69,29 +113,14 @@ jobs:
           git config user.name "nwp-bot"
           git config user.email "actions@users.noreply.github.com"
           git add verification/
-          if ! git diff --cached --quiet; then
-            git commit -m "verification: $(date '+%Y-%m-%d %H:%M KST') [skip ci]"
-            git pull --rebase origin main
-            git push origin main
-          fi
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "verification: $(date '+%Y-%m-%d %H:%M KST') [skip ci]"
+          # obs-hourly 도 main 에 커밋한다 — 밀리면 rebase 후 재시도
+          for i in 1 2 3; do
+            git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && exit 0
+            echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
+          done
+          echo "::error::main push 실패"; exit 1
 
-      - name: 사이트 조립 (기존 아카이브 복원 → 오늘분 추가)
-        run: |
-          mkdir -p site_build
-          if git fetch origin site-data 2>/dev/null; then
-            git --work-tree=site_build checkout FETCH_HEAD -- . || true
-            git reset > /dev/null   # 인덱스 원복 (--work-tree checkout이 인덱스를 바꿈)
-          fi
-          python build_site.py --site-dir site_build
-
-      - name: site-data 브랜치 발행 (단일 커밋, 변경 블롭만 전송)
-        # 새 git init 방식은 매일 사이트 전체를 재전송한다(아카이브 커지면 수백 MB).
-        # 본 저장소의 객체 DB(site-data fetch 완료 상태)를 공유하는 commit-tree로
-        # 변경된 파일만 팩에 담긴다.
-        run: |
-          export GIT_INDEX_FILE="$(pwd)/.git/site-index"
-          git --work-tree=site_build add -A
-          TREE=$(git write-tree)
-          unset GIT_INDEX_FILE
-          COMMIT=$(git commit-tree "$TREE" -m "site $(date '+%Y-%m-%d %H:%M KST')")
-          git push --force origin "$COMMIT:refs/heads/site-data"
+      - name: 2차 발행 — 검증·관측·예보변화
+        run: tools/publish_site.sh "site verif $(date '+%Y-%m-%d %H:%M KST')"

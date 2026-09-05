@@ -78,6 +78,23 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 이 PC의 AVG Mail Shield는 SMTP를 별도 'Untrusted Root'로 가로채므로, AVG 가로채기가
 확인된 경우에 한해 로컬 AV 구간을 비검증으로 연결한다 (send_summary.py `_smtp_connect` 참조).
 
+### 사이트 발행 방식 (2026-09-06 개편)
+
+두 워크플로(`daily-nwp`, `obs-hourly`)는 **서로 기다리지 않는다**. 예전에는 동시성 그룹을
+나눠 써서 시간별 관측 갱신이 daily 전체(기상청 API가 막히는 날 80~100분)를 기다리다
+다음 시간분에 밀려 취소됐고, 관측·예보-관측이 2~3시간씩 멈췼다(9/5 실측). 대신:
+
+- `tools/publish_site.sh` — **낙관적 잠금 발행**. 최신 site-data 복원 → 이번 산출 얹기 →
+  복원 시점 SHA 를 전제로 `--force-with-lease` push. 그 사이 남이 먼저 발행했으면 거부되고
+  처음부터 다시(최대 6회). 로컬 시험은 `DRY_RUN=1 SITE_DIR=<임시폴더>` 로.
+- `build_site.py` **무회귀 가드** — 관측·예보-관측 JSON은 배포본보다 *덜 찬* 것으로 덮어쓰지
+  않는다(daily 는 시작 시각 관측을 종료 시각에 발행하므로 시간별 갱신을 되돌릴 수 있었다).
+  `--hourly` 모드는 daily 소유물(모델 지도·미티오그램·검증·예보변화)에 손대지 않는다.
+- daily 는 **2단계 발행** — NWP 지도가 나오는 즉시 1차, 검증·관측 뒤 2차. 단계마다 `timeout`
+  과 `plot_fcstdiff.py --max-minutes` 로 한 API 지연이 전체를 잡아먹지 못하게 했다.
+- 심장박동 cron 은 gate 가 걸러낸다 — 최근(obs 2h·daily 8h)에 성공한 실행이 있으면 건너뜀.
+  GitHub 예약은 4~5시간 늦게 발동하는 일이 잦아 정상 실행과 겹쳤다.
+
 일일 자동화는 Windows 작업 스케줄러에 등록되어 있다 (`run_daily.ps1` 상단 참조):
 - `kpx-model-06` 06:10 KST — 대개 ECMWF 전일 12UTC + GFS 당일 18UTC(전일 기준) 런
 - `kpx-model-10` 10:30 KST — 당일 00UTC 런 (ECMWF 00Z는 09~10 KST 배포)

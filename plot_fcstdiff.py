@@ -21,6 +21,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import time
 
 import numpy as np
 import pandas as pd
@@ -52,6 +53,9 @@ for _font in ["Malgun Gothic", "NanumGothic", "Noto Sans CJK KR"]:
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
+DEADLINE = 0.0   # time.monotonic() 기준 수신 마감 (0=무제한) — main 에서 --max-minutes 로 설정
+
+
 def stations() -> pd.DataFrame:
     df = pd.read_csv(STN_CSV)
     df["nx"], df["ny"] = zip(*[latlon_to_grid(r.lat, r.lon) for r in df.itertuples()])
@@ -67,6 +71,12 @@ def load_issue(bdt: str, stns: pd.DataFrame, key: str) -> dict:
     for r in stns.itertuples():
         if str(r.STN) in cache:
             continue
+        # 시간 상한 (2026-09-06): API허브가 막히는 날 지점마다 재시도 3회×60초를 다 쓰면
+        # 97지점 × 2발표가 70분을 넘겨 daily 전체가 100분 상한에 취소됐다(9/5 실측).
+        # 받은 지점까지만 캐시에 남기고 물러선다 — 발표분은 불변이라 다음 실행이 이어받는다.
+        if DEADLINE and time.monotonic() > DEADLINE:
+            print(f"[예보변화] {bdt}: 시간 상한 도달 — 남은 지점은 다음 실행에")
+            break
         try:
             cache[str(r.STN)] = fetch(r.nx, r.ny, bdt, key)["TMP"]
             n_new += 1
@@ -140,7 +150,12 @@ def main():
     p.add_argument("--issue", default="", help="기준 발표시각 YYYYMMDDHH (생략=최신)")
     p.add_argument("--no-plot", action="store_true",
                    help="PNG 생략 — 사이트가 지점값 JSON으로 직접 그린다(기본 운영 모드)")
+    p.add_argument("--max-minutes", type=float, default=0.0,
+                   help="단기예보 수신 시간 상한(분). 초과하면 받은 지점까지만 쓴다 (0=무제한)")
     args = p.parse_args()
+    if args.max_minutes > 0:
+        global DEADLINE
+        DEADLINE = time.monotonic() + args.max_minutes * 60
 
     now = dt.datetime.now()
     if args.issue:
