@@ -5,12 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <header>
-  <h1>NWP 모델 아카이브</h1>
-  <p class="sub">개인 연구 프로젝트 — 공공기관 공식 서비스가 아닙니다</p>
+  <div class="head-row">
+    <div>
+      <h1>NWP 모델 아카이브</h1>
+      <p class="sub">개인 연구 프로젝트 — 공공기관 공식 서비스가 아닙니다</p>
+    </div>
+    <div id="freshPill" class="pill" title="site-data 마지막 발행 시각 기준">갱신 확인 중…</div>
+  </div>
   <nav id="tabs">
     <button data-tab="charts" class="on">NWP</button>
     <button data-tab="obs">관측</button>
@@ -23,7 +28,7 @@
 </header>
 
 <main>
-  <section id="tab-charts" class="tab on">
+  <section id="tab-charts" class="tab on card">
     <div class="controls">
       <select id="dateSel"></select>
       <div id="modelBtns" class="btns"></div>
@@ -31,31 +36,41 @@
       <div id="runSel" class="btns"></div>
     </div>
     <div class="slider-row">
+      <button id="stepPlay" class="play" title="자동 재생">▶</button>
       <button id="stepPrev">◀</button>
       <input type="range" id="stepSlider" min="0" max="0" value="0">
       <button id="stepNext">▶</button>
     </div>
     <div id="stepLabel" class="step-label"></div>
     <div class="imgwrap" id="chartStack"><img id="chartImg" alt="차트" loading="lazy"></div>
+    <p class="note">◀ ▶ 또는 키보드 방향키로 스텝 이동 · ▶ 자동 재생. 일사 = 3시간 평균 하향 단파복사, 강수 = 3시간 누적.</p>
   </section>
 
-  <section id="tab-obs" class="tab">
+  <section id="tab-obs" class="tab card">
     <div class="controls">
       <select id="dateSelO"></select>
       <div id="obsVarBtns" class="btns"></div>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" id="obsSliderRow">
+      <button id="obsPlay" class="play" title="자동 재생">▶</button>
       <button id="obsPrev">◀</button>
       <input type="range" id="obsSlider" min="0" max="0" value="0">
       <button id="obsNext">▶</button>
     </div>
     <div id="obsLabel" class="step-label"></div>
     <div id="obsMap"></div>
-    <p class="note">ASOS 전 지점(~97개) <b>실측값</b>을 그대로 찍습니다 — 지점 사이는 관측이 없어 채우지 않습니다.
-       색축은 절대 고정 — 오늘의 20℃와 내일의 20℃는 항상 같은 색.</p>
+    <p class="note" id="obsNote">ASOS 전 지점(~97개) <b>실측값</b>을 그대로 찍습니다 — 지점 사이는 관측이 없어 채우지 않습니다.
+       색축은 절대 고정 — 오늘의 20℃와 내일의 20℃는 항상 같은 색. 전운량은 목측 십분위(0 맑음 ~ 10 흐림).</p>
+    <div id="satBlock" hidden>
+      <h2>위성 일사 — 하루 적산 (GK2A 천리안2A)</h2>
+      <div class="imgwrap"><img id="satImg" alt="위성 일사 일적산" loading="lazy"></div>
+      <p class="note">GK2A 하향 단파복사(DSR) 산출물을 정시마다 받아 하루치를 더한 값(MJ/m²). 지점 관측(위 '일사')이
+         없는 곳까지 면으로 보입니다 — 태양광 지역별 자원의 근사치. 정시 순간값 × 1시간의 합이라 10분 자료 전체를
+         쓴 값보다 거칠고, 당일은 '지금까지의 적산'입니다.</p>
+    </div>
   </section>
 
-  <section id="tab-nowcast" class="tab">
+  <section id="tab-nowcast" class="tab card">
     <p class="note" style="font-size:13px;color:#444">
       <b>위성 기반 운량 나우캐스트 — GK2A 천리안2A 구름분석(CLA)을 딥러닝(U-Net)으로 +6시간 외삽.</b><br>
       매시 갱신 · 자체 학습 모델(사전학습 가중치 미사용) · 위성영상 문법(0=어두움 · 100=밝음, 노란 지리선).
@@ -66,6 +81,7 @@
       되살린 것입니다 — <b>정보가 늘어난 것이 아니며</b>, 아래 검증 점수는 보정 전 원본으로 매깁니다.</p>
     <div id="ncIssue" class="step-label"></div>
     <div class="slider-row">
+      <button id="ncPlay" class="play" title="자동 재생">▶</button>
       <button id="ncPrev">◀</button>
       <input type="range" id="ncSlider" min="0" max="0" value="0">
       <button id="ncNext">▶</button>
@@ -96,27 +112,44 @@
        양(+)이면 "마지막 위성 화면 유지"보다 나음.</p>
   </section>
 
-  <section id="tab-meteo" class="tab">
+  <section id="tab-meteo" class="tab card">
     <p class="note" style="font-size:13px;color:#444">
-      <b>도시별 시계열 — 모델 3종 비교.</b> 각 모델의 최신 런을 3시간 간격으로 겹쳐 그립니다.
-      선 위에 마우스를 올리거나(휴대폰은 손가락으로 짚으면) 그 시각의 모델별 값이 표시됩니다.</p>
+      <b>도시별 시계열 — 모델 3종 비교.</b> 굵은 선 = 각 모델의 최신 런.
+      <b>이전 런</b>을 켜면 직전 런들(최대 4개)이 겹치는 범위를 옅은 띠로, 또는 가는 선으로 보입니다 —
+      띠가 넓을수록 런마다 흔들린 예보입니다. <b>앙상블</b>은 ECMWF 50멤버의 10~90% 구간(세로 막대,
+      06·15시)입니다. 아래 <b>하늘 띠</b>는 위 ECMWF · 중 KIM · 아래 GFS 순으로,
+      <span class="sw" style="background:#8ec9ff"></span>강수 ·
+      <span class="sw" style="background:#7d7d7d"></span>흐림 ·
+      <span class="sw" style="background:#c8c8c8"></span>구름많음 ·
+      <span class="sw" style="background:#fff;border-color:#999"></span>맑음.
+      선 위에 마우스를 올리거나(휴대폰은 짚으면) 그 시각의 모델별 값이 표시됩니다.</p>
     <div class="controls">
       <select id="dateSelM"></select>
       <div id="meteoVarBtns" class="btns">
         <button data-v="t2m" class="on">기온</button>
         <button data-v="tcc">전운량</button>
+        <button data-v="dswrf">일사</button>
+        <button data-v="tp">강수</button>
+      </div>
+      <div class="btns">
+        <button id="prevModeBtn" title="이전 런 표시 방식">이전 런: 띠</button>
+        <button id="ensBtn" class="on" hidden>앙상블 폭</button>
+        <button id="stripBtn" class="on">하늘 띠</button>
       </div>
     </div>
     <div id="meteoLegend" class="step-label"></div>
     <div id="meteoCharts"></div>
   </section>
 
-  <section id="tab-kmaf" class="tab">
+  <section id="tab-kmaf" class="tab card">
     <p class="note" style="font-size:13px;color:#444">
       <b>기상청 단기예보(동네예보) vs ASOS 지상관측 실측 — 기온, 1시간 간격.</b><br>
       검정 실선=ASOS 실측(생성 시점까지) · 파랑 파선=<b>선택한 발표시각</b>의 단기예보.
+      둘 사이의 <span class="sw" style="background:rgba(200,30,30,.25)"></span>붉은 면은 예보가 실측보다 높았던 구간,
+      <span class="sw" style="background:rgba(30,90,200,.25)"></span>푸른 면은 낮았던 구간입니다.
       발표시각을 바꿔가며 "언제 발표된 예보가 오늘을 잘 맞혔나"를 비교할 수 있습니다
-      (전일 11·17시 + 당일 05·11·17시 — 실무에서 보는 다섯 판만 남겼습니다).
+      (전일 11·17시 + 당일 05·11·17시). 아래 두 띠는 <b>예보 하늘</b>(SKY·강수형태)과 <b>실측 하늘</b>(전운량 십분위) —
+      색 문법은 Meteogram 과 같습니다(실측 띠에는 강수 정보가 없습니다).
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
     <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
     <div id="kmafCharts"></div>
@@ -134,9 +167,20 @@
       </div></div>
       <div id="fdMap"></div>
     </div>
+
+    <div id="midBlock" hidden>
+      <h2>중기예보 — 3~10일 뒤 최고·최저기온 vs 실측</h2>
+      <p class="note" style="font-size:13px;color:#444">
+        기상청 <b>중기예보</b>(하루 2회, 06·18시 발표)의 일 최고(<b style="color:#c22">빨강</b>)·최저(<b style="color:#1a5fb4">파랑</b>)기온.
+        굵은 선 = 선택한 발표, 옅은 선 = 그보다 1~3일 앞선 발표(같은 날을 더 먼저 내다본 판) — 선이 벌어질수록
+        예보가 흔들린 날입니다. 세로 막대 = 기상청이 붙인 예보 범위(±). 검정 점 = ASOS 실측 일 최고(●)·최저(○),
+        정시값 기반이라 참 극값보다 조금 안쪽입니다.</p>
+      <div class="controls"><select id="midIssueSel"></select></div>
+      <div id="midCharts"></div>
+    </div>
   </section>
 
-  <section id="tab-verif" class="tab">
+  <section id="tab-verif" class="tab card">
     <h2>오차 지도 — 지점별 모델 비교</h2>
     <div class="controls">
       <div id="vmVarBtns" class="btns">
@@ -160,34 +204,44 @@
     <div id="verifDailyT" class="tablewrap"></div>
     <h3>운량 %</h3>
     <div id="verifDailyC" class="tablewrap"></div>
+    <h3 id="verifDailySH">일사 W/m² (3시간 평균, 낮 시간만)</h3>
+    <div id="verifDailyS" class="tablewrap"></div>
     <p class="note">같은 유효시각에 런이 여럿이면 최단 리드(최신 런) 값.
        셀 배경: <b style="color:#c22">과대(+)=빨강</b> · <b style="color:#1a7a3c">저평가(−)=초록</b>,
-       진할수록 |오차| 큼 (기온 ±3℃ · 운량 ±40%p에서 포화).</p>
+       진할수록 |오차| 큼 (기온 ±3℃ · 운량 ±40%p · 일사 ±200W/m²에서 포화).
+       일사 실측 = ASOS 시간 일사합을 W/m²로 환산해 같은 창으로 평균.</p>
     <h2>리드타임별 MAE</h2>
     <div class="imgwrap"><img src="verif/mae_curve_t2m.png" alt="기온 MAE" loading="lazy"></div>
     <div class="imgwrap"><img src="verif/mae_curve_tcc.png" alt="운량 MAE" loading="lazy"></div>
+    <div class="imgwrap"><img id="maeSw" src="verif/mae_curve_dswrf.png" alt="일사 MAE" loading="lazy" onerror="this.closest('.imgwrap').hidden=true"></div>
     <h2>오답노트 사례</h2>
     <ul id="caseList"></ul>
   </section>
 
-  <section id="tab-about" class="tab">
+  <section id="tab-about" class="tab card">
     <h2>소개</h2>
-    <p>수치예보모델(ECMWF·GFS·KIM)의 한반도 기온·운량 예측을 원본 GRIB에서 직접 추출해
+    <p>수치예보모델(ECMWF·GFS·KIM)의 한반도 기온·운량·일사·강수 예측을 원본 GRIB에서 직접 추출해
        정량 표출하고, ASOS 실황과 대조해 모델별 오차 특성을 누적하는 <b>개인 연구
        프로젝트</b>입니다. 어떤 공공기관의 공식 서비스도 아닙니다.</p>
     <p>원칙: 모델 간 발산은 평균·중재하지 않고 그대로 표시합니다. 요약 옆에는 항상
        원수치를 남깁니다. 수집 실패는 추정으로 채우지 않고 누락으로 표시합니다.</p>
     <h3>데이터 출처</h3>
     <ul>
-      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료</li>
+      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료. 고해상도(HRES)와 앙상블(ENS 50멤버, 2m 기온 요약)</li>
       <li>NOAA GFS 0.25° (NOMADS)</li>
-      <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), ASOS 지상관측,
+      <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), 중기예보, ASOS 지상관측(시간·일자료),
           GK2A 천리안2A 위성 구름분석(CLA)</li>
+    </ul>
+    <h3>표출 규약</h3>
+    <ul>
+      <li>일사·강수는 모델마다 다른 누적·평균 규약을 <b>3시간 창</b>으로 통일했습니다(ECMWF 누적 차분, GFS 6시간 리셋 구간 재조합, KIM 3시간 창).</li>
+      <li>하늘 띠: 3시간 강수 ≥ 0.5mm → 강수(하늘색), 전운량 ≥ 85% → 흐림(진회색), 55~85% → 구름많음(연회색), 그 외 맑음(흰색). 기상청 하늘상태 구분(운량 0~5·6~8·9~10)에 맞췄습니다.</li>
+      <li>평년편차의 평년은 기상청 API허브에 평년값 API가 없어 ASOS 일자료 1991~2020(30년, 유효 20년 이상 지점만, ±7일 평활)로 <b>자체 산출</b>한 값입니다. 기상청 공식 평년값과 소폭 다를 수 있습니다.</li>
     </ul>
     <p class="note" id="genInfo"></p>
   </section>
 </main>
 <div id="chartTip" class="tip" hidden></div>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

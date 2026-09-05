@@ -30,6 +30,7 @@ KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
 OBS_DATES: list[str] = []
 FD_DATES: list[str] = []
+HAS_MIDFCST = False    # export_midfcst 결과 (manifest 용)
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
@@ -49,7 +50,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff"):
+        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff", "satsw"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
@@ -106,7 +107,7 @@ def export_verif_daily(site_dir: str) -> list[str]:
     dates = set()
     for f in glob.glob(os.path.join(VERIF_DIR, "scores", "*.csv")):
         sc = pd.read_csv(f, parse_dates=["valid_kst"])
-        sc = sc[sc["var"].isin(["t2m", "tcc"])]
+        sc = sc[sc["var"].isin(["t2m", "tcc", "dswrf"])]   # dswrf(일사) 2026-09-06 추가
         for day, g in sc.groupby(sc["valid_kst"].dt.date):
             data = {}
             for r in g.itertuples():
@@ -240,10 +241,17 @@ def export_kmafcst(site_dir: str) -> list[str]:
         keys = [f"{g:%Y%m%d%H}" for g in grid]
 
         data = {"cities": KMAF_CITIES, "t0": f"{t0:%Y%m%d%H}", "hours": hours,
-                "fcst": {}, "obs": {}}
+                "fcst": {}, "obs": {}, "sky": {}, "pty": {}, "pop": {}, "obs_ca": {}}
         for b in issues:
             data["fcst"][b] = {c: [cache[b].get(c, {}).get(k) for k in keys]
                                for c in KMAF_CITIES}
+            # 하늘상태(SKY 1맑음·3구름많음·4흐림)·강수형태(PTY 0없음 1비 2비/눈 3눈 4소나기)·
+            # 강수확률(POP %) — 2026-09-06 부터 캐시에 "도시#카테고리" 키로 함께 저장
+            for cat, slot in (("SKY", "sky"), ("PTY", "pty"), ("POP", "pop")):
+                per_city = {c: cache[b].get(f"{c}#{cat}") for c in KMAF_CITIES}
+                if any(per_city.values()):
+                    data[slot][b] = {c: [None if not v else v.get(k) for k in keys]
+                                     for c, v in per_city.items()}
 
         for mm in {f"{g:%Y-%m}" for g in grid}:
             if mm not in obs_cache:
@@ -260,6 +268,11 @@ def export_kmafcst(site_dir: str) -> list[str]:
                 ser = ob[ob["STN"] == stn].set_index("key")["TA"] if stn else pd.Series(dtype=float)
                 data["obs"][c] = [None if k not in ser.index or pd.isna(ser[k])
                                   else round(float(ser[k]), 1) for k in keys]
+                # 실측 하늘(전운량 십분위) — 예보 SKY 띠와 나란히 (2026-09-06)
+                if stn and "CA_TOT" in ob.columns:
+                    ca = ob[ob["STN"] == stn].set_index("key")["CA_TOT"]
+                    data["obs_ca"][c] = [None if k not in ca.index or pd.isna(ca[k])
+                                         else int(ca[k]) for k in keys]
 
         # 발표 수가 같으면 관측이 더 찬 쪽이 새것
         _write_unless_older(os.path.join(out_dir, f"{ymd}.json"), data,
@@ -284,6 +297,31 @@ def export_meteo(site_dir: str) -> list[str]:
         c = os.path.join(day_dir, "city_forecast.csv")
         if os.path.exists(c):
             srcs.setdefault(os.path.basename(day_dir), c)
+
+    # 이전 런(런 간 흔들림 띠) 은 전 런이 쌓이는 예측 아카이브에서 (verify.py archive)
+    arch_cache: dict[str, pd.DataFrame] = {}
+
+    def archive_month(ym: str) -> pd.DataFrame:
+        if ym not in arch_cache:
+            fp = os.path.join(VERIF_DIR, "forecast", f"{ym}.csv")
+            arch_cache[ym] = pd.read_csv(fp) if os.path.exists(fp) else pd.DataFrame()
+        return arch_cache[ym]
+
+    # ECMWF 앙상블 요약 (fetch_ens.py) — 런별 JSON
+    ens_runs = {os.path.basename(f)[:-5]: f
+                for f in glob.glob(os.path.join(VERIF_DIR, "ens", "??????????.json"))}
+
+    def _grid_series(sub: pd.DataFrame, idx: dict, n: int, col: str, nd: int):
+        arr = [None] * n
+        if col not in sub.columns:
+            return arr
+        for r in sub.itertuples():
+            i = idx.get(r.valid)
+            v = getattr(r, col)
+            if i is not None and pd.notna(v):
+                arr[i] = round(float(v), nd)
+        return arr
+
     for ymd, csv in sorted(srcs.items()):
         df = pd.read_csv(csv)
         df = df[df["city"].isin(KMAF_CITIES)]
@@ -296,26 +334,113 @@ def export_meteo(site_dir: str) -> list[str]:
 
         grid = pd.date_range(df["valid"].min(), df["valid"].max(), freq="3h")
         idx = {t: i for i, t in enumerate(grid)}
+        n = len(grid)
         data = {"cities": KMAF_CITIES, "models": sorted(latest.index),
                 "runs": {m: pd.Timestamp(latest[m]).strftime("%Y%m%d%H") for m in latest.index},
-                "t0": grid[0].strftime("%Y%m%d%H"), "steps": len(grid), "series": {}}
+                "t0": grid[0].strftime("%Y%m%d%H"), "steps": n, "series": {},
+                "wins": {}, "prev": {}}
         for m in data["models"]:
             data["series"][m] = {}
+            sub_m = df[df["model"] == m]
+            # 창 길이(일사·강수) — 도시 공통. 없으면(구 자료) null
+            data["wins"][m] = _grid_series(sub_m[sub_m["city"] == KMAF_CITIES[0]], idx, n, "win_h", 0)
             for c in KMAF_CITIES:
-                sub = df[(df["model"] == m) & (df["city"] == c)]
-                t2m = [None] * len(grid); tcc = [None] * len(grid)
-                for r in sub.itertuples():
-                    i = idx.get(r.valid)
-                    if i is None:
+                sub = sub_m[sub_m["city"] == c]
+                data["series"][m][c] = {"t2m": _grid_series(sub, idx, n, "t2m_C", 1),
+                                        "tcc": _grid_series(sub, idx, n, "tcc_pct", 0),
+                                        "dswrf": _grid_series(sub, idx, n, "dswrf_avg_Wm2", 0),
+                                        "tp": _grid_series(sub, idx, n, "tp_mm", 1)}
+
+            # 이전 런 최대 4개 (2026-09-06, 런 겹치기) — 같은 유효시각 격자에 정렬, 기온·운량만
+            run_ts = pd.Timestamp(latest[m])
+            months = {(run_ts - pd.Timedelta(days=d)).strftime("%Y-%m") for d in range(0, 4)}
+            arch = pd.concat([archive_month(ym) for ym in sorted(months)], ignore_index=True) \
+                if months else pd.DataFrame()
+            if not arch.empty:
+                arch = arch[(arch["model"] == m) & (arch["city"].isin(KMAF_CITIES))].copy()
+                # 아카이브 run_utc 는 "2026-09-04"(자정)·"… 12:00:00" 형식 혼합 (실측) → mixed 파싱 후 통일
+                arch["run_utc"] = pd.to_datetime(arch["run_utc"], format="mixed").dt.strftime("%Y-%m-%d %H:%M")
+                arch = arch[pd.to_datetime(arch["run_utc"]) < run_ts]
+                prev_runs = sorted(arch["run_utc"].unique())[-4:]
+                if prev_runs:
+                    arch = arch[arch["run_utc"].isin(prev_runs)].copy()
+                    arch["valid"] = pd.to_datetime(arch["valid_kst"])
+                    data["prev"][m] = {}
+                    for ru in prev_runs:
+                        key = pd.Timestamp(ru).strftime("%Y%m%d%H")
+                        g = arch[arch["run_utc"] == ru]
+                        data["prev"][m][key] = {
+                            c: {"t2m": _grid_series(g[g["city"] == c], idx, n, "t2m_C", 1),
+                                "tcc": _grid_series(g[g["city"] == c], idx, n, "tcc_pct", 0)}
+                            for c in KMAF_CITIES}
+
+        # 앙상블: ECMWF 최신 런과 같은 런이 있으면 그것, 없으면 그 이전 최신 런
+        ec_run = data["runs"].get("ECMWF")
+        if ec_run and ens_runs:
+            cand = [r for r in sorted(ens_runs) if r <= ec_run]
+            if cand:
+                ens = json.load(open(ens_runs[cand[-1]], encoding="utf-8"))
+                gi = {t.strftime("%Y%m%d%H"): i for t, i in idx.items()}
+                out_e = {"run": ens["run"], "n": ens.get("n_members"), "cities": {}}
+                for c in KMAF_CITIES:
+                    e = ens["cities"].get(c)
+                    if not e:
                         continue
-                    if pd.notna(r.t2m_C):
-                        t2m[i] = round(float(r.t2m_C), 1)
-                    if pd.notna(r.tcc_pct):
-                        tcc[i] = round(float(r.tcc_pct), 0)
-                data["series"][m][c] = {"t2m": t2m, "tcc": tcc}
+                    keep = [k for k, v in enumerate(e["valid_kst"]) if v in gi]
+                    out_e["cities"][c] = {"i": [gi[e["valid_kst"][k]] for k in keep],
+                                          **{s: [e[s][k] for k in keep]
+                                             for s in ("mean", "sd", "p10", "p50", "p90", "min", "max")}}
+                data["ens"] = out_e
+
         with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     return _json_dates(out_dir, MAX_DAYS)
+
+
+def export_midfcst(site_dir: str) -> bool:
+    """중기예보 기온(D+3~D+10 최저·최고, kma_midfcst.py 캐시) → site/midfcst/index.json (2026-09-06).
+
+    최근 21일 발표분과, 검증용 실측 일 최고·최저(ASOS 시간값 기반)를 한 파일에.
+    구조: {issues:[tmfc...], cities:[...], fcst:{tmfc:{city:{ymd:[min,max,min_l,min_h,max_l,max_h]}}},
+           obs:{city:{ymd:[tmax,tmin]}}}"""
+    src = sorted(glob.glob(os.path.join(VERIF_DIR, "midfcst", "??????????.json")))
+    if not src:
+        return False
+    cut = (dt.date.today() - dt.timedelta(days=21)).strftime("%Y%m%d")
+    src = [f for f in src if os.path.basename(f)[:8] >= cut]
+    out = {"issues": [], "cities": [], "fcst": {}, "obs": {}}
+    cities: set[str] = set()
+    for f in src:
+        tmfc = os.path.basename(f)[:-5]
+        d = json.load(open(f, encoding="utf-8"))
+        out["issues"].append(tmfc)
+        out["fcst"][tmfc] = {}
+        for c, days in d.items():
+            cities.add(c)
+            out["fcst"][tmfc][c] = {ymd: [v.get("min"), v.get("max"), v.get("min_l"), v.get("min_h"),
+                                          v.get("max_l"), v.get("max_h")] for ymd, v in days.items()}
+    out["cities"] = [c for c in ("서울", "인천", "수원", "대전", "대구", "광주", "전주", "부산", "강릉", "제주")
+                     if c in cities]
+    # 실측 일 극값 (시간값 기반 — 정시 사이 극값은 놓친다; 표출에 명시)
+    months = sorted({f"{(dt.date.today() - dt.timedelta(days=k)):%Y-%m}" for k in (0, 21, 35)})
+    frames = [pd.read_csv(os.path.join(VERIF_DIR, "obs", f"{mm}.csv"), parse_dates=["TM"])
+              for mm in months if os.path.exists(os.path.join(VERIF_DIR, "obs", f"{mm}.csv"))]
+    if frames:
+        ob = pd.concat(frames, ignore_index=True)
+        ob = ob[ob["TM"].dt.strftime("%Y%m%d") >= (dt.date.today() - dt.timedelta(days=35)).strftime("%Y%m%d")]
+        ob["ymd"] = ob["TM"].dt.strftime("%Y%m%d")
+        for c in out["cities"]:
+            stn = CITY_OBS_STN.get(c)
+            if not stn:
+                continue
+            g = ob[ob["STN"] == stn].groupby("ymd")["TA"].agg(["max", "min", "count"])
+            out["obs"][c] = {ymd: [round(float(r["max"]), 1), round(float(r["min"]), 1)]
+                             for ymd, r in g.iterrows() if r["count"] >= 20}
+    od = os.path.join(site_dir, "midfcst")
+    os.makedirs(od, exist_ok=True)
+    with open(os.path.join(od, "index.json"), "w", encoding="utf-8") as fp:
+        json.dump(out, fp, ensure_ascii=False, separators=(",", ":"))
+    return True
 
 
 def _n_values(obj) -> int:
@@ -412,6 +537,15 @@ def export_obs(site_dir: str) -> list[str]:
                                 for r in st.rename(columns={"name": "name_"}).itertuples()],
                    "scales": scales}, f, ensure_ascii=False, separators=(",", ":"))
 
+    # 자체 산출 평년(1991~2020, tools/build_normals.py) — 있으면 날짜별 JSON 에 그날 값만 싣는다
+    normals: dict[tuple[int, str], list] = {}
+    nrm_path = os.path.join(VERIF_DIR, "normals_daily.csv")
+    if os.path.exists(nrm_path):
+        nd = pd.read_csv(nrm_path, dtype={"mmdd": str})
+        for r in nd.itertuples():
+            normals[(int(r.stn), r.mmdd)] = [None if pd.isna(v) else round(float(v), 1)
+                                             for v in (r.tavg, r.tmax, r.tmin)]
+
     dates = []
     cutoff = (dt.date.today() - dt.timedelta(days=OBS_MAX_DAYS)).strftime("%Y%m%d")
     for src in sorted(glob.glob(os.path.join(VERIF_DIR, "obs", "????-??.csv"))):
@@ -432,8 +566,19 @@ def export_obs(site_dir: str) -> list[str]:
                 data["vars"][k] = {str(int(s)): [None if pd.isna(v) else round(float(v), 1)
                                                  for v in row]
                                    for s, row in piv.iterrows()}
+            # 일 최고·최저(시간값 기반 — 정시 사이의 극값은 놓치므로 참값보다 약간 안쪽) + 평년
+            # (2026-09-06, 평년편차 지도용). 관측이 다 쌓이기 전(당일)에는 '지금까지의' 극값.
+            agg = g.groupby("STN")["TA"].agg(["max", "min", "count"])
+            data["daily"] = {str(int(s)): [None if pd.isna(r["max"]) else round(float(r["max"]), 1),
+                                           None if pd.isna(r["min"]) else round(float(r["min"]), 1),
+                                           int(r["count"])]
+                             for s, r in agg.iterrows()}
+            if normals:
+                mmdd = ymd[4:]
+                data["normals"] = {str(s): normals[(int(s), mmdd)] for s in agg.index
+                                   if (int(s), mmdd) in normals}
             _write_unless_older(os.path.join(out_dir, f"{ymd}.json"), data,
-                                _n_values, "관측")
+                                lambda d: _n_values(d["vars"]), "관측")
     return _json_dates(out_dir, OBS_MAX_DAYS)
 
 
@@ -511,6 +656,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
                 entry["meteograms"].append(fn)
             elif fn.startswith("fcstdiff_"):
                 entry.setdefault("fcstdiff", []).append(fn)
+            elif fn.startswith("satsw_"):          # 위성 일사 일적산 (2026-09-06)
+                entry.setdefault("satsw", []).append(fn)
             elif fn.startswith("kmafcst_"):
                 mk = re.match(r"^kmafcst_(\d{10})\.webp$", fn)
                 if mk:
@@ -521,7 +668,7 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
             e["latest"] = max(e["runs"])
         if os.path.exists(os.path.join(site_dir, "daily", f"{ymd}.json")):
             entry["daily_json"] = f"daily/{ymd}.json"
-        if entry["models"] or entry["meteograms"] or entry["obs"]:
+        if entry["models"] or entry["meteograms"] or entry["obs"] or entry.get("satsw"):
             manifest["dates"][ymd] = entry
 
     manifest["cases"] = sorted(
@@ -531,6 +678,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
     manifest["meteo_dates"] = METEO_DATES
     manifest["obs_dates"] = OBS_DATES
     manifest["fd_dates"] = FD_DATES
+    manifest["midfcst"] = bool(HAS_MIDFCST)          # 2026-09-06 중기예보 섹션
+    manifest["normals"] = os.path.exists(os.path.join(VERIF_DIR, "normals_daily.csv"))
     manifest["verif_dates"] = sorted(
         os.path.basename(p)[:-5] for p in
         glob.glob(os.path.join(site_dir, "verif", "daily", "*.json")))
@@ -554,19 +703,21 @@ def main():
         shutil.copy2(os.path.join(SITE_SRC, fn), args.site_dir)
     open(os.path.join(args.site_dir, ".nojekyll"), "w").close()
 
-    global KMAFCST_DATES, METEO_DATES, OBS_DATES, FD_DATES
+    global KMAFCST_DATES, METEO_DATES, OBS_DATES, FD_DATES, HAS_MIDFCST
     if args.hourly:
         # obs-hourly 러너의 checkout 은 daily 가 마지막으로 커밋한 검증 자료라 배포본보다
         # 오래됐을 수 있다(daily 커밋→발행 사이에 끼어든 경우). 그걸로 verif/·meteo/ 를
         # 다시 쓰면 검증 탭이 하루 뒤로 간다 → daily 소유물은 목록만 세고 손대지 않는다.
         METEO_DATES = _json_dates(os.path.join(args.site_dir, "meteo"), MAX_DAYS)
         FD_DATES = _json_dates(os.path.join(args.site_dir, "fcstdiff"), MAX_DAYS)
+        HAS_MIDFCST = os.path.exists(os.path.join(args.site_dir, "midfcst", "index.json"))
     else:
         copy_outputs(args.site_dir)
         copy_verif(args.site_dir)
         export_verif_daily(args.site_dir)
         METEO_DATES = export_meteo(args.site_dir)
         FD_DATES = export_fcstdiff(args.site_dir)
+        HAS_MIDFCST = export_midfcst(args.site_dir)
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
     nc = copy_nowcast(args.site_dir)

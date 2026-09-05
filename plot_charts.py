@@ -77,9 +77,94 @@ def _subset(ds):
     return ds.sel(longitude=slice(LON_MIN, LON_MAX), latitude=lat_slice)
 
 
+def _read_windows(path, short_name, kind, scale=1.0, per_hour=False):
+    """누적(accum)·구간평균(avg) 변수를 **3시간 창**으로 정규화해 DataArray 로 (2026-09-06).
+
+    모델마다 창 규약이 다르다 (실측):
+      · ECMWF tp/ssrd : 런 시작부터 누적 (0-3, 0-6, …; 144h 이후 6h 간격)
+      · GFS  APCP     : f009 에 (6-9)·(0-9) 공존, f006 은 (0-6)만 — 6시간마다 리셋
+      · GFS  DSWRF avg: (0-3),(0-6),(6-9),(6-12) … 6시간 리셋 구간 평균
+      · KIM  avg_sdswrf: (3-6),(6-9) … 처음부터 3h 창 / KIM tp: 누적
+    규칙: 끝 시각 e 마다 가장 짧은 창 (s,e) 를 잡고, 3h 보다 길면 (s,e-3) 또는 (0,e-3)
+    기록과의 차로 3h 를 만든다. avg 는 창 길이를 곱해 적분값으로 바꿔 같은 산술을 쓴다.
+    반환 DataArray: dims (step, latitude, longitude) + 좌표 win_h (창 길이, 시간).
+      kind="accum": 값 = 창 합계 × scale         (tp: m→mm 면 scale=1000)
+      kind="avg"  : 값 = 창 평균 (W/m² 등)
+      per_hour=True: 누적 적분값을 창 시간(초)으로 나눠 평균 W/m² 로 (ssrd J/m² 용)
+    cfgrib 를 쓰지 않는 이유: 같은 step 에 창이 둘인 GFS 기록이 하이퍼큐브 충돌을 낸다.
+    """
+    import eccodes
+    recs: dict[tuple[int, int], np.ndarray] = {}
+    geo = None
+    with open(path, "rb") as f:
+        while True:
+            gid = eccodes.codes_grib_new_from_file(f)
+            if gid is None:
+                break
+            try:
+                if eccodes.codes_get(gid, "shortName") != short_name:
+                    continue
+                s, e = int(eccodes.codes_get(gid, "startStep")), int(eccodes.codes_get(gid, "endStep"))
+                if geo is None:
+                    ni, nj = eccodes.codes_get(gid, "Ni"), eccodes.codes_get(gid, "Nj")
+                    lat0 = eccodes.codes_get(gid, "latitudeOfFirstGridPointInDegrees")
+                    lon0 = eccodes.codes_get(gid, "longitudeOfFirstGridPointInDegrees")
+                    dlat = eccodes.codes_get(gid, "jDirectionIncrementInDegrees")
+                    dlon = eccodes.codes_get(gid, "iDirectionIncrementInDegrees")
+                    if eccodes.codes_get(gid, "jScansPositively") == 0:
+                        dlat = -dlat
+                    lats = lat0 + dlat * np.arange(nj)
+                    lons = ((lon0 + dlon * np.arange(ni)) + 180) % 360 - 180
+                    jj = np.where((lats >= LAT_MIN) & (lats <= LAT_MAX))[0]
+                    ii = np.where((lons >= LON_MIN) & (lons <= LON_MAX))[0]
+                    run = (dt.datetime.strptime(str(eccodes.codes_get(gid, "dataDate")), "%Y%m%d")
+                           + dt.timedelta(hours=int(eccodes.codes_get(gid, "dataTime")) // 100))
+                    geo = (ni, nj, lats[jj], lons[ii], jj, ii, run)
+                ni, nj, _la, _lo, jj, ii, _run = geo
+                v = eccodes.codes_get_values(gid).reshape(nj, ni)[np.ix_(jj, ii)]
+                if kind == "avg":
+                    v = v * (e - s)              # 평균 → 적분(값·시간)
+                recs[(s, e)] = v
+            finally:
+                eccodes.codes_release(gid)
+    if not recs:
+        return None
+    ni, nj, lats, lons, jj, ii, run = geo
+    ends = sorted({e for _s, e in recs})
+    steps, wins, arrs = [], [], []
+    for e in ends:
+        cands = sorted((s, ee) for (s, ee) in recs if ee == e)
+        s, _ = max(cands)                       # 가장 짧은 창
+        win, arr = e - s, recs[(s, e)]
+        if win > 3:
+            if (s, e - 3) in recs:
+                win, arr = 3, arr - recs[(s, e - 3)]
+            elif s == 0:
+                prev = [pe for pe in ends if pe < e and (0, pe) in recs]
+                if prev:
+                    pe = max(prev); win, arr = e - pe, arr - recs[(0, pe)]
+        if win <= 0:
+            continue
+        if kind == "avg":
+            arr = arr / win                     # 적분 → 창 평균
+        elif per_hour:
+            arr = arr / (win * 3600.0)          # J/m² 누적 → W/m²
+        arr = np.where(arr < 0, 0.0, arr) * scale   # 차분 잡음의 음수 제거
+        steps.append(e); wins.append(win); arrs.append(arr)
+    da = xr.DataArray(np.stack(arrs), dims=("step", "latitude", "longitude"),
+                      coords={"step": np.array(steps, dtype="timedelta64[h]"),
+                              "latitude": lats, "longitude": lons})
+    da = da.assign_coords(win_h=("step", np.array(wins)))
+    # 위도가 남→북이면 기존 판독기(북→남)와 맞춘다
+    if float(da.latitude[0]) < float(da.latitude[-1]):
+        da = da.isel(latitude=slice(None, None, -1))
+    return da.sortby("longitude")
+
+
 def load_ecmwf(path):
-    """ECMWF IFS: {'t2m': DataArray(°C), 'tcc': DataArray(%) or None, 'run': datetime}"""
-    out = {}
+    """ECMWF IFS: {'t2m': DataArray(°C), 'tcc': DataArray(%) or None, 'run': datetime,
+    'dswrf': 3h 평균 W/m²(ssrd 차분) or None, 'tp': 3h 강수 mm or None}"""
+    out = {"dswrf": None, "tp": None}
     ds_t = _subset(_open(path, {"shortName": "2t"}))
     out["t2m"] = ds_t["t2m"] - 273.15
     out["run"] = pd.Timestamp(ds_t.time.values).to_pydatetime()
@@ -91,6 +176,15 @@ def load_ecmwf(path):
     except Exception:
         print("[판독] ECMWF tcc 없음 — 기온만 표출 (해당 런 미제공 가능)")
         out["tcc"] = None
+    # 2026-09-06 추가: 일사(ssrd, J/m² 누적)·강수(tp, m 누적) → 3h 창
+    for sn, key, kw in (("ssrd", "dswrf", dict(kind="accum", per_hour=True)),
+                        ("tp", "tp", dict(kind="accum", scale=1000.0))):
+        try:
+            out[key] = _read_windows(path, sn, **kw)
+            if out[key] is None:
+                print(f"[판독] ECMWF {sn} 없음 (구 런 파일이거나 미제공)")
+        except Exception as e:
+            print(f"[판독] ECMWF {sn} 판독 실패: {e}")
     return out
 
 
@@ -125,12 +219,18 @@ def load_gfs(path):
         print("[판독] GFS 전운량 판독 실패 — tools/dump_grib.py로 확인 필요")
 
     # 일사: 실측 확정 shortName=sdswrf (dswrf 아님), avg만 존재.
-    # 평균 구간은 6시간마다 리셋(f003=0-3h, f006=0-6h, f009=6-9h ...) — 적분 시 주의
-    try:
-        ds = _subset(_open(path, {"typeOfLevel": "surface", "shortName": "sdswrf"}))
-        out["dswrf"] = ds["sdswrf"]
-    except Exception:
-        print("[판독] GFS sdswrf(일사) 없음")
+    # 평균 구간은 6시간마다 리셋(f003=0-3h, f006=0-6h, f009=6-9h ...) → _read_windows 가
+    # 3h 창으로 정규화한다 (2026-09-06. 예전엔 6h 리셋 창 그대로 CSV 에 실렸다 — 검증은
+    # win_h 열이 없는 옛 행에만 그 규약을 적용한다).
+    out["tp"] = None
+    for sn, key, kw in (("sdswrf", "dswrf", dict(kind="avg")),
+                        ("tp", "tp", dict(kind="accum"))):           # GFS APCP 의 shortName 은 tp
+        try:
+            out[key] = _read_windows(path, sn, **kw)
+            if out[key] is None:
+                print(f"[판독] GFS {sn} 없음")
+        except Exception as e:
+            print(f"[판독] GFS {sn} 판독 실패: {e}")
     return out
 
 
@@ -138,12 +238,11 @@ def load_kim(path):
     """KIM(k512, fetch_kim.py로 변수 추출된 파일): t2m(°C), tcc/lcc/mcc/hcc(%), dswrf.
     실측(2026-08-21): 층별 운량 typeOfLevel은 'unknown'이라 shortName으로만 필터.
     일사는 avg_sdswrf(구간 평균) — GFS와 동일하게 dswrf 키에 담는다."""
-    out = {"tcc": None, "lcc": None, "mcc": None, "hcc": None, "dswrf": None}
+    out = {"tcc": None, "lcc": None, "mcc": None, "hcc": None, "dswrf": None, "tp": None}
     ds_t = _subset(_open(path, {"shortName": "2t"}))
     out["t2m"] = ds_t["t2m"] - 273.15
     out["run"] = pd.Timestamp(ds_t.time.values).to_pydatetime()
-    for sn, key in [("tcc", "tcc"), ("lcc", "lcc"), ("mcc", "mcc"),
-                    ("hcc", "hcc"), ("avg_sdswrf", "dswrf")]:
+    for sn, key in [("tcc", "tcc"), ("lcc", "lcc"), ("mcc", "mcc"), ("hcc", "hcc")]:
         try:
             ds = _subset(_open(path, {"shortName": sn}))
             da = ds[list(ds.data_vars)[0]]
@@ -153,6 +252,30 @@ def load_kim(path):
             out[key] = da
         except Exception:
             print(f"[판독] KIM {sn} 없음")
+    # 일사 avg_sdswrf 는 처음부터 3h 창(실측: 3-6, 6-9 …) → 공통 정규화기
+    try:
+        out["dswrf"] = _read_windows(path, "avg_sdswrf", kind="avg")
+        if out["dswrf"] is None:
+            print("[판독] KIM avg_sdswrf 없음 (fetch_kim.py KEEP_SHORTNAMES 확인)")
+    except Exception as e:
+        print(f"[판독] KIM avg_sdswrf 판독 실패: {e}")
+    # 강수: k512 'tp' 는 빈 필드(2026-09-06 실측, 전 스텝 최대 0.02mm). 대규모(lswp)+대류(cwp)
+    # 수적 강수와 눈(snol·snoc, 수당량)을 더한다. 각각 3h 창 누적(kg/m² = mm).
+    parts = []
+    for sn in ("lswp", "cwp", "snol", "snoc"):
+        try:
+            da = _read_windows(path, sn, kind="accum")
+            if da is not None:
+                parts.append(da)
+        except Exception as e:
+            print(f"[판독] KIM {sn} 판독 실패: {e}")
+    if parts:
+        tot = parts[0]
+        for da in parts[1:]:
+            tot = tot + da.reindex(step=tot.step, fill_value=0.0)
+        out["tp"] = tot.assign_coords(win_h=parts[0].win_h)
+    else:
+        print("[판독] KIM 강수(lswp/cwp) 없음 — KEEP_SHORTNAMES 확인")
     return out
 
 
@@ -295,6 +418,35 @@ def plot_maps(model_name, data, out_dir):
                             bbox=dict(fc="white", alpha=0.7, ec="none"))
                 _save(step_h, "cloud3", draw_c3)
 
+        # 2026-09-06 추가 — 일사(3h 평균 W/m²)·강수(3h mm). 창 길이가 3h 가 아니면 제목에 표시.
+        for key, panel in (("dswrf", "dswrf"), ("tp", "tp")):
+            da = data.get(key)
+            if da is None:
+                continue
+            fld = _sel_step(da, step_h)
+            if fld is None:
+                continue
+            win = int(fld.win_h) if "win_h" in fld.coords else 3
+            lo2d, la2d = np.meshgrid(fld.longitude, fld.latitude)
+            if panel == "dswrf":
+                def draw_sw(fig, ax, _f=fld, _lo=lo2d, _la=la2d, _w=win):
+                    pm = ax.pcolormesh(_lo, _la, _f.values, cmap="YlOrRd", vmin=0, vmax=900,
+                                       shading="auto")
+                    fig.colorbar(pm, ax=ax, shrink=0.8, label=f"하향 단파복사 {_w}h 평균 (W/m²)")
+                _save(step_h, panel, draw_sw)
+            else:
+                def draw_tp(fig, ax, _f=fld, _lo=lo2d, _la=la2d, _w=win):
+                    from matplotlib.colors import BoundaryNorm, ListedColormap
+                    lev = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80]
+                    cols = ["#d4ecff", "#a6d4ff", "#6fb6ff", "#3d8ef0", "#1f5fd0", "#7a3fd0",
+                            "#c02fb0", "#e0207a", "#ff4040"]
+                    cmap = ListedColormap(cols); cmap.set_under("#ffffff", alpha=0); cmap.set_over("#7a0000")
+                    pm = ax.pcolormesh(_lo, _la, np.ma.masked_less(_f.values, 0.1), cmap=cmap,
+                                       norm=BoundaryNorm(lev, cmap.N), shading="auto")
+                    fig.colorbar(pm, ax=ax, shrink=0.8, extend="max", ticks=lev,
+                                 label=f"{_w}h 강수 (mm) — 0.1 미만 표시 안 함")
+                _save(step_h, panel, draw_tp)
+
     print(f"[지도] {model_name} 패널 PNG {n_saved}장 저장: {out_dir}")
 
 
@@ -316,7 +468,7 @@ def city_series(model_name, data):
     for name, lat, lon, is_rep in CITIES:
         sel = dict(latitude=lat, longitude=lon, method="nearest")
         series = {}
-        for key in ("t2m", "tcc", "lcc", "mcc", "hcc", "dswrf"):
+        for key in ("t2m", "tcc", "lcc", "mcc", "hcc", "dswrf", "tp"):
             da = data.get(key)
             if da is None:
                 series[key] = (None, {})
@@ -324,8 +476,16 @@ def city_series(model_name, data):
                 da_city = da.sel(**sel)
                 idx_map = {int(s): i for i, s in enumerate(_steps_h(da_city))}
                 series[key] = (da_city, idx_map)
+        # 창 길이(win_h): 일사·강수 공통 (2026-09-06). 없으면(구 자료) NaN → 검증이 옛 규약 적용
+        win_da = None
+        for key in ("dswrf", "tp"):
+            if series[key][0] is not None and "win_h" in series[key][0].coords:
+                win_da = series[key]
+                break
         for sh in _steps_h(series["t2m"][0]):
             sh = int(sh)
+            win = (int(win_da[0].win_h.values[win_da[1][sh]])
+                   if win_da is not None and sh in win_da[1] else None)
             rows.append({
                 "model": model_name,
                 "run_utc": run.strftime("%Y-%m-%d %H:00"),
@@ -339,6 +499,8 @@ def city_series(model_name, data):
                 "mcc_pct": _at(*series["mcc"], sh, 0),
                 "hcc_pct": _at(*series["hcc"], sh, 0),
                 "dswrf_avg_Wm2": _at(*series["dswrf"], sh, 0),
+                "tp_mm": _at(*series["tp"], sh, 1),
+                "win_h": win,
             })
     return pd.DataFrame(rows)
 

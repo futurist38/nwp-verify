@@ -46,8 +46,13 @@ for _font in ["Malgun Gothic", "NanumGothic", "Noto Sans CJK KR"]:
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
+# 기온 외 함께 저장하는 카테고리 (2026-09-06, 하늘 띠 표출용). 같은 응답에 다 들어 있어
+# API 호출이 늘지 않는다. 캐시 키는 "도시#카테고리" — 기존 도시 키(TMP)와 공존.
+EXTRA_CATS = ("SKY", "PTY", "POP")
+
+
 def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
-    """{bdt: {city: {timekey: val}}} — 캐시에 없는 발표만 API 호출."""
+    """{bdt: {city: {timekey: TMP}, "도시#SKY": {...}, ...}} — 캐시에 없는 발표만 API 호출."""
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = os.path.join(CACHE_DIR, f"{day:%Y%m%d}.json")
     cache = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
@@ -55,10 +60,16 @@ def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
     for bdt in bdts:
         got = cache.setdefault(bdt, {})
         for city, (nx, ny) in CITY_GRID.items():
-            if city in got:
+            # 기온과 부가 카테고리가 다 있으면 완료. 기온만 있는 캐시(개편 전)는 한 번 다시 받아
+            # 채운다 — 발표분은 불변이라 그 뒤로는 호출이 없다.
+            if city in got and all(f"{city}#{cat}" in got for cat in EXTRA_CATS):
                 continue
             try:
-                got[city] = fetch(nx, ny, bdt, key)["TMP"]
+                res = fetch(nx, ny, bdt, key, cats=("TMP",) + EXTRA_CATS)
+                got[city] = res["TMP"]
+                for cat in EXTRA_CATS:
+                    if res.get(cat):
+                        got[f"{city}#{cat}"] = res[cat]
                 changed = True
             except Exception as e:
                 print(f"[단기예보] {bdt} {city} 수신 실패: {e}")
