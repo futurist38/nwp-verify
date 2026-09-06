@@ -5,7 +5,7 @@
 "use strict";
 
 const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량", dswrf: "일사", tp: "강수" };
-const PANEL_ORDER = ["t2m", "tcc", "cloud3", "dswrf", "tp"];
+const PANEL_ORDER = ["t2m", "tcc", "cloud3", "tp"];   // 일사(dswrf) 지도는 제외 — 2026-09-06 사용자 결정
 const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
 const MODEL_SHORT = { ECMWF: "EC", GFS: "GFS", KIM: "KIM" };
 let MF = null;
@@ -758,6 +758,7 @@ function renderRunSel() {
         `<option value="${r}" ${r === cur ? "selected" : ""}>${fmtRun(r)}</option>`).join("")
       + `</select></label>`;
   }).join("");
+  $("runGrp").hidden = !$("runSel").innerHTML.trim();
   $("runSel").querySelectorAll("select").forEach((s) => {
     s.onchange = () => { state.runs[s.dataset.m] = s.value; renderPanelBtns(); };
   });
@@ -772,7 +773,7 @@ function renderPanelBtns() {
     panels = PANEL_ORDER.filter((p) => cnt[p] >= 2);
   } else {
     const have = runEntry(state.model).panels;
-    panels = PANEL_ORDER.filter((p) => have.includes(p)).concat(have.filter((p) => !PANEL_ORDER.includes(p)));
+    panels = PANEL_ORDER.filter((p) => have.includes(p));   // 목록에 없는 패널(옛 일사 등)은 숨긴다
   }
   if (!panels.includes(state.panel)) state.panel = panels[0];
   $("panelBtns").innerHTML = panels.map((p) =>
@@ -898,19 +899,22 @@ function obsHours() {
 
 function renderObsVarBtns() {
   const present = Object.keys((obsState.data && obsState.data.vars) || {});
-  let vars = OBS_ORDER.filter((v) => present.includes(v))
+  const hourly = OBS_ORDER.filter((v) => present.includes(v))
     .concat(present.filter((v) => !OBS_ORDER.includes(v)));
-  if (obsState.data && obsState.data.normals && obsState.data.daily) vars = vars.concat(["anom_tmax", "anom_tmin"]);
+  const daily = (obsState.data && obsState.data.normals && obsState.data.daily) ? ["anom_tmax", "anom_tmin"] : [];
+  const vars = hourly.concat(daily);
   if (!vars.length) {
-    $("obsVarBtns").innerHTML = "";
+    $("obsVarBtns").innerHTML = ""; $("obsDayBtns").innerHTML = ""; $("obsDayGrp").hidden = true;
     $("obsMap").innerHTML = "";
     $("obsLabel").textContent = "이 날짜엔 관측 자료 없음";
     return;
   }
   if (!vars.includes(obsState.v)) obsState.v = vars.includes("ta") ? "ta" : vars[0];
-  $("obsVarBtns").innerHTML = vars.map((v) =>
-    `<button data-v="${v}" class="${v === obsState.v ? "on" : ""}">${OBS_LABEL[v] || v}</button>`).join("");
-  $("obsVarBtns").querySelectorAll("button").forEach((b) => {
+  const btn = (v) => `<button data-v="${v}" class="${v === obsState.v ? "on" : ""}">${OBS_LABEL[v] || v}</button>`;
+  $("obsVarBtns").innerHTML = hourly.map(btn).join("");
+  $("obsDayBtns").innerHTML = daily.map(btn).join("");
+  $("obsDayGrp").hidden = !daily.length;
+  document.querySelectorAll("#obsVarBtns button, #obsDayBtns button").forEach((b) => {
     b.onclick = () => { obsState.v = b.dataset.v; renderObsVarBtns(); };
   });
   $("obsSliderRow").hidden = isAnom(obsState.v);

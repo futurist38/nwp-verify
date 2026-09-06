@@ -574,7 +574,7 @@ def prune_kmafcst(site_dir: str):
     """예보-관측 그림 전량 제거 — 이제 사이트가 JSON으로 직접 그린다(2026-08-26).
     이미 배포된 과거분을 걷어내기 위한 정리 단계."""
     n = 0
-    for pat in ("kmafcst_*.*", "obs_*.*", "meteogram_*.*", "fcstdiff_*.*"):
+    for pat in ("kmafcst_*.*", "obs_*.*", "meteogram_*.*", "fcstdiff_*.*", "*_dswrf.*"):
         for f in glob.glob(os.path.join(site_dir, "archive", "????????", pat)):
             os.remove(f)
             n += 1
@@ -621,6 +621,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
                 entry["obs"].setdefault(mo["var"], []).append(int(mo["hour"]))
                 continue
             m = PNG_RE.match(fn)
+            if m and m["panel"] == "dswrf":
+                continue            # 일사 지도는 표출 제외 (2026-09-06 사용자 결정) — 남은 파일은 prune 에서 삭제
             if m:
                 mdl = m["model"].upper()
                 e = entry["models"].setdefault(mdl, {"runs": {}, "latest": None})

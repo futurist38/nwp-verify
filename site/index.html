@@ -30,10 +30,10 @@
 <main>
   <section id="tab-charts" class="tab on card">
     <div class="controls">
-      <select id="dateSel"></select>
-      <div id="modelBtns" class="btns"></div>
-      <div id="panelBtns" class="btns"></div>
-      <div id="runSel" class="btns"></div>
+      <div class="grp"><span class="grp-lab">날짜</span><select id="dateSel"></select></div>
+      <div class="grp"><span class="grp-lab">모델</span><div id="modelBtns" class="btns"></div></div>
+      <div class="grp"><span class="grp-lab">변수</span><div id="panelBtns" class="btns"></div></div>
+      <div class="grp" id="runGrp"><span class="grp-lab">런</span><div id="runSel" class="btns"></div></div>
     </div>
     <div class="slider-row">
       <button id="stepPlay" class="play" title="자동 재생">▶</button>
@@ -43,13 +43,14 @@
     </div>
     <div id="stepLabel" class="step-label"></div>
     <div class="imgwrap" id="chartStack"><img id="chartImg" alt="차트" loading="lazy"></div>
-    <p class="note">◀ ▶ 또는 키보드 방향키로 스텝 이동 · ▶ 자동 재생. 일사 = 3시간 평균 하향 단파복사, 강수 = 3시간 누적.</p>
+    <p class="note">◀ ▶ 또는 키보드 방향키로 스텝 이동 · ▶ 자동 재생. 강수 = 3시간 누적(0.1mm 미만은 칠하지 않음).</p>
   </section>
 
   <section id="tab-obs" class="tab card">
     <div class="controls">
-      <select id="dateSelO"></select>
-      <div id="obsVarBtns" class="btns"></div>
+      <div class="grp"><span class="grp-lab">날짜</span><select id="dateSelO"></select></div>
+      <div class="grp"><span class="grp-lab">시간별</span><div id="obsVarBtns" class="btns"></div></div>
+      <div class="grp" id="obsDayGrp" hidden><span class="grp-lab">하루 단위</span><div id="obsDayBtns" class="btns"></div></div>
     </div>
     <div class="slider-row" id="obsSliderRow">
       <button id="obsPlay" class="play" title="자동 재생">▶</button>
@@ -124,17 +125,17 @@
       <span class="sw" style="background:#fff;border-color:#999"></span>맑음(칠하지 않음). 띠를 켠 동안 야간 음영은 숨깁니다.
       선 위에 마우스를 올리거나(휴대폰은 짚으면) 그 시각의 모델별 값이 표시됩니다.</p>
     <div class="controls">
-      <select id="dateSelM"></select>
-      <div id="meteoVarBtns" class="btns">
+      <div class="grp"><span class="grp-lab">날짜</span><select id="dateSelM"></select></div>
+      <div class="grp"><span class="grp-lab">변수</span><div id="meteoVarBtns" class="btns">
         <button data-v="t2m" class="on">기온</button>
         <button data-v="tcc">전운량</button>
         <button data-v="dswrf">일사</button>
         <button data-v="tp">강수</button>
-      </div>
-      <div class="btns">
+      </div></div>
+      <div class="grp"><span class="grp-lab">표시</span><div class="btns">
         <button id="prevModeBtn" title="이전 런 표시 방식">이전 런: 띠</button>
         <button id="stripBtn" class="on">하늘 띠</button>
-      </div>
+      </div></div>
     </div>
     <div id="meteoLegend" class="step-label"></div>
     <div id="meteoCharts"></div>
@@ -150,7 +151,10 @@
       (전일 11·17시 + 당일 05·11·17시). 그래프 배경은 두 단 — <b>위 = 예보 하늘</b>(SKY·강수형태), <b>아래 = 실측 하늘</b>(전운량 십분위).
       색 문법은 Meteogram 과 같습니다(실측에는 강수 정보가 없습니다). 배경이 있는 동안 야간 음영은 숨깁니다.
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
-    <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
+    <div class="controls">
+      <div class="grp"><span class="grp-lab">날짜</span><select id="dateSelK"></select></div>
+      <div class="grp"><span class="grp-lab">발표</span><select id="issueSelK"></select></div>
+    </div>
     <div id="kmafCharts"></div>
 
     <h2 id="fdTitle">예보 변화 — 어제 발표 대비</h2>
@@ -160,10 +164,10 @@
       ASOS 97지점 위치의 동네예보를 보간했고, 지점에서 먼 곳은 칠하지 않습니다.
       모레는 어제 발표가 하루를 다 담지 못해(단기예보 3일) 비교에서 제외합니다.</p>
     <div id="fdPair">
-      <div class="controls"><div id="fdVarBtns" class="btns">
+      <div class="controls"><div class="grp"><span class="grp-lab">변수</span><div id="fdVarBtns" class="btns">
         <button data-v="tmx" class="on">일 최고기온</button>
         <button data-v="tmn">일 최저기온</button>
-      </div></div>
+      </div></div></div>
       <div id="fdMap"></div>
     </div>
 
@@ -174,7 +178,7 @@
         굵은 선 = 선택한 발표, 옅은 선 = 그보다 1~3일 앞선 발표(같은 날을 더 먼저 내다본 판) — 선이 벌어질수록
         예보가 흔들린 날입니다. 세로 막대 = 기상청이 붙인 예보 범위(±). 검정 점 = ASOS 실측 일 최고(●)·최저(○),
         정시값 기반이라 참 극값보다 조금 안쪽입니다.</p>
-      <div class="controls"><select id="midIssueSel"></select></div>
+      <div class="controls"><div class="grp"><span class="grp-lab">발표</span><select id="midIssueSel"></select></div></div>
       <div id="midCharts"></div>
     </div>
   </section>
@@ -182,23 +186,23 @@
   <section id="tab-verif" class="tab card">
     <h2>오차 지도 — 지점별 모델 비교</h2>
     <div class="controls">
-      <div id="vmVarBtns" class="btns">
+      <div class="grp"><span class="grp-lab">변수</span><div id="vmVarBtns" class="btns">
         <button data-v="t2m" class="on">기온</button>
         <button data-v="tcc">운량</button>
-      </div>
-      <div id="vmWinBtns" class="btns">
+      </div></div>
+      <div class="grp"><span class="grp-lab">기간</span><div id="vmWinBtns" class="btns">
         <button data-w="d" class="on">어제</button>
         <button data-w="7">7일</button>
         <button data-w="30">30일</button>
         <button data-w="sm">모델별 지도</button>
-      </div>
+      </div></div>
     </div>
     <div class="imgwrap"><img id="vmImg" alt="오차 지도" loading="lazy"></div>
     <p class="note">칩 색=모델(빨강 ECMWF · 초록 GFS · 파랑 KIM), 진할수록 |평균오차| 큼(부호는 칩 안 숫자),
        큰 칩·굵은 테두리=기간 MAE 낮음(신뢰).</p>
 
     <h2>일별 검증 — 관측 vs 모델별 예측(괄호: 오차)</h2>
-    <div class="controls"><select id="dateSelV"></select></div>
+    <div class="controls"><div class="grp"><span class="grp-lab">날짜</span><select id="dateSelV"></select></div></div>
     <h3>기온 ℃</h3>
     <div id="verifDailyT" class="tablewrap"></div>
     <h3>운량 %</h3>

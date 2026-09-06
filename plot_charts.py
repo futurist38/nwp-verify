@@ -418,8 +418,9 @@ def plot_maps(model_name, data, out_dir):
                             bbox=dict(fc="white", alpha=0.7, ec="none"))
                 _save(step_h, "cloud3", draw_c3)
 
-        # 2026-09-06 추가 — 일사(3h 평균 W/m²)·강수(3h mm). 창 길이가 3h 가 아니면 제목에 표시.
-        for key, panel in (("dswrf", "dswrf"), ("tp", "tp")):
+        # 2026-09-06 추가 — 강수(3h mm) 지도. 일사 지도는 사용자 결정으로 제외(3h 평균이라 볼 시간대가 적음;
+        # 일사 값은 CSV·미티오그램·검증에는 그대로 실린다). 창 길이가 3h 가 아니면 제목에 표시.
+        for key, panel in (("tp", "tp"),):
             da = data.get(key)
             if da is None:
                 continue
