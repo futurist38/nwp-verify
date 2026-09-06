@@ -307,10 +307,6 @@ def export_meteo(site_dir: str) -> list[str]:
             arch_cache[ym] = pd.read_csv(fp) if os.path.exists(fp) else pd.DataFrame()
         return arch_cache[ym]
 
-    # ECMWF 앙상블 요약 (fetch_ens.py) — 런별 JSON
-    ens_runs = {os.path.basename(f)[:-5]: f
-                for f in glob.glob(os.path.join(VERIF_DIR, "ens", "??????????.json"))}
-
     def _grid_series(sub: pd.DataFrame, idx: dict, n: int, col: str, nd: int):
         arr = [None] * n
         if col not in sub.columns:
@@ -374,24 +370,7 @@ def export_meteo(site_dir: str) -> list[str]:
                                 "tcc": _grid_series(g[g["city"] == c], idx, n, "tcc_pct", 0)}
                             for c in KMAF_CITIES}
 
-        # 앙상블: ECMWF 최신 런과 같은 런이 있으면 그것, 없으면 그 이전 최신 런
-        ec_run = data["runs"].get("ECMWF")
-        if ec_run and ens_runs:
-            cand = [r for r in sorted(ens_runs) if r <= ec_run]
-            if cand:
-                ens = json.load(open(ens_runs[cand[-1]], encoding="utf-8"))
-                gi = {t.strftime("%Y%m%d%H"): i for t, i in idx.items()}
-                out_e = {"run": ens["run"], "n": ens.get("n_members"), "cities": {}}
-                for c in KMAF_CITIES:
-                    e = ens["cities"].get(c)
-                    if not e:
-                        continue
-                    keep = [k for k, v in enumerate(e["valid_kst"]) if v in gi]
-                    out_e["cities"][c] = {"i": [gi[e["valid_kst"][k]] for k in keep],
-                                          **{s: [e[s][k] for k in keep]
-                                             for s in ("mean", "sd", "p10", "p50", "p90", "min", "max")}}
-                data["ens"] = out_e
-
+        # (앙상블 요약 부착은 2026-09-06 사용자 결정으로 보류 — fetch_ens.py 산출이 있으면 여기서 붙일 수 있다)
         with open(os.path.join(out_dir, f"{ymd}.json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     return _json_dates(out_dir, MAX_DAYS)

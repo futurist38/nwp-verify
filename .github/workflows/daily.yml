@@ -105,15 +105,10 @@ jobs:
           timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 캐시 실패/시간초과 — 계속"
           timeout 900 python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
           timeout 300 python plot_verifmap.py  || echo "::warning::오차지도 실패/시간초과 — 계속"
-          # 2026-09-06 추가 — 중기예보 기온(하루 2회 발표, 10도시 10호출) · ECMWF 앙상블 2t 요약
-          # (50멤버 × 12스텝 ≈ 400MB, 미러에서. 실패해도 미티오그램은 앙상블 막대만 빠진다)
+          # 2026-09-06 추가 — 중기예보 기온(하루 2회 발표, 10도시 10호출) · GK2A 위성 일사 일적산
+          # (ECMWF 앙상블 fetch_ens.py 는 사용자 결정으로 보류 — 필요 시 여기에 한 줄 추가)
           timeout 300  python kma_midfcst.py --days 3 || echo "::warning::중기예보 실패/시간초과 — 계속"
           timeout 600  python gk2a_swrad_daily.py || echo "::warning::위성 일사 실패/시간초과 — 계속"
-          timeout 1200 python fetch_ens.py --source azure || echo "::warning::앙상블 실패/시간초과 — 계속"
-
-      # 위성 일사·앙상블은 러너에 netCDF4·eccodes 가 이미 있어(requirements.txt) 추가 의존성 없음
-      - name: 2차 발행 준비 — 위성 일사 지도 포함 확인
-        run: ls -R output/*/satsw 2>/dev/null | head -5 || true
           # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청) — 되살리려면 아래 주석만 풀면 된다.
           # python send_summary.py   || echo "::warning::메일 실패 — 계속"
 

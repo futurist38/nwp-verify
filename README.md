@@ -83,8 +83,8 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 | 탭 | 추가된 것 | 자료·스크립트 |
 |---|---|---|
 | NWP | **일사**(3h 평균 하향 단파복사)·**강수**(3h 누적) 지도 패널, 3모델 | `plot_charts.py` `_read_windows` — EC `ssrd`·`tp`, GFS `DSWRF`·`APCP`, KIM `avg_sdswrf`·`lswp+cwp+snol+snoc` |
-| Meteogram | 일사·강수 변수 / **이전 런 띠·선**(최대 4런) / **EC 앙상블 10~90% 막대**(06·15 KST, D+1~6) / **하늘 띠**(그래프 배경을 y축 3단으로 — 상 EC·중 KIM·하 GFS) / 야간 음영·지금 선 | `build_site.py export_meteo` (아카이브 `verification/forecast`), `fetch_ens.py` |
-| 예보-관측 | **예보 하늘 띠**(SKY·PTY, 강수확률은 마우스) · **실측 하늘 띠**(전운량) · 예보−실측 **오차 면** · **중기예보 섹션**(D+3~10 최고·최저 vs 실측, 1~3일 전 발표 겹침, 예보 범위 막대) | `plot_kmafcst.py`(SKY·PTY·POP 캐시), `kma_midfcst.py` |
+| Meteogram | 일사·강수 변수 / **이전 런 띠·선**(최대 4런) / **하늘 띠**(그래프 배경을 y축 3단으로 — 상 EC·중 KIM·하 GFS) / 야간 음영·지금 선 | `build_site.py export_meteo` (아카이브 `verification/forecast`) |
+| 예보-관측 | 그래프 배경 2단 — **위 예보 하늘**(SKY·PTY, 강수확률은 마우스) · **아래 실측 하늘**(전운량) · 예보−실측 **오차 면** · **중기예보 섹션**(D+3~10 최고·최저 vs 실측, 1~3일 전 발표 겹침, 예보 범위 막대) | `plot_kmafcst.py`(SKY·PTY·POP 캐시), `kma_midfcst.py` |
 | 관측 | **전운량** 지도 · **일최고/일최저 평년편차** 지도 · **위성 일사 하루 적산** 지도 | `plot_obsmap.py VARS`, `tools/build_normals.py`(자체 평년), `gk2a_swrad_daily.py` |
 | 검증 | 일별 검증표에 **일사** · 일사 MAE 곡선 | `verify.py`(`win_h` 창 규약), `export_verif_daily` |
 | 공통 | 갱신 신선도 배지(머리말) · 자동 재생(▶) · 카드 레이아웃 · 고정 탭 | `site/` |
@@ -93,7 +93,7 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 55~85% → 구름많음(연회) · 그 외 맑음(흰). 단기예보 SKY 1/3/4, ASOS 전운량 0~5/6~8/9~10 을 같은 네 색에 매핑.
 
 **실측 확정 기록 (2026-09-06)**
-- ECMWF 오픈데이터 ENS 에 평균(em)·표준편차(es) 산출물은 **없다** — pf 50멤버만(`Client.latest` 는 통과하나 `retrieve` 가 인덱스 없음으로 실패). 2t 한 스텝 33MB → 06·15 KST 12스텝만 받아(≈400MB) 도시 통계만 남긴다.
+- ECMWF 오픈데이터 ENS 에 평균(em)·표준편차(es) 산출물은 **없다** — pf 50멤버만(`Client.latest` 는 통과하나 `retrieve` 가 인덱스 없음으로 실패). `fetch_ens.py` 는 06·15 KST 12스텝(≈400MB)만 받아 도시 통계를 내는 수집기로 **보류 상태**(사용자 결정, 표출·파이프라인 미연결). GFS 는 GEFS 가 평균·스프레드 파일을 따로 제공해 훨씬 싸다 — 재개 시 GEFS 먼저.
 - ECMWF HRES 에 `tp`·`ssrd` 추가 시 런 파일 80MB → **208MB**(수신 시간 2.5배).
 - KIM k512 의 `tp` 는 전 스텝 최대 0.02mm 인 **빈 필드**. 강수는 `lswp`(=`ncpcp`)·`cwp`, 눈은 `snol`·`snoc` — 모두 3h 창 누적. `avg_sdswrf` 도 3h 창.
 - GFS `APCP` 는 f009 에 (6-9)·(0-9) 창이 공존, f006 은 (0-6) 만 → cfgrib 하이퍼큐브 충돌. eccodes 로 직접 읽어 3h 창으로 재조합.

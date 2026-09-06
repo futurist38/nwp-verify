@@ -116,8 +116,7 @@
     <p class="note" style="font-size:13px;color:#444">
       <b>도시별 시계열 — 모델 3종 비교.</b> 굵은 선 = 각 모델의 최신 런.
       <b>이전 런</b>을 켜면 직전 런들(최대 4개)이 겹치는 범위를 옅은 띠로, 또는 가는 선으로 보입니다 —
-      띠가 넓을수록 런마다 흔들린 예보입니다. <b>앙상블</b>은 ECMWF 50멤버의 10~90% 구간(세로 막대,
-      06·15시)입니다. <b>하늘 띠</b>를 켜면 그래프 배경이 세 단으로 나뉘어 <b>상단 ECMWF · 중단 KIM · 하단 GFS</b>의
+      띠가 넓을수록 런마다 흔들린 예보입니다. <b>하늘 띠</b>를 켜면 그래프 배경이 세 단으로 나뉘어 <b>상단 ECMWF · 중단 KIM · 하단 GFS</b>의
       시간대별 하늘 상태가 깔립니다 —
       <span class="sw" style="background:#8ec9ff"></span>강수 ·
       <span class="sw" style="background:#7d7d7d"></span>흐림 ·
@@ -134,7 +133,6 @@
       </div>
       <div class="btns">
         <button id="prevModeBtn" title="이전 런 표시 방식">이전 런: 띠</button>
-        <button id="ensBtn" class="on" hidden>앙상블 폭</button>
         <button id="stripBtn" class="on">하늘 띠</button>
       </div>
     </div>
@@ -149,8 +147,8 @@
       둘 사이의 <span class="sw" style="background:rgba(200,30,30,.25)"></span>붉은 면은 예보가 실측보다 높았던 구간,
       <span class="sw" style="background:rgba(30,90,200,.25)"></span>푸른 면은 낮았던 구간입니다.
       발표시각을 바꿔가며 "언제 발표된 예보가 오늘을 잘 맞혔나"를 비교할 수 있습니다
-      (전일 11·17시 + 당일 05·11·17시). 아래 두 띠는 <b>예보 하늘</b>(SKY·강수형태)과 <b>실측 하늘</b>(전운량 십분위) —
-      색 문법은 Meteogram 과 같습니다(실측 띠에는 강수 정보가 없습니다).
+      (전일 11·17시 + 당일 05·11·17시). 그래프 배경은 두 단 — <b>위 = 예보 하늘</b>(SKY·강수형태), <b>아래 = 실측 하늘</b>(전운량 십분위).
+      색 문법은 Meteogram 과 같습니다(실측에는 강수 정보가 없습니다). 배경이 있는 동안 야간 음영은 숨깁니다.
       수치모델(NWP)이 아니라 <b>기상청 공식 예보</b>와 실측의 대조입니다. 표출 6지점, 시간별 갱신.</p>
     <div class="controls"><select id="dateSelK"></select><select id="issueSelK"></select></div>
     <div id="kmafCharts"></div>
@@ -228,7 +226,7 @@
        원수치를 남깁니다. 수집 실패는 추정으로 채우지 않고 누락으로 표시합니다.</p>
     <h3>데이터 출처</h3>
     <ul>
-      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료. 고해상도(HRES)와 앙상블(ENS 50멤버, 2m 기온 요약)</li>
+      <li>ECMWF Open Data (CC-BY 4.0) — 원해상도(9km)가 아닌 0.25° 재격자 자료. 고해상도(HRES)</li>
       <li>NOAA GFS 0.25° (NOMADS)</li>
       <li>기상청 API허브 (공공누리) — KIM(GDAPS) 수치모델, 단기예보(동네예보), 중기예보, ASOS 지상관측(시간·일자료),
           GK2A 천리안2A 위성 구름분석(CLA)</li>

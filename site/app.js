@@ -347,20 +347,23 @@ function renderKmaf() {
   const pad = Math.max(1, (hi - lo) * 0.12);
   const sky = d.sky && d.sky[b], pty = d.pty && d.pty[b], pop = d.pop && d.pop[b];
   $("kmafCharts").innerHTML = d.cities.map((c) => {
+    // 그래프 배경을 위·아래 두 단으로: 위 = 예보 하늘(SKY·PTY), 아래 = 실측 하늘(전운량) (2026-09-06 사용자 지정)
     const strips = [];
     if (sky && sky[c]) {
-      strips.push({ label: "예보", cells: sky[c].map((s, i) => SKY_COLOR[skyFromKma(s, pty && pty[c] ? pty[c][i] : null)] || null) });
+      strips.push({ label: "예보", color: "#1a5fb4",
+                    cells: sky[c].map((s, i) => { const k = skyFromKma(s, pty && pty[c] ? pty[c][i] : null); return k ? SKY_BG[k] : null; }) });
     }
     if (d.obs_ca && d.obs_ca[c]) {
-      strips.push({ label: "실측", cells: d.obs_ca[c].map((v) => SKY_COLOR[skyFromCa(v)] || null) });
+      strips.push({ label: "실측", color: "#111",
+                    cells: d.obs_ca[c].map((v) => { const k = skyFromCa(v); return k ? SKY_BG[k] : null; }) });
     }
     return drawPanel({
       title: c, i0: i0, i1: i1, ylo: lo - pad, yhi: hi + pad,
-      t0ms: t0ms, stepMs: 3600e3, vline: iIss, night: true, now: Date.now(),
+      t0ms: t0ms, stepMs: 3600e3, vline: iIss, night: !strips.length, now: Date.now(),
       fills: [{ a: d.fcst[b][c] || [], b: d.obs[c] || [], pos: "rgba(200,30,30,1)", neg: "rgba(30,90,200,1)", opacity: 0.16 }],
       series: [{ color: "#1a5fb4", dash: "5 3", data: d.fcst[b][c] },
                { color: "#111", data: d.obs[c] }],
-      strips: strips,
+      bgStrips: strips,
     });
   }).join("");
   bindHover("kmafCharts", (city, i) => {
@@ -575,15 +578,13 @@ async function renderMid() {
 const METEO_UNIT = { t2m: "℃", tcc: "%", dswrf: "W/m²", tp: "mm" };
 const METEO_ND = { t2m: 1, tcc: 0, dswrf: 0, tp: 1 };
 const STRIP_ORDER = ["ECMWF", "KIM", "GFS"];   // 위 → 아래 (사용자 지정)
-let METEO = { date: null, data: null, v: "t2m", prevMode: "band", ens: true, strips: true };
+let METEO = { date: null, data: null, v: "t2m", prevMode: "band", strips: true };   // 앙상블은 보류(2026-09-06 사용자)
 
 function renderMeteoCharts() {
   const d = METEO.data, v = METEO.v;
   if (!d) { $("meteoCharts").innerHTML = ""; return; }
   const t0ms = keyToMs(d.t0), i1 = d.steps - 1;
   const hasPrev = d.prev && Object.keys(d.prev).length;
-  const hasEns = d.ens && d.ens.cities && Object.keys(d.ens.cities).length;
-  $("ensBtn").hidden = !(hasEns && v === "t2m");
   $("prevModeBtn").hidden = !hasPrev;
   let lo = Infinity, hi = -Infinity;
   const bump = (x) => { if (x != null) { lo = Math.min(lo, x); hi = Math.max(hi, x); } };
@@ -592,9 +593,6 @@ function renderMeteoCharts() {
     Object.values(d.prev).forEach((runs) => Object.values(runs).forEach((cs) =>
       d.cities.forEach((c) => (cs[c] && cs[c][v] || []).forEach(bump))));
   }
-  if (hasEns && METEO.ens && v === "t2m") {
-    Object.values(d.ens.cities).forEach((e) => { e.p10.forEach(bump); e.p90.forEach(bump); });
-  }
   if (!isFinite(lo)) { $("meteoCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
   if (v === "tcc") { lo = 0; hi = 100; }
   if (v === "dswrf") { lo = 0; hi = Math.max(200, Math.ceil(hi / 100) * 100); }
@@ -602,7 +600,7 @@ function renderMeteoCharts() {
   const pad = (v === "tcc" || v === "dswrf" || v === "tp") ? 0 : Math.max(1, (hi - lo) * 0.12);
 
   $("meteoCharts").innerHTML = d.cities.map((c) => {
-    const series = [], bands = [], whiskers = [], strips = [];
+    const series = [], bands = [], strips = [];
     d.models.forEach((m) => {
       const col = MODEL_COLOR[m] || "#666";
       const runs = hasPrev && d.prev[m] ? Object.keys(d.prev[m]).sort() : [];
@@ -625,10 +623,6 @@ function renderMeteoCharts() {
       }
       series.push({ color: col, data: d.series[m][c][v], width: 2 });
     });
-    if (hasEns && METEO.ens && v === "t2m" && d.ens.cities[c]) {
-      const e = d.ens.cities[c];
-      whiskers.push({ idx: e.i, lo: e.p10, hi: e.p90, mid: e.p50, color: MODEL_COLOR.ECMWF });
-    }
     if (METEO.strips) {
       STRIP_ORDER.filter((m) => d.models.includes(m)).forEach((m) => {
         const s = d.series[m][c], w = (d.wins && d.wins[m]) || [];
@@ -649,7 +643,7 @@ function renderMeteoCharts() {
     }
     return drawPanel({ title: c, i0: 0, i1: i1, ylo: lo - pad, yhi: hi + pad, t0ms: t0ms, stepMs: 3 * 3600e3,
                        w: 1160, h: 250, night: !METEO.strips, now: Date.now(), series: series, bands: bands,
-                       whiskers: whiskers, bgStrips: strips });
+                       bgStrips: strips });
   }).join("");
 
   const runTxt = (r) => `${r.slice(4, 6)}-${r.slice(6, 8)} ${r.slice(8)}z`;
@@ -657,8 +651,7 @@ function renderMeteoCharts() {
     const prev = hasPrev && d.prev[m] ? Object.keys(d.prev[m]).sort() : [];
     return `<span class="legend-chip" style="border-color:${MODEL_COLOR[m]}"><b style="color:${MODEL_COLOR[m]}">■ ${m}</b> 런 ${runTxt(d.runs[m])}`
       + (prev.length && METEO.prevMode !== "off" ? `<span style="color:#888"> · 이전 ${prev.length}런 (${runTxt(prev[0])}~)</span>` : "") + `</span>`;
-  }).join("") + (hasEns && METEO.ens && v === "t2m"
-      ? `<span class="legend-chip">┃ EC 앙상블 ${d.ens.n || 50}멤버 10~90% · 런 ${runTxt(d.ens.run)}</span>` : "");
+  }).join("");
 
   bindHover("meteoCharts", (city, i) => {
     const rows = d.models.map((m) => {
@@ -670,10 +663,6 @@ function renderMeteoCharts() {
       }
       return [m, s];
     });
-    if (hasEns && METEO.ens && v === "t2m" && d.ens.cities[city]) {
-      const e = d.ens.cities[city], k = e.i.indexOf(i);
-      if (k >= 0) rows.push(["EC 앙상블", `${e.p10[k]}~${e.p90[k]}℃ (중앙 ${e.p50[k]}, σ ${e.sd[k]})`]);
-    }
     if (METEO.strips) {
       const sk = STRIP_ORDER.filter((m) => d.models.includes(m)).map((m) => {
         const s = d.series[m][city], w = (d.wins && d.wins[m]) || [];
@@ -1139,7 +1128,6 @@ function renderFresh() {
     renderMeteoCharts();
   };
   $("prevModeBtn").classList.add("on");
-  $("ensBtn").onclick = () => { METEO.ens = !METEO.ens; $("ensBtn").classList.toggle("on", METEO.ens); renderMeteoCharts(); };
   $("stripBtn").onclick = () => { METEO.strips = !METEO.strips; $("stripBtn").classList.toggle("on", METEO.strips); renderMeteoCharts(); };
 
   const odates = (MF.obs_dates || []).slice().reverse();
