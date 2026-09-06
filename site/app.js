@@ -1094,6 +1094,107 @@ function renderVerif() {
     `<li><a href="verif/cases/${fn}" target="_blank">${fn.replace(".md", "")}</a></li>`).join("");
 }
 
+
+// ── 오늘 한눈에 (2026-09-06) ─────────────────────────────
+// 있는 JSON(관측·미티오그램·단기예보)만으로 도시 카드를 만든다. 모델은 평균하지 않고 나란히.
+const TODAY_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉"];
+const TODAY_STN = { 서울: 108, 대전: 133, 대구: 143, 부산: 159, 광주: 156, 강릉: 105 };
+
+function kstYmd(ms) {
+  const d = new Date(ms + 9 * 3600e3), p2 = (x) => String(x).padStart(2, "0");
+  return `${d.getUTCFullYear()}${p2(d.getUTCMonth() + 1)}${p2(d.getUTCDate())}`;
+}
+function kstHour(ms) { return new Date(ms + 9 * 3600e3).getUTCHours(); }
+
+async function renderToday() {
+  const grid = $("todayGrid");
+  const oday = (MF.obs_dates || []).slice().sort().pop();
+  const mday = (MF.meteo_dates || []).slice().sort().pop();
+  const kday = (MF.kmafcst_dates || []).slice().sort().pop();
+  if (!oday || !mday) { grid.innerHTML = "<p class='note'>자료 없음</p>"; return; }
+  let obs = null, met = null, kmf = null;
+  try { obs = await fetchJSON(`obs/${oday}.json?${Date.now()}`); } catch (e) { /* 관측 없이도 그린다 */ }
+  try { met = await fetchJSON(`meteo/${mday}.json?${Date.now()}`); } catch (e) { /* */ }
+  try { if (kday) kmf = await fetchJSON(`kmafcst/${kday}.json?${Date.now()}`); } catch (e) { /* */ }
+  const today = oday;
+  const tmMs = keyToMs(today + "00") + 864e5;
+  const tomorrow = kstYmd(tmMs);
+  const t0 = met ? keyToMs(met.t0) : 0;
+  const idxOfDay = (ymd) => met ? Array.from({ length: met.steps }, (_, i) => i).filter((i) => kstYmd(t0 + i * 3 * 3600e3) === ymd) : [];
+  const dayIdx = { [today]: idxOfDay(today), [tomorrow]: idxOfDay(tomorrow) };
+  const latestIssue = kmf ? Object.keys(kmf.fcst).sort().pop() : null;
+  const kt0 = kmf ? keyToMs(kmf.t0) : 0;
+  const kIdx = (ymd) => kmf ? Array.from({ length: kmf.hours }, (_, i) => i).filter((i) => kstYmd(kt0 + i * 3600e3) === ymd) : [];
+  const kDayIdx = { [today]: kIdx(today), [tomorrow]: kIdx(tomorrow) };
+  const stamp = [];
+  if (obs) {
+    let lastH = -1;
+    Object.values(obs.vars.ta || {}).forEach((arr) => arr.forEach((v, h) => { if (v != null && h > lastH) lastH = h; }));
+    if (lastH >= 0) stamp.push(`관측 ${fmtDate(today)} ${String(lastH).padStart(2, "0")}시`);
+  }
+  if (met) stamp.push(Object.entries(met.runs).map(([m, r]) => `${MODEL_SHORT[m] || m} ${r.slice(6, 8)}일 ${r.slice(8)}z`).join(" · "));
+  if (latestIssue) stamp.push(`기상청 ${latestIssue.slice(6, 8)}일 ${latestIssue.slice(8)}시 발표`);
+  $("todayStamp").textContent = stamp.join("  |  ");
+
+  const mx = (arr, idx) => { const v = idx.map((i) => arr && arr[i]).filter((x) => x != null); return v.length >= 3 ? Math.max(...v) : null; };
+  const skyOf = (m, c, ymd) => {
+    if (!met || !met.series[m]) return 0;
+    const s = met.series[m][c], w = (met.wins && met.wins[m]) || [];
+    const idx = dayIdx[ymd].filter((i) => { const h = kstHour(t0 + i * 3 * 3600e3); return h >= 9 && h <= 18; });
+    if (!idx.length) return 0;
+    const cls = idx.map((i) => skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i])).filter(Boolean);
+    if (!cls.length) return 0;
+    if (cls.includes(4)) return 4;
+    const cnt = {}; cls.forEach((k) => { cnt[k] = (cnt[k] || 0) + 1; });
+    return +Object.entries(cnt).sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  };
+  const chip = (v, nrm, m) => {
+    if (v == null) return `<span class="mchip" style="border-color:#ddd;color:#aaa">—</span>`;
+    const bg = nrm != null ? divColor(v - nrm, 6) : "#fff";
+    const t = nrm != null ? ` title="평년 대비 ${v - nrm > 0 ? "+" : ""}${(v - nrm).toFixed(1)}℃"` : "";
+    return `<span class="mchip" style="border-color:${m ? MODEL_COLOR[m] : "#555"};background:${bg}"${t}>${v.toFixed(1)}</span>`;
+  };
+  const light = (vals) => {
+    const v = vals.filter((x) => x != null);
+    if (v.length < 2) return `<span class="dot n" title="모델 2개 미만"></span>`;
+    const w = Math.max(...v) - Math.min(...v);
+    const k = w <= 1 ? "g" : w <= 2.5 ? "y" : "r";
+    const name = { g: "합의", y: "주의", r: "분기" }[k];
+    return `<span class="dot ${k}"></span><span style="font-size:11px;color:#666">${name} ${w.toFixed(1)}℃</span>`;
+  };
+  const skyCol = (c, ymd) => `<span class="sky3" title="${STRIP_ORDER.map((m) => `${MODEL_SHORT[m]} ${SKY_NAME[skyOf(m, c, ymd)] || "—"}`).join(" · ")}">`
+    + STRIP_ORDER.map((m) => { const k = skyOf(m, c, ymd); return `<span style="background:${k ? SKY_COLOR[k] : "transparent"}"></span>`; }).join("") + `</span>`;
+
+  grid.innerHTML = TODAY_CITIES.map((c) => {
+    const stn = String(TODAY_STN[c]);
+    const ta = obs && obs.vars.ta && obs.vars.ta[stn];
+    let nowV = null, nowH = null;
+    if (ta) ta.forEach((v, h) => { if (v != null) { nowV = v; nowH = h; } });
+    const nrm = obs && obs.normals && obs.normals[stn];            // [tavg, tmax, tmin]
+    const nTmax = nrm && nrm[1] != null ? nrm[1] : null;
+    const dl = obs && obs.daily && obs.daily[stn];                 // [tmax, tmin, n]
+    const si = obs && obs.vars.si && obs.vars.si[stn];
+    const siSum = si ? si.reduce((a, v) => a + (v || 0), 0) : null;
+    const models = met ? met.models : [];
+    const row = (ymd, label) => {
+      const vals = models.map((m) => mx(met.series[m][c] && met.series[m][c].t2m, dayIdx[ymd]));
+      const kmaV = (kmf && latestIssue && kmf.fcst[latestIssue][c]) ? mx(kmf.fcst[latestIssue][c], kDayIdx[ymd]) : null;
+      return `<tr><td class="day">${label}</td>`
+        + models.map((m, k) => `<td>${chip(vals[k], nTmax, m)}</td>`).join("")
+        + `<td>${chip(kmaV, nTmax, null)}</td><td>${skyCol(c, ymd)}</td><td style="white-space:nowrap">${light(vals)}</td></tr>`;
+    };
+    return `<div class="tcard">
+      <div class="city">${c}</div>
+      <div class="now">${nowV == null ? "—" : nowV.toFixed(1) + "℃"}<small>${nowH == null ? "" : String(nowH).padStart(2, "0") + "시 관측"}</small></div>
+      <div class="ref">${dl && dl[0] != null ? `오늘 지금까지 최고 <b>${dl[0].toFixed(1)}</b> · 최저 <b>${dl[1].toFixed(1)}</b>℃` : ""}
+        ${nTmax != null ? ` · 평년 일최고 <b>${nTmax.toFixed(1)}</b>℃` : ""}
+        ${siSum != null && siSum > 0 ? ` · 일사 누적 <b>${siSum.toFixed(1)}</b> MJ/㎡` : ""}</div>
+      <table><tr><th></th>${models.map((m) => `<th style="color:${MODEL_COLOR[m]}">${MODEL_SHORT[m] || m}</th>`).join("")}<th>기상청</th><th>하늘</th><th>신호등</th></tr>
+        ${row(today, "오늘 최고")}${row(tomorrow, "내일 최고")}
+      </table></div>`;
+  }).join("");
+}
+
 // ── 갱신 신선도 배지 ──
 function renderFresh() {
   const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(MF.generated_utc || "");
@@ -1245,6 +1346,7 @@ function renderFresh() {
   renderModelBtns();
   renderMeteo();
   renderVerif();
+  renderToday();
   if (vdates.length) renderVerifDaily();
   $("genInfo").textContent =
     `마지막 갱신(UTC): ${MF.generated_utc} · 지도 보존 ${MF.max_days}일`;

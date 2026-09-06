@@ -17,7 +17,8 @@
     <div id="freshPill" class="pill" title="site-data 마지막 발행 시각 기준">갱신 확인 중…</div>
   </div>
   <nav id="tabs">
-    <button data-tab="charts" class="on">NWP</button>
+    <button data-tab="today" class="on">오늘</button>
+    <button data-tab="charts">NWP</button>
     <button data-tab="obs">관측</button>
     <button data-tab="nowcast" id="nowcastTabBtn" hidden>초단기 운량예측</button>
     <button data-tab="meteo">Meteogram</button>
@@ -28,7 +29,21 @@
 </header>
 
 <main>
-  <section id="tab-charts" class="tab on card">
+  <section id="tab-today" class="tab on card">
+    <div class="today-head">
+      <h2 style="margin-top:0">오늘 한눈에</h2>
+      <span id="todayStamp" class="step-label" style="margin:0"></span>
+    </div>
+    <div id="todayGrid" class="today-grid"></div>
+    <p class="note">
+      <b>지금</b> = 최신 ASOS 정시 관측. <b>최고 예보</b> = 각 모델 최신 런의 그날 3시간 값 최고(정시 사이 극값은 놓쳐 참 최고보다 조금 낮음)와
+      기상청 단기예보(1시간 값) 최고. 칸 색 = <b>평년 일최고 대비</b>(빨강 높음 · 파랑 낮음, 자체 산출 평년 1991~2020).
+      <b>하늘</b> = 09~18시 하늘 상태 요약(위 EC · 중 KIM · 아래 GFS, 강수가 하나라도 있으면 강수).
+      <b>신호등</b> = 세 모델 최고 예보의 폭 — <span class="dot g"></span>1℃ 이하 합의 · <span class="dot y"></span>2.5℃ 이하 주의 · <span class="dot r"></span>그 이상 분기.
+      모델을 평균하지 않고 나란히 둡니다. 세부는 각 탭에서.</p>
+  </section>
+
+  <section id="tab-charts" class="tab card">
     <div class="controls">
       <div class="grp"><span class="grp-lab">날짜</span><select id="dateSel"></select></div>
       <div class="grp"><span class="grp-lab">모델</span><div id="modelBtns" class="btns"></div></div>
