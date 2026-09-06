@@ -45,13 +45,15 @@ KST_OFFSET_H = 9
 # ECMWF 오픈데이터 요청 파라미터
 #   2t  : 2m 기온
 #   tcc : 전운량 (2025-11-20부터 오픈데이터 제공, 런 제한 있을 수 있음 → 실패 시 자동 제외)
-ECMWF_PARAMS = ["2t", "tcc"]
+ECMWF_PARAMS = ["2t", "tcc", "tp", "ssrd"]
+#   tp   : 총강수(누적 m → 스텝 차분해 3h 강수 mm)      — 2026-09-06 추가(강수 띠)
+#   ssrd : 하향단파복사 누적(J/m²) → 차분/시간 = 구간평균 W/m² — 2026-09-06 추가(일사)
 
 # GFS NOMADS grib filter 변수/레벨
 # 실측 확정(2026-08-14, gfs.t18z idx 대조): 층별 운량 변수명은 TCDC가 아니라
 # LCDC/MCDC/HCDC. TCDC(entire atmosphere)·층별은 instant와 avg 두 계열이 오고,
 # DSWRF는 avg(구간 평균)만 존재한다.
-GFS_VARS = ["TMP", "TCDC", "LCDC", "MCDC", "HCDC", "DSWRF"]
+GFS_VARS = ["TMP", "TCDC", "LCDC", "MCDC", "HCDC", "DSWRF", "APCP"]   # APCP: 2026-09-06 추가(강수 띠)
 GFS_LEVELS = [
     "2_m_above_ground",     # TMP
     "entire_atmosphere",    # TCDC 전운량

@@ -78,6 +78,29 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 이 PC의 AVG Mail Shield는 SMTP를 별도 'Untrusted Root'로 가로채므로, AVG 가로채기가
 확인된 경우에 한해 로컬 AV 구간을 비검증으로 연결한다 (send_summary.py `_smtp_connect` 참조).
 
+### 표출 확장 (2026-09-06)
+
+| 탭 | 추가된 것 | 자료·스크립트 |
+|---|---|---|
+| NWP | **강수**(3h 누적) 지도 패널, 3모델. 컨트롤을 날짜/모델/변수/런 그룹으로 구분. (일사 지도는 사용자 결정으로 제외 — 일사는 Meteogram·검증에만) | `plot_charts.py` `_read_windows` — EC `ssrd`·`tp`, GFS `DSWRF`·`APCP`, KIM `avg_sdswrf`·`lswp+cwp+snol+snoc` |
+| Meteogram | 일사·강수 변수 / **이전 런 띠·선**(최대 4런) / **하늘 띠**(그래프 배경을 y축 3단으로 — 상 EC·중 KIM·하 GFS) / 야간 음영·지금 선 | `build_site.py export_meteo` (아카이브 `verification/forecast`) |
+| 예보-관측 | 그래프 배경 2단 — **위 예보 하늘**(SKY·PTY, 강수확률은 마우스) · **아래 실측 하늘**(전운량) · 예보−실측 **오차 면** · **중기예보 섹션**(D+3~10 최고·최저 vs 실측, 1~3일 전 발표 겹침, 예보 범위 막대) | `plot_kmafcst.py`(SKY·PTY·POP 캐시), `kma_midfcst.py` |
+| 관측 | **전운량** 지도 · **일최고/일최저 평년편차** 지도 · **위성 일사 하루 적산** 지도 | `plot_obsmap.py VARS`, `tools/build_normals.py`(자체 평년), `gk2a_swrad_daily.py` |
+| 검증 | 일별 검증표에 **일사** · 일사 MAE 곡선 | `verify.py`(`win_h` 창 규약), `export_verif_daily` |
+| 공통 | 갱신 신선도 배지(머리말) · 자동 재생(▶) · 카드 레이아웃 · 고정 탭 | `site/` |
+
+하늘 띠 규칙(공통): 3h 강수 ≥ 0.5mm(6h 창은 1mm) → 강수(하늘색) · 전운량 ≥ 85% → 흐림(진회) ·
+55~85% → 구름많음(연회) · 그 외 맑음(흰). 단기예보 SKY 1/3/4, ASOS 전운량 0~5/6~8/9~10 을 같은 네 색에 매핑.
+
+**실측 확정 기록 (2026-09-06)**
+- ECMWF 오픈데이터 ENS 에 평균(em)·표준편차(es) 산출물은 **없다** — pf 50멤버만(`Client.latest` 는 통과하나 `retrieve` 가 인덱스 없음으로 실패). `fetch_ens.py` 는 06·15 KST 12스텝(≈400MB)만 받아 도시 통계를 내는 수집기로 **보류 상태**(사용자 결정, 표출·파이프라인 미연결). GFS 는 GEFS 가 평균·스프레드 파일을 따로 제공해 훨씬 싸다 — 재개 시 GEFS 먼저.
+- ECMWF HRES 에 `tp`·`ssrd` 추가 시 런 파일 80MB → **208MB**(수신 시간 2.5배).
+- KIM k512 의 `tp` 는 전 스텝 최대 0.02mm 인 **빈 필드**. 강수는 `lswp`(=`ncpcp`)·`cwp`, 눈은 `snol`·`snoc` — 모두 3h 창 누적. `avg_sdswrf` 도 3h 창.
+- GFS `APCP` 는 f009 에 (6-9)·(0-9) 창이 공존, f006 은 (0-6) 만 → cfgrib 하이퍼큐브 충돌. eccodes 로 직접 읽어 3h 창으로 재조합.
+- 기상청 API허브에 **평년값 API 가 없다**(nrm_*, sts_nrm 등 404). 일자료 `kma_sfcdd3`(1년·전지점 한 호출 8.5MB)로 1991~2020 을 받아 자체 산출(유효 20년 이상 73지점, ±7일 평활).
+- 중기예보 기온 `fct_afs_wc.php` 는 apihub-pub 에서 일반키 OK, `tmfc1~tmfc2` 범위 조회 가능(백필 도시당 1회). 10도시 예보구역 코드는 `kma_midfcst.py REGS`.
+- GK2A SWRAD KO: `DSR`(uint16 ×0.1 W/m²) 900×900, CLA 와 같은 LCC 격자. netCDF4 는 **윈도우 한글 경로를 못 열어** 메모리 모드로 읽는다.
+
 ### 사이트 발행 방식 (2026-09-06 개편)
 
 두 워크플로(`daily-nwp`, `obs-hourly`)는 **서로 기다리지 않는다**. 예전에는 동시성 그룹을

@@ -58,7 +58,8 @@ def cmd_archive(csv_path: str | None = None):
         path = os.path.join(FCST_DIR, f"{ym}.csv")
         key = ["model", "run_utc", "city", "step_h"]
         if os.path.exists(path):
-            old = pd.read_csv(path, parse_dates=["run_utc"])
+            old = pd.read_csv(path)
+            old["run_utc"] = pd.to_datetime(old["run_utc"], format="mixed")
             before = len(old)
             merged = pd.concat([old, g], ignore_index=True)
             merged = merged.drop_duplicates(subset=key, keep="last")
@@ -67,6 +68,9 @@ def cmd_archive(csv_path: str | None = None):
             merged = g.drop_duplicates(subset=key, keep="last")
             n_new += len(merged)
         merged = merged.sort_values(["run_utc", "model", "city", "step_h"])
+        # 시각 서식을 고정해 쓴다 — pandas 는 열 전체가 자정이면 날짜만 쓰고, 뒤에 12z 런이
+        # 붙으면 한 파일에 두 형식이 섞여 재판독이 깨진다 (2026-09-06 실측)
+        merged["run_utc"] = pd.to_datetime(merged["run_utc"]).dt.strftime("%Y-%m-%d %H:%M")
         merged.to_csv(path, index=False, encoding="utf-8-sig")
         print(f"[archive] {path}: {len(merged)}행 (신규 {n_new})")
     print(f"[archive] 적재 원본: {csv_path}")
@@ -81,7 +85,11 @@ def _load_months(dir_, months, parse_col):
     for ym in months:
         path = os.path.join(dir_, f"{ym}.csv")
         if os.path.exists(path):
-            frames.append(pd.read_csv(path, parse_dates=[parse_col]))
+            df = pd.read_csv(path)
+            # 2026-09-06 실측: 아카이브에 "2026-09-04"(자정 런, 날짜만)와 "2026-09-05 12:00:00"이
+            # 섞여 있어 parse_dates 가 조용히 실패(문자열 유지) → 사례 파일 서식 오류. 형식 혼합 허용.
+            df[parse_col] = pd.to_datetime(df[parse_col], format="mixed")
+            frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
@@ -153,8 +161,13 @@ def cmd_score(date_str: str | None = None, fetch_obs: bool = True):
             ca = obs_at(r.valid_kst, r.stn, "CA_TOT")
             pairs.append(("tcc", float(r.tcc_pct), None if ca is None else ca * 10.0))
         if getattr(r, "dswrf_avg_Wm2", None) is not None and pd.notna(r.dswrf_avg_Wm2):
-            # 구간 평균 대 구간 평균 (모듈 주석의 규칙)
-            win_start = 6 * ((int(r.step_h) - 1) // 6)
+            # 구간 평균 대 구간 평균. 2026-09-06 부터 CSV 에 win_h(창 길이)가 실린다 —
+            # 모델 공통 3h 창. 열이 없는 옛 행은 GFS 6시간 리셋 규약(모듈 주석)으로 처리.
+            win_h = getattr(r, "win_h", None)
+            if win_h is not None and pd.notna(win_h):
+                win_start = int(r.step_h) - int(win_h)
+            else:
+                win_start = 6 * ((int(r.step_h) - 1) // 6)
             hours = range(win_start + 1, int(r.step_h) + 1)
             si_vals = [obs_at(r.valid_kst - pd.Timedelta(hours=int(r.step_h) - h), r.stn, "SI")
                        for h in hours]
@@ -305,7 +318,7 @@ def cmd_report():
             break
     matplotlib.rcParams["axes.unicode_minus"] = False
 
-    for var, unit in [("t2m", "℃"), ("tcc", "%p")]:
+    for var, unit in [("t2m", "℃"), ("tcc", "%p"), ("dswrf", "W/m²")]:
         g = sc[sc["var"] == var]
         if g.empty:
             continue

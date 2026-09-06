@@ -32,7 +32,9 @@ from config import KIM_STEPS, DATA_DIR
 
 API = "https://apihub-pub.kma.go.kr/api/typ06/url/nwp_file_down.php"
 NWP = "k512"
-KEEP_SHORTNAMES = {"2t", "tcc", "lcc", "mcc", "hcc", "avg_sdswrf"}
+# 강수 (2026-09-06 실측): k512 의 'tp' 는 전 스텝 최대 0.02mm 로 사실상 빈 필드다. 실제 강수는
+# lswp(=ncpcp, 대규모 수적 강수)·cwp(대류성) 에 있고 눈은 snol·snoc 로 따로 온다 — 3h 창 누적.
+KEEP_SHORTNAMES = {"2t", "tcc", "lcc", "mcc", "hcc", "avg_sdswrf", "lswp", "cwp", "snol", "snoc"}
 
 
 def _auth_key() -> str:
