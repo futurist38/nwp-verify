@@ -271,16 +271,21 @@ def render_kim(path: str, out_dir: str) -> int:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--delete-raw", action="store_true", help="렌더 후 상층 GRIB 원본 삭제(그림만 보존)")
+    p.add_argument("--run", default=None, help="런 YYYYMMDDHH 지정(백필) — 그 런의 파일만 그린다")
+    p.add_argument("--out-date", default=None, help="산출 날짜 폴더 YYYYMMDD (기본 오늘)")
+    p.add_argument("--no-kim", action="store_true", help="KIM 지상장 생략")
     a = p.parse_args()
-    out_dir = os.path.join(OUT_DIR, dt.date.today().strftime("%Y%m%d"), "upper")
+    out_dir = os.path.join(OUT_DIR, a.out_date or dt.date.today().strftime("%Y%m%d"), "upper")
+    tag = a.run or "*"
 
     def latest(pat):
         fs = sorted(glob.glob(os.path.join(DATA_DIR, pat)))
         return fs[-1] if fs else None
 
     raw = []
-    ec_pl, ec_pl2, ec_sfc = latest("upper_ecmwf_pl_*.grib2"), latest("upper_ecmwf_pl2_*.grib2"), latest("upper_ecmwf_sfc_*.grib2")
-    gf = latest("upper_gfs_*.grib2")
+    ec_pl, ec_pl2, ec_sfc = (latest(f"upper_ecmwf_pl_{tag}.grib2"), latest(f"upper_ecmwf_pl2_{tag}.grib2"),
+                             latest(f"upper_ecmwf_sfc_{tag}.grib2"))
+    gf = latest(f"upper_gfs_{tag}.grib2")
     total = 0
     if ec_pl:
         pls = [ec_pl] + ([ec_pl2] if ec_pl2 else [])
@@ -289,7 +294,7 @@ def main():
     if gf:
         n = render_gfs(gf, out_dir); print(f"[UPPER] GFS {n}장"); total += n
         raw.append(gf)
-    km = latest("kim_*.grib2")
+    km = None if a.no_kim else latest(f"kim_*_{tag}.grib2")
     if km:
         n = render_kim(km, out_dir); print(f"[UPPER] KIM 지상 {n}장" + (" (prmsl 없음 — fetch_kim KEEP 확인)" if n == 0 else "")); total += n
     print(f"[UPPER] 총 {total}장 → {out_dir}")

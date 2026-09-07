@@ -31,20 +31,27 @@ UP_LON_MIN, UP_LON_MAX, UP_LAT_MIN, UP_LAT_MAX = 100.0, 150.0, 20.0, 55.0
 GFS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
 
 
-def fetch_ecmwf(source: str, workers: int = 21) -> list[str]:
+def fetch_ecmwf(source: str, workers: int = 21, run: str | None = None) -> list[str]:
+    """run='YYYYMMDDHH' 를 주면 그 런(백필). 06/18z 런은 +90h 까지만 있어 그 뒤 스텝은 실패로 기록되고 건너뛴다."""
+    import datetime as dt
     from ecmwf.opendata import Client
     c = Client(source=source, model="ifs", resol="0p25")
     req_low = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [925, 850, 700],
                "param": ["gh", "t", "u", "v", "r"], "step": STEPS}
     req_high = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [500, 300, 200],
                 "param": ["gh", "u", "v"], "step": STEPS}
-    latest = c.latest(**req_low)
+    if run:
+        latest = dt.datetime.strptime(run, "%Y%m%d%H")
+        req_low["date"] = req_high["date"] = latest.strftime("%Y-%m-%d")
+    else:
+        latest = c.latest(**req_low)
     tag = latest.strftime("%Y%m%d%H")
     print(f"[UPPER] ECMWF 런 {latest:%Y-%m-%d %H}UTC")
     out = []
     for name, req in (("pl", req_low), ("pl2", req_high),
                       ("sfc", {"type": "fc", "stream": "oper", "levtype": "sfc",
-                               "param": ["msl", "2t"], "step": STEPS})):
+                               "param": ["msl", "2t"], "step": STEPS,
+                               **({"date": latest.strftime("%Y-%m-%d")} if run else {})})):
         target = os.path.join(DATA_DIR, f"upper_ecmwf_{name}_{tag}.grib2")
         if os.path.exists(target) and os.path.getsize(target) > 0:
             print(f"[UPPER] 이미 수신됨: {target}")
@@ -64,10 +71,13 @@ def gfs_url(ymd: str, hh: str, step: int) -> str:
     return GFS_BASE + "?" + "&".join(p)
 
 
-def fetch_gfs() -> str:
+def fetch_gfs(run: str | None = None) -> str:
     from fetch_gfs import find_latest_run
     s = requests.Session()
-    ymd, hh, _ = find_latest_run(s)
+    if run:
+        ymd, hh = run[:8], run[8:10]
+    else:
+        ymd, hh, _ = find_latest_run(s)
     target = os.path.join(DATA_DIR, f"upper_gfs_{ymd}{hh}.grib2")
     if os.path.exists(target) and os.path.getsize(target) > 0:
         print(f"[UPPER] 이미 수신됨: {target}")
@@ -99,17 +109,18 @@ def main():
     p.add_argument("--gfs-only", action="store_true")
     p.add_argument("--source", default="ecmwf", choices=["ecmwf", "azure", "aws"])
     p.add_argument("--workers", type=int, default=21, help="ECMWF 스텝 병렬 수신 수 (실측 2026-09-07: 6→1.1MB/s, 21→1.9MB/s, 503 없음)")
+    p.add_argument("--run", default=None, help="런 YYYYMMDDHH (백필용, 생략=최신)")
     a = p.parse_args()
     os.makedirs(DATA_DIR, exist_ok=True)
     rc = 0
     if not a.gfs_only:
         try:
-            fetch_ecmwf(a.source, a.workers)
+            fetch_ecmwf(a.source, a.workers, a.run)
         except Exception as e:
             print(f"[UPPER] ECMWF 실패: {e}", file=sys.stderr); rc = 1
     if not a.ecmwf_only:
         try:
-            fetch_gfs()
+            fetch_gfs(a.run)
         except Exception as e:
             print(f"[UPPER] GFS 실패: {e}", file=sys.stderr); rc = 1
     sys.exit(rc)

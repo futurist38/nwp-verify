@@ -1,0 +1,72 @@
+name: backfill-upper
+
+# 고도별 기압장 소급 생성 (2026-09-07). 지정한 런들의 상층 GRIB 을 받아 그림만 만들고 원본은 지운 뒤
+# site-data 에 병합 발행한다. 로컬 PC 에서 발행하지 않는 원칙(과거 덮어쓰기 사고) 대신 러너에서 돈다.
+#   runs   : 쉼표로 나열한 런 YYYYMMDDHH (예: 2026090612,2026090618,2026090700)
+#   models : ec,gfs,kim 중 쉼표 목록 (KIM 은 지상장만 — unis 파일 1.9GB/런)
+#   out_date : 산출 날짜 폴더 (그 런의 다른 지도가 들어 있는 날짜와 맞춘다)
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: "런 목록 YYYYMMDDHH, 쉼표 구분"
+        required: true
+      models:
+        description: "ec,gfs,kim"
+        default: "ec,gfs,kim"
+      out_date:
+        description: "산출 날짜 폴더 YYYYMMDD"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-nwp          # daily 와 같은 그룹 — 같은 checkout·발행 경로를 쓴다
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Seoul
+  PYTHONIOENCODING: utf-8
+  PYTHONUNBUFFERED: "1"
+  KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: 시스템 의존성 (한글 폰트)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-nanum
+          rm -rf ~/.cache/matplotlib
+      - name: Python 의존성
+        run: pip install -r requirements.txt
+
+      - name: 런별 수신·렌더 (원본 삭제)
+        env:
+          RUNS: ${{ inputs.runs }}
+          MODELS: ${{ inputs.models }}
+          OUT_DATE: ${{ inputs.out_date }}
+        run: |
+          IFS=',' read -ra RL <<< "$RUNS"
+          for R in "${RL[@]}"; do
+            R=$(echo "$R" | tr -d ' ')
+            echo "::group::런 $R"
+            case ",$MODELS," in *,ec,*)  timeout 900 python fetch_upper.py --ecmwf-only --run "$R" || echo "::warning::EC $R 실패";; esac
+            case ",$MODELS," in *,gfs,*) timeout 600 python fetch_upper.py --gfs-only --run "$R"   || echo "::warning::GFS $R 실패";; esac
+            case ",$MODELS," in *,kim,*) timeout 900 python fetch_kim.py --run "${R:0:8}" "${R:8:2}" --max-minutes 12 || echo "::warning::KIM $R 실패";; esac
+            timeout 900 python plot_upper.py --run "$R" --out-date "$OUT_DATE" --delete-raw || echo "::warning::렌더 $R 실패"
+            rm -f data/kim_*_"$R".grib2*
+            echo "::endgroup::"
+          done
+          ls output/"$OUT_DATE"/upper | wc -l
+
+      - name: 발행
+        run: tools/publish_site.sh "site backfill upper $(date '+%Y-%m-%d %H:%M KST')"
