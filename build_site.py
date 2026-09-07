@@ -32,6 +32,8 @@ OBS_DATES: list[str] = []
 FD_DATES: list[str] = []
 HAS_MIDFCST = False    # export_midfcst 결과 (manifest 용)
 MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
+UPPER_MAX_DAYS = 14    # 고도별 기압장 보존 일수 (7패널×21스텝×2모델 ≈ 17MB/일 — 2026-09-07)
+UPPER_PANELS = {"sfc", "p925", "p850", "p700", "p500", "p300", "p200"}
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
 
@@ -50,7 +52,7 @@ def copy_outputs(site_dir: str):
         ymd = os.path.basename(day_dir)
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
-        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff", "satsw"):
+        for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff", "satsw", "upper"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
@@ -67,18 +69,26 @@ def copy_outputs(site_dir: str):
     # 보존 기한 초과 정리 (지도만 — daily JSON·검증 자료는 전 기간 유지)
     cutoff = (dt.date.today() - dt.timedelta(days=MAX_DAYS)).strftime("%Y%m%d")
     cutoff_obs = (dt.date.today() - dt.timedelta(days=OBS_MAX_DAYS)).strftime("%Y%m%d")
-    removed = n_obs = 0
+    cutoff_up = (dt.date.today() - dt.timedelta(days=UPPER_MAX_DAYS)).strftime("%Y%m%d")
+    removed = n_obs = n_up = 0
     for d in glob.glob(os.path.join(arch, "????????")):
         ymd = os.path.basename(d)
         if ymd < cutoff:
             shutil.rmtree(d)
             removed += 1
-        elif ymd < cutoff_obs:
+            continue
+        if ymd < cutoff_obs:
             for f in glob.glob(os.path.join(d, "obs_*.png")) + glob.glob(os.path.join(d, "obs_*.webp")):
                 os.remove(f)
                 n_obs += 1
-    if removed or n_obs:
-        print(f"[site] 보존기한 정리: 지도 {removed}일치, 관측 PNG {n_obs}장 삭제")
+        if ymd < cutoff_up:      # 고도별 기압장은 14일만 (용량)
+            for f in glob.glob(os.path.join(d, "*_f???_*.*")):
+                m = PNG_RE.match(os.path.basename(f)) or PNG_RE.match(os.path.basename(f)[:-4] + ".webp")
+                if m and m["panel"] in UPPER_PANELS:
+                    os.remove(f)
+                    n_up += 1
+    if removed or n_obs or n_up:
+        print(f"[site] 보존기한 정리: 지도 {removed}일치, 관측 PNG {n_obs}장, 고도별 {n_up}장 삭제")
 
 
 def copy_verif(site_dir: str):
@@ -627,12 +637,13 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
                 mdl = m["model"].upper()
                 e = entry["models"].setdefault(mdl, {"runs": {}, "latest": None})
                 # 런별로 전부 보존 (2026-08-21 런 선택 기능 — 하루 2회 배치가 축적)
-                r = e["runs"].setdefault(m["run"], {"steps": [], "panels": []})
+                r = e["runs"].setdefault(m["run"], {"steps": [], "panels": [], "psteps": {}})
                 s = int(m["step"])
                 if s not in r["steps"]:
                     r["steps"].append(s)
                 if m["panel"] not in r["panels"]:
                     r["panels"].append(m["panel"])
+                r["psteps"].setdefault(m["panel"], []).append(s)
             elif fn.startswith("meteogram_"):
                 entry["meteograms"].append(fn)
             elif fn.startswith("fcstdiff_"):
@@ -646,6 +657,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         for e in entry["models"].values():
             for r in e["runs"].values():
                 r["steps"].sort()
+                for k in r["psteps"]:
+                    r["psteps"][k].sort()
             e["latest"] = max(e["runs"])
         if os.path.exists(os.path.join(site_dir, "daily", f"{ymd}.json")):
             entry["daily_json"] = f"daily/{ymd}.json"

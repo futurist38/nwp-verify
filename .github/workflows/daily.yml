@@ -99,6 +99,9 @@ jobs:
 
       - name: 2단계 — 검증·관측·단기예보
         run: |
+          # 고도별 기압장 (2026-09-07): ECMWF pl ≈ 200MB + GFS 14MB → 그림만 남기고 원본 삭제
+          timeout 1200 python fetch_upper.py || echo "::warning::상층 수신 실패/시간초과 — 계속"
+          timeout 900  python plot_upper.py --delete-raw || echo "::warning::상층 지도 실패/시간초과 — 계속"
           timeout 600 python verify.py score   || echo "::warning::score 실패/시간초과 — 계속"
           timeout 300 python verify.py report  || echo "::warning::report 실패/시간초과 — 계속"
           timeout 600 python plot_obsmap.py --no-plot || echo "::warning::관측 수신 실패/시간초과 — 계속"

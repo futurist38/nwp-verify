@@ -4,8 +4,11 @@
    관측 전운량·평년편차, 중기예보 섹션, 일사 검증, 자동 재생·갱신 배지·야간 음영. */
 "use strict";
 
-const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량", dswrf: "일사", tp: "강수" };
+const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량", dswrf: "일사", tp: "강수",
+                      sfc: "지상", p925: "925", p850: "850", p700: "700", p500: "500", p300: "300", p200: "200" };
 const PANEL_ORDER = ["t2m", "tcc", "cloud3", "tp"];   // 일사(dswrf) 지도는 제외 — 2026-09-06 사용자 결정
+// 고도별 기압장(2026-09-07): 동아시아 영역, 6h 간격 — 별도 그룹으로 표시
+const UPPER_ORDER = ["sfc", "p925", "p850", "p700", "p500", "p300", "p200"];
 const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
 const MODEL_SHORT = { ECMWF: "EC", GFS: "GFS", KIM: "KIM" };
 let MF = null;
@@ -706,10 +709,16 @@ function runOf(m) {
   return (r && e.runs[r]) ? r : e.latest;
 }
 function runEntry(m) { const e = entry().models[m]; const r = runOf(m); return { run: r, ...e.runs[r] }; }
+function panelSteps(e, panel) {   // 패널이 있는 스텝만 (고도별은 6h 간격)
+  const ps = e.psteps && e.psteps[panel || state.panel];
+  return ps && ps.length ? ps : e.steps;
+}
 function cmpSteps() {
-  const sets = cmpModels().map((m) => {
+  const ms = cmpModels().filter((m) => runEntry(m).panels.includes(state.panel));
+  if (!ms.length) return [];
+  const sets = ms.map((m) => {
     const e = runEntry(m);
-    return new Set(e.steps.map((s) => validEpoch(e.run, s)));
+    return new Set(panelSteps(e).map((s) => validEpoch(e.run, s)));
   });
   return [...sets[0]].filter((t) => sets.every((st) => st.has(t))).sort((a, b) => a - b);
 }
@@ -766,23 +775,30 @@ function renderRunSel() {
 function renderPanelBtns() {
   const compare = state.model === CMP;
   renderRunSel();
-  let panels;
+  let panels, uppers;
   if (compare) {
     const cnt = {};
     cmpModels().forEach((m) => runEntry(m).panels.forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; }));
     panels = PANEL_ORDER.filter((p) => cnt[p] >= 2);
+    uppers = UPPER_ORDER.filter((p) => cnt[p] >= 2);
   } else {
     const have = runEntry(state.model).panels;
     panels = PANEL_ORDER.filter((p) => have.includes(p));   // 목록에 없는 패널(옛 일사 등)은 숨긴다
+    uppers = UPPER_ORDER.filter((p) => have.includes(p));
   }
-  if (!panels.includes(state.panel)) state.panel = panels[0];
-  $("panelBtns").innerHTML = panels.map((p) =>
-    `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`).join("");
-  $("panelBtns").querySelectorAll("button").forEach((b) => {
+  const all = panels.concat(uppers);
+  if (!all.includes(state.panel)) state.panel = all[0];
+  const btn = (p) => `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`;
+  $("panelBtns").innerHTML = panels.map(btn).join("");
+  $("panelBtns").closest(".grp").hidden = !panels.length;   // 그 런에 일반 패널이 없으면 칸을 숨긴다
+  $("upperBtns").innerHTML = uppers.map(btn).join("");
+  $("upperGrp").hidden = !uppers.length;
+  document.querySelectorAll("#panelBtns button, #upperBtns button").forEach((b) => {
     b.onclick = () => { state.panel = b.dataset.p; renderPanelBtns(); };
   });
+  $("upperNote").hidden = !UPPER_ORDER.includes(state.panel);
   const epochs = compare ? cmpSteps()
-    : runEntry(state.model).steps.map((s) => validEpoch(runEntry(state.model).run, s));
+    : panelSteps(runEntry(state.model)).map((s) => validEpoch(runEntry(state.model).run, s));
   $("stepSlider").max = Math.max(0, epochs.length - 1);
   if (firstChart && epochs.length) {
     const now = Date.now();
@@ -810,7 +826,7 @@ function renderChart() {
     $("chartStack").innerHTML = cmpModels().map((m) => {
       const e = runEntry(m);
       const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
-      if (!e.steps.includes(stepH) || !e.panels.includes(state.panel)) return "";
+      if (!panelSteps(e).includes(stepH) || !e.panels.includes(state.panel)) return "";
       return `<div class="cmp-item">`
            + `<div class="cmp-name">${m} <span>(런 ${fmtRun(e.run)} +${stepH}h)</span></div>`
            + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy"></div>`;
@@ -818,17 +834,18 @@ function renderChart() {
     return;
   }
   const e = runEntry(state.model);
-  const step = e.steps[state.stepIdx];
+  const steps = panelSteps(e);
+  const step = steps[state.stepIdx];
   const t = validEpoch(e.run, step);
   $("stepLabel").textContent =
     `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
   $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트">`;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
-    if (i >= 0 && i < e.steps.length) new Image().src = imgPathFor(state.model, e.steps[i]);
+    if (i >= 0 && i < steps.length) new Image().src = imgPathFor(state.model, steps[i]);
   });
 }
 function maxStepIdx() {
-  return (state.model === CMP ? cmpSteps().length : runEntry(state.model).steps.length) - 1;
+  return (state.model === CMP ? cmpSteps().length : panelSteps(runEntry(state.model)).length) - 1;
 }
 $("stepSlider").oninput = (ev) => { state.stepIdx = +ev.target.value; renderChart(); };
 $("stepPrev").onclick = () => { if (state.stepIdx > 0) { state.stepIdx--; renderChart(); } };

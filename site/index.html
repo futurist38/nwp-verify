@@ -48,8 +48,12 @@
       <div class="grp"><span class="grp-lab">날짜</span><select id="dateSel"></select></div>
       <div class="grp"><span class="grp-lab">모델</span><div id="modelBtns" class="btns"></div></div>
       <div class="grp"><span class="grp-lab">변수</span><div id="panelBtns" class="btns"></div></div>
+      <div class="grp" id="upperGrp" hidden><span class="grp-lab">고도별 hPa</span><div id="upperBtns" class="btns"></div></div>
       <div class="grp" id="runGrp"><span class="grp-lab">런</span><div id="runSel" class="btns"></div></div>
     </div>
+    <p class="note" id="upperNote" hidden>고도별 기압장 — 동아시아(100~150E, 20~55N), 6시간 간격 +120h. 지상 = 해면기압 등압선(4hPa)+2m 기온,
+       상층 = 지오퍼텐셜 고도 등고선(dam)+그 층 기온. ECMWF·GFS 는 전 층, KIM 은 지상만(상층 파일이 스텝당 302MB 라 제외).
+       파란 점선 = 다른 지도의 한반도 영역. 원본 GRIB 은 그림을 만든 뒤 지웁니다(14일 보존).</p>
     <div class="slider-row">
       <button id="stepPlay" class="play" title="자동 재생">▶</button>
       <button id="stepPrev">◀</button>
