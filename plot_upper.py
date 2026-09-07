@@ -263,9 +263,18 @@ def render_gfs(path: str, out_dir: str) -> int:
     return _render_levels("GFS", f, lats, lons, run, out_dir) + _render_sfc("GFS", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir)
 
 
-def render_kim(path: str, out_dir: str) -> int:
-    f, lats, lons, run = read_fields(path, {("prmsl", "meanSea", 0), ("2t", "heightAboveGround", 2)})
-    return _render_sfc("KIM", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir) if f else 0
+def render_kim(path: str | None, out_dir: str, pres_path: str | None = None) -> int:
+    """지상은 unis 파일(prmsl·2t), 상층은 fetch_kim_pres.py 가 남긴 upper_kim_{run}.grib2 (2026-09-08)."""
+    n = 0
+    if path and os.path.exists(path):
+        f, lats, lons, run = read_fields(path, {("prmsl", "meanSea", 0), ("2t", "heightAboveGround", 2)})
+        n += _render_sfc("KIM", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir) if f else 0
+    if pres_path and os.path.exists(pres_path):
+        want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
+        g, la, lo, r = read_fields(pres_path, want)
+        if g:
+            n += _render_levels("KIM", g, la, lo, r, out_dir)
+    return n
 
 
 def main():
@@ -295,8 +304,11 @@ def main():
         n = render_gfs(gf, out_dir); print(f"[UPPER] GFS {n}장"); total += n
         raw.append(gf)
     km = None if a.no_kim else latest(f"kim_*_{tag}.grib2")
-    if km:
-        n = render_kim(km, out_dir); print(f"[UPPER] KIM 지상 {n}장" + (" (prmsl 없음 — fetch_kim KEEP 확인)" if n == 0 else "")); total += n
+    kp = None if a.no_kim else latest(f"upper_kim_{tag}.grib2")
+    if km or kp:
+        n = render_kim(km, out_dir, kp); print(f"[UPPER] KIM {n}장 (지상 {'있음' if km else '없음'}, 상층 {'있음' if kp else '없음'})"); total += n
+        if kp:
+            raw.append(kp)
     print(f"[UPPER] 총 {total}장 → {out_dir}")
     if a.delete_raw:
         for f in raw:

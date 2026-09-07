@@ -6,8 +6,8 @@
     6시간 간격 0~120h(21스텝) 만 받는다. 층별로 쓰는 변수만: 925·850·700 = gh·t·u·v·r(15필드/스텝),
     500·300·200 = gh·u·v(9필드/스텝) → 24×21 ≈ 500필드 ≈ 270MB + sfc 42필드 ≈ 25MB. (2026-09-07 층별 변수 개편)
   · GFS: NOMADS 필터에 층·변수·**동아시아 영역**을 지정 → 스텝당 0.2MB 수준.
-  · KIM: 상층은 pres 파일이 층 필터 없이 스텝당 302MB 라 제외(실측). 지상 해면기압(prmsl)은 unis 파일에
-    있어 fetch_kim.py 가 함께 추출한다 → plot_upper.py 가 kim_*.grib2 에서 지상장만 그린다.
+  · KIM: 지상 해면기압(prmsl)은 unis 파일(fetch_kim.py), 상층은 fetch_kim_pres.py(302MB/스텝 스트리밍 후
+    필요한 30메시지만 보존) → plot_upper.py 가 둘 다 그린다 (2026-09-08 KIM 상층 추가).
 
 원본은 그림을 만든 뒤 지운다(plot_upper.py --delete-raw) — 그림만 보존한다는 사용자 결정.
 산출: data/upper_ecmwf_pl_{run}.grib2, data/upper_ecmwf_sfc_{run}.grib2, data/upper_gfs_{run}.grib2
