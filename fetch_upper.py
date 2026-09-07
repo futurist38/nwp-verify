@@ -2,8 +2,9 @@
 """
 고도별 기압장(지상·925·850·700·500·300·200 hPa) 수신 — ECMWF 오픈데이터 + GFS NOMADS (2026-09-07).
 
-  · ECMWF: levtype=pl 의 gh·t (지오퍼텐셜 고도·기온) + sfc 의 msl·2t. 전구 파일이라 영역 절단 불가 —
-    6시간 간격 0~120h(21스텝) 만 받는다 (6층×2변수×21 ≈ 250필드 ≈ 170MB + sfc 42필드 ≈ 30MB).
+  · ECMWF: levtype=pl 의 gh·t·u·v·r + sfc 의 msl·2t. 전구 파일이라 영역 절단 불가 —
+    6시간 간격 0~120h(21스텝) 만 받는다. 층별로 쓰는 변수만: 925·850·700 = gh·t·u·v·r(15필드/스텝),
+    500·300·200 = gh·u·v(9필드/스텝) → 24×21 ≈ 500필드 ≈ 270MB + sfc 42필드 ≈ 25MB. (2026-09-07 층별 변수 개편)
   · GFS: NOMADS 필터에 층·변수·**동아시아 영역**을 지정 → 스텝당 0.2MB 수준.
   · KIM: 상층은 pres 파일이 층 필터 없이 스텝당 302MB 라 제외(실측). 지상 해면기압(prmsl)은 unis 파일에
     있어 fetch_kim.py 가 함께 추출한다 → plot_upper.py 가 kim_*.grib2 에서 지상장만 그린다.
@@ -33,13 +34,15 @@ GFS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
 def fetch_ecmwf(source: str) -> list[str]:
     from ecmwf.opendata import Client
     c = Client(source=source, model="ifs", resol="0p25")
-    req_pl = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": LEVELS,
-              "param": ["gh", "t"], "step": STEPS}
-    latest = c.latest(**req_pl)
+    req_low = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [925, 850, 700],
+               "param": ["gh", "t", "u", "v", "r"], "step": STEPS}
+    req_high = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [500, 300, 200],
+                "param": ["gh", "u", "v"], "step": STEPS}
+    latest = c.latest(**req_low)
     tag = latest.strftime("%Y%m%d%H")
     print(f"[UPPER] ECMWF 런 {latest:%Y-%m-%d %H}UTC")
     out = []
-    for name, req in (("pl", req_pl),
+    for name, req in (("pl", req_low), ("pl2", req_high),
                       ("sfc", {"type": "fc", "stream": "oper", "levtype": "sfc",
                                "param": ["msl", "2t"], "step": STEPS})):
         target = os.path.join(DATA_DIR, f"upper_ecmwf_{name}_{tag}.grib2")
@@ -56,7 +59,7 @@ def fetch_ecmwf(source: str) -> list[str]:
 
 def gfs_url(ymd: str, hh: str, step: int) -> str:
     p = [f"dir=%2Fgfs.{ymd}%2F{hh}%2Fatmos", f"file=gfs.t{hh}z.pgrb2.0p25.f{step:03d}",
-         "var_HGT=on", "var_TMP=on", "var_PRMSL=on"]
+         "var_HGT=on", "var_TMP=on", "var_PRMSL=on", "var_UGRD=on", "var_VGRD=on", "var_RH=on"]
     p += [f"lev_{lv}_mb=on" for lv in LEVELS]
     p += ["lev_mean_sea_level=on", "lev_2_m_above_ground=on", "subregion=",
           f"leftlon={UP_LON_MIN}", f"rightlon={UP_LON_MAX}", f"toplat={UP_LAT_MAX}", f"bottomlat={UP_LAT_MIN}"]
