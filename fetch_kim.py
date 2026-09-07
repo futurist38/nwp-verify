@@ -119,7 +119,7 @@ def _download_step(tmfc: str, step: int, key: str) -> str | None:
     return None
 
 
-def fetch(tmfc: str | None = None, max_minutes: float = 0.0, workers: int = 4) -> str:
+def fetch(tmfc: str | None = None, max_minutes: float = 0.0, workers: int = 8) -> str:
     """스텝을 병렬(workers)로 받아 순서대로 필터·결합한다 (2026-09-07 병렬화).
     API허브는 변수 필터가 없어 스텝당 76MB 를 다 받아 11변수(13MB)만 남긴다 — 이것이 구조적 한계.
     max_minutes>0 이면 그 시간을 넘긴 뒤로는 새 스텝을 시작하지 않고, 받은 데까지 완성한다
@@ -190,7 +190,7 @@ def main():
     p.add_argument("--run", nargs=2, metavar=("YYYYMMDD", "HH"), default=None)
     p.add_argument("--max-minutes", type=float, default=0.0,
                    help="시간 상한(분). 초과 시 받은 스텝까지만 사용")
-    p.add_argument("--workers", type=int, default=4, help="스텝 병렬 수신 수")
+    p.add_argument("--workers", type=int, default=8, help="스텝 병렬 수신 수 (실측 2026-09-07: 4→5.9MB/s, 8→8.9MB/s)")
     args = p.parse_args()
     tmfc = (args.run[0] + args.run[1]) if args.run else None
     try:
