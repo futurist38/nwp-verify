@@ -19,8 +19,10 @@ import sslfix  # noqa: F401  (AVG TLS 검사 대응 — 모듈 주석 참조)
 from config import ECMWF_PARAMS, ECMWF_STEPS, DATA_DIR
 
 
-def fetch(run_time: int | None = None, source: str = "ecmwf") -> str:
-    """ECMWF 오픈데이터 GRIB 다운로드. 저장 경로를 반환."""
+def fetch(run_time: int | None = None, source: str = "ecmwf", workers: int = 16) -> str:
+    """ECMWF 오픈데이터 GRIB 다운로드. 저장 경로를 반환.
+    2026-09-07: 스텝 병렬 수신(ecmwf_parallel) — 순차 0.34MB/s → 병렬 ~1.9MB/s (이 PC 실측).
+    tcc·tp·ssrd 가 없는 런/스텝은 스텝 단위로 param 을 줄여 다시 받는다(예전엔 파일 전체를 2t 만으로)."""
     from ecmwf.opendata import Client
 
     client = Client(source=source, model="ifs", resol="0p25")
@@ -51,20 +53,17 @@ def fetch(run_time: int | None = None, source: str = "ecmwf") -> str:
         print(f"[ECMWF] 이미 수신됨: {target}")
         return target
 
-    # 중단된 부분 파일을 "이미 수신됨"으로 오인하지 않도록 .part 에 받고 완료 후 개명
-    tmp = target + ".part"
-    try:
-        client.retrieve(target=tmp, **request)
-    except Exception as e:
-        # tcc 미제공 런 대비: 2t만으로 재시도
-        if "tcc" in request.get("param", []):
-            print(f"[ECMWF] 전체 파라미터 수신 실패({e}) — tcc 제외 후 재시도")
-            request["param"] = ["2t"]
-            client.retrieve(target=tmp, **request)
-        else:
-            raise
-    os.replace(tmp, target)
-
+    # 스텝 병렬 수신 (.part 에 받고 완료 후 개명 — 중단 파일을 '수신됨' 으로 오인하지 않게)
+    from ecmwf_parallel import retrieve_parallel
+    full = list(request["param"])
+    fallbacks = [[p for p in full if p != "tcc"], ["2t"]]
+    request["time"] = latest.hour
+    res = retrieve_parallel(client, request, target, workers, fallbacks=fallbacks, tag="[ECMWF]")
+    if not res["ok"]:
+        raise RuntimeError("ECMWF 스텝을 하나도 받지 못했습니다")
+    reduced = {st: p for st, p in res["params"].items() if p != full}
+    if reduced:
+        print(f"[ECMWF] param 축소 스텝 {len(reduced)}개 (예: {min(reduced)} → {reduced[min(reduced)]})")
     size_mb = os.path.getsize(target) / 1e6
     print(f"[ECMWF] 수신 완료: {target} ({size_mb:.1f} MB)")
     return target
@@ -76,9 +75,10 @@ def main():
                    help="런 시각(UTC). 생략 시 최신 런")
     p.add_argument("--source", default="ecmwf", choices=["ecmwf", "azure", "aws"],
                    help="다운로드 소스. 본 서버가 느리면 azure/aws 미러 사용")
+    p.add_argument("--workers", type=int, default=16, help="스텝 병렬 수신 수")
     args = p.parse_args()
     try:
-        path = fetch(args.time, args.source)
+        path = fetch(args.time, args.source, args.workers)
         print(path)
     except Exception as e:
         print(f"[ECMWF] 수신 실패: {e}", file=sys.stderr)

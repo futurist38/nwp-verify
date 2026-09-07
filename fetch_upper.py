@@ -31,7 +31,7 @@ UP_LON_MIN, UP_LON_MAX, UP_LAT_MIN, UP_LAT_MAX = 100.0, 150.0, 20.0, 55.0
 GFS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
 
 
-def fetch_ecmwf(source: str) -> list[str]:
+def fetch_ecmwf(source: str, workers: int = 21) -> list[str]:
     from ecmwf.opendata import Client
     c = Client(source=source, model="ifs", resol="0p25")
     req_low = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [925, 850, 700],
@@ -49,10 +49,8 @@ def fetch_ecmwf(source: str) -> list[str]:
         if os.path.exists(target) and os.path.getsize(target) > 0:
             print(f"[UPPER] 이미 수신됨: {target}")
         else:
-            tmp = target + ".part"
-            c.retrieve(target=tmp, **{**req, "time": latest.hour})
-            os.replace(tmp, target)
-            print(f"[UPPER] ECMWF {name} 수신: {os.path.getsize(target) / 1e6:.0f}MB")
+            from ecmwf_parallel import retrieve_parallel
+            retrieve_parallel(c, {**req, "time": latest.hour}, target, workers, tag=f"[UPPER] ECMWF {name}")
         out.append(target)
     return out
 
@@ -100,12 +98,13 @@ def main():
     p.add_argument("--ecmwf-only", action="store_true")
     p.add_argument("--gfs-only", action="store_true")
     p.add_argument("--source", default="ecmwf", choices=["ecmwf", "azure", "aws"])
+    p.add_argument("--workers", type=int, default=21, help="ECMWF 스텝 병렬 수신 수 (실측 2026-09-07: 6→1.1MB/s, 21→1.9MB/s, 503 없음)")
     a = p.parse_args()
     os.makedirs(DATA_DIR, exist_ok=True)
     rc = 0
     if not a.gfs_only:
         try:
-            fetch_ecmwf(a.source)
+            fetch_ecmwf(a.source, a.workers)
         except Exception as e:
             print(f"[UPPER] ECMWF 실패: {e}", file=sys.stderr); rc = 1
     if not a.ecmwf_only:

@@ -92,65 +92,84 @@ def _filter_append(src_path: str, dst, keep=KEEP_SHORTNAMES) -> int:
     return n
 
 
-def fetch(tmfc: str | None = None, max_minutes: float = 0.0) -> str:
-    """max_minutes>0이면 그 시간을 넘긴 순간 남은 스텝을 포기하고 받은 데까지 완성한다.
-    (2026-08-26 실측: API 혼잡으로 외부 timeout에 걸리면 .part만 남아 KIM 표출이 통째로
-     사라졌다. 짧은 리드부터 순서대로 받으므로 부분 수신도 그대로 쓸모가 있다.)"""
+def _download_step(tmfc: str, step: int, key: str) -> str | None:
+    """한 스텝(76MB)을 임시 파일로. 실패 시 None (3회 재시도)."""
+    for attempt in range(3):
+        tmp_in = None
+        try:
+            r = requests.get(API, params={"nwp": NWP, "sub": "unis", "tmfc": tmfc,
+                                          "ef": str(step), "authKey": key},
+                             timeout=600, stream=True)
+            with tempfile.NamedTemporaryFile(dir=DATA_DIR, delete=False) as tf:
+                tmp_in = tf.name
+                for chunk in r.iter_content(1 << 20):
+                    tf.write(chunk)
+            with open(tmp_in, "rb") as chk:
+                if chk.read(4) != b"GRIB":
+                    raise ValueError("GRIB 아님 (파일 미존재/오류 응답)")
+            return tmp_in
+        except Exception as e:
+            if tmp_in:
+                try:
+                    os.remove(tmp_in)
+                except OSError:
+                    pass
+            print(f"[KIM]  ef{step:03d} 실패({attempt + 1}/3): {e}")
+            time.sleep(3 * (attempt + 1))
+    return None
+
+
+def fetch(tmfc: str | None = None, max_minutes: float = 0.0, workers: int = 4) -> str:
+    """스텝을 병렬(workers)로 받아 순서대로 필터·결합한다 (2026-09-07 병렬화).
+    API허브는 변수 필터가 없어 스텝당 76MB 를 다 받아 11변수(13MB)만 남긴다 — 이것이 구조적 한계.
+    max_minutes>0 이면 그 시간을 넘긴 뒤로는 새 스텝을 시작하지 않고, 받은 데까지 완성한다
+    (2026-08-26 실측: 외부 timeout 에 걸리면 .part 만 남아 KIM 표출이 통째로 사라졌다)."""
+    import concurrent.futures as cf
     key = _auth_key()
     if tmfc is None:
         tmfc = find_latest_run(key)
-    print(f"[KIM] 수신 대상 런: {tmfc} ({NWP})")
+    print(f"[KIM] 수신 대상 런: {tmfc} ({NWP}), 병렬 {workers}")
 
     os.makedirs(DATA_DIR, exist_ok=True)
     target = os.path.join(DATA_DIR, f"kim_{NWP}_{tmfc}.grib2")
-    # 부분 수신본을 "완료"로 오인하면 영영 반쪽 자료를 쓰게 된다 → 완료 표식으로 구분
     done_mark = target + ".done"
     if os.path.exists(target) and os.path.getsize(target) > 0 and os.path.exists(done_mark):
         print(f"[KIM] 이미 수신됨: {target}")
         return target
 
-    tmp_out = target + ".part"
-    n_ok = n_fail = n_skip = 0
     t_start = time.time()
-    with open(tmp_out, "wb") as dst:
+    got: dict[int, str | None] = {}
+    n_skip = 0
+    with cf.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futs = {}
         for step in KIM_STEPS:
             if max_minutes and (time.time() - t_start) / 60 >= max_minutes:
-                n_skip = len(KIM_STEPS) - n_ok - n_fail
-                print(f"[KIM] 시간 상한 {max_minutes}분 도달 — 남은 {n_skip}스텝 포기, "
-                      f"받은 {n_ok}스텝으로 마무리")
-                break
-            ok = False
-            for attempt in range(3):
-                try:
-                    r = requests.get(API, params={"nwp": NWP, "sub": "unis",
-                                                  "tmfc": tmfc, "ef": str(step),
-                                                  "authKey": key},
-                                     timeout=600, stream=True)
-                    with tempfile.NamedTemporaryFile(dir=DATA_DIR, delete=False) as tf:
-                        tmp_in = tf.name
-                        for chunk in r.iter_content(1 << 20):
-                            tf.write(chunk)
-                    with open(tmp_in, "rb") as chk:
-                        if chk.read(4) != b"GRIB":
-                            raise ValueError("GRIB 아님 (파일 미존재/오류 응답)")
-                    kept = _filter_append(tmp_in, dst)
-                    os.remove(tmp_in)
-                    print(f"[KIM]  ef{step:03d}: 변수 {kept}개 추출")
-                    ok = True
-                    break
-                except Exception as e:
-                    try:
-                        os.remove(tmp_in)
-                    except OSError:
-                        pass
-                    print(f"[KIM]  ef{step:03d} 실패({attempt + 1}/3): {e}")
-                    time.sleep(3 * (attempt + 1))
-            if ok:
-                n_ok += 1
-            else:
-                n_fail += 1
-                print(f"[KIM]  ef{step:03d} 수신 실패 (건너뜀 — 누락 기록)")
-            time.sleep(0.3)
+                n_skip += 1
+                continue
+            futs[ex.submit(_download_step, tmfc, step, key)] = step
+            # 제출을 살짝 띄워 시간 상한이 제출 단계에서 먹히게 (워커가 차 있으면 어차피 대기)
+            while max_minutes and len([f for f in futs if not f.done()]) >= workers \
+                    and (time.time() - t_start) / 60 < max_minutes:
+                time.sleep(1)
+        for f in cf.as_completed(futs):
+            got[futs[f]] = f.result()
+    if n_skip:
+        print(f"[KIM] 시간 상한 {max_minutes}분 도달 — 남은 {n_skip}스텝 포기, 받은 데까지 마무리")
+
+    tmp_out = target + ".part"
+    n_ok = n_fail = 0
+    with open(tmp_out, "wb") as dst:
+        for step in KIM_STEPS:
+            path = got.get(step)
+            if path is None:
+                if step in got:
+                    n_fail += 1
+                    print(f"[KIM]  ef{step:03d} 수신 실패 (건너뜀 — 누락 기록)")
+                continue
+            kept = _filter_append(path, dst)
+            os.remove(path)
+            print(f"[KIM]  ef{step:03d}: 변수 {kept}개 추출")
+            n_ok += 1
 
     if n_ok == 0:
         os.remove(tmp_out)
@@ -160,8 +179,9 @@ def fetch(tmfc: str | None = None, max_minutes: float = 0.0) -> str:
         open(done_mark, "w").close()          # 전 스텝 확보 시에만 완료 표식
     elif os.path.exists(done_mark):
         os.remove(done_mark)
+    el = time.time() - t_start
     print(f"[KIM] 수신 완료: {target} ({os.path.getsize(target)/1e6:.1f} MB, "
-          f"성공 {n_ok} / 실패 {n_fail} / 미수신 {n_skip} 스텝)")
+          f"성공 {n_ok} / 실패 {n_fail} / 미수신 {n_skip} 스텝, {el:.0f}s ≈ 원본 {76 * n_ok / max(1, el):.1f}MB/s)")
     return target
 
 
@@ -170,10 +190,11 @@ def main():
     p.add_argument("--run", nargs=2, metavar=("YYYYMMDD", "HH"), default=None)
     p.add_argument("--max-minutes", type=float, default=0.0,
                    help="시간 상한(분). 초과 시 받은 스텝까지만 사용")
+    p.add_argument("--workers", type=int, default=4, help="스텝 병렬 수신 수")
     args = p.parse_args()
     tmfc = (args.run[0] + args.run[1]) if args.run else None
     try:
-        print(fetch(tmfc, args.max_minutes))
+        print(fetch(tmfc, args.max_minutes, args.workers))
     except Exception as e:
         print(f"[KIM] 수신 실패: {e}", file=sys.stderr)
         sys.exit(1)
