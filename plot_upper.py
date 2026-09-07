@@ -27,6 +27,7 @@ import os
 
 import numpy as np
 import matplotlib
+import matplotlib.patheffects
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -36,7 +37,9 @@ from config import OUT_DIR, DATA_DIR, KST_OFFSET_H, LON_MIN, LON_MAX, LAT_MIN, L
 from fetch_upper import LEVELS, UP_LON_MIN, UP_LON_MAX, UP_LAT_MIN, UP_LAT_MAX
 
 # 등치선 간격(지상 hPa, 상층 m) — 층별 관례
-CONTOUR = {"sfc": 4, 925: 30, 850: 30, 700: 30, 500: 60, 300: 120, 200: 120}
+# 표준 일기도(기상청·JMA) 관례: 지상 4hPa, 925·850 30m, 700·500 60m, 300·200 120m (2026-09-07 사용자 요청)
+CONTOUR = {"sfc": 4, 925: 30, 850: 30, 700: 60, 500: 60, 300: 120, 200: 120}
+LW_CONTOUR = 1.4          # 등고선을 해안선(0.6)보다 확실히 굵게
 # 층별 채움 변수: (변수, 컬러맵, vmin, vmax, 라벨). 기온 층은 범위·컬러맵 공통.
 FILL = {"sfc": ("t", "RdYlBu_r", -25, 35, "2m 기온 (℃)"),
         925: ("t", "RdYlBu_r", -25, 35, "기온 (℃)"),
@@ -109,7 +112,7 @@ def _ax(fig):
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     ax.set_extent([UP_LON_MIN, UP_LON_MAX, UP_LAT_MIN, UP_LAT_MAX])
     try:
-        ax.coastlines(resolution="50m", linewidth=0.6, color="#222")
+        ax.coastlines(resolution="50m", linewidth=0.6, color="#555")
         ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor="#444")
     except Exception:
         pass
@@ -152,15 +155,15 @@ def draw_panel(model: str, run: dt.datetime, step: int, lev, fields: dict, lats,
     lo2d, la2d = np.meshgrid(lons, lats)
     pm = ax.pcolormesh(lo2d, la2d, fill, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto")
     if lev == "sfc":
-        cs = ax.contour(lo2d, la2d, fields["msl"], levels=np.arange(920, 1080, CONTOUR["sfc"]), colors="k", linewidths=0.8)
+        cs = ax.contour(lo2d, la2d, fields["msl"], levels=np.arange(920, 1080, CONTOUR["sfc"]), colors="k", linewidths=LW_CONTOUR)
         ax.clabel(cs, fmt="%d", fontsize=FS_LABEL, inline_spacing=3)
         _mark_centers(ax, fields["msl"], lats, lons)
-        title = "지상 — 해면기압(hPa) · 색 2m 기온(℃)"
+        title = f"지상 - 해면기압({CONTOUR['sfc']}hPa 간격) + 2m 기온(℃)"
     else:
-        cs = ax.contour(lo2d, la2d, fields["gh"], levels=np.arange(0, 20000, CONTOUR[lev]), colors="k", linewidths=0.8)
-        ax.clabel(cs, fmt=lambda v: f"{v / 10:.0f}", fontsize=FS_LABEL, inline_spacing=3)   # dam
+        cs = ax.contour(lo2d, la2d, fields["gh"], levels=np.arange(0, 20000, CONTOUR[lev]), colors="k", linewidths=LW_CONTOUR)
+        ax.clabel(cs, fmt="%d", fontsize=FS_LABEL, inline_spacing=3)   # m 단위 그대로(예: 5880) — dam 표기는 낯설다(사용자)
         what = {"t": "기온(℃)", "r": "상대습도(%)", "vort": "절대와도", "wspd": "풍속(m/s)"}[var]
-        title = f"{lev} hPa — 고도(dam, {CONTOUR[lev]}m 간격) · 색 {what} · 바람깃(kt)"
+        title = f"{lev}hPa - 지위고도({CONTOUR[lev]}m 간격) + {what} + 바람(kt)"
         if "u" in fields and "v" in fields:
             k = max(1, int(round(2.5 / abs(lats[1] - lats[0]))))          # 2.5° 마다 바람깃
             sl = (slice(k // 2, None, k), slice(k // 2, None, k))            # 경계 격자는 피한다(깃이 지도 밖으로 나감)
@@ -198,10 +201,12 @@ def _mark_centers(ax, p, lats, lons):
             if any(abs(lats[j] - a) < 8 and abs(lons[i] - b) < 8 for a, b in picked):
                 continue                                   # 평탄한 마루/골에서 겹치는 표시 제거
             picked.append((lats[j], lons[i]))
-            ax.text(lons[i], lats[j], sym, color=col, fontsize=17, weight="bold", ha="center", va="center",
-                    transform=ccrs.PlateCarree())
-            ax.text(lons[i], lats[j] - 1.3, f"{v:.0f}", color=col, fontsize=10, weight="bold", ha="center", va="top",
-                    transform=ccrs.PlateCarree())
+            # 흰 테두리로 어떤 배경색 위에서도 읽히게 (2026-09-07 사용자 요청)
+            pe = [matplotlib.patheffects.withStroke(linewidth=3.5, foreground="white")]
+            ax.text(lons[i], lats[j], sym, color=col, fontsize=18, weight="bold", ha="center", va="center",
+                    transform=ccrs.PlateCarree(), path_effects=pe)
+            ax.text(lons[i], lats[j] - 1.3, f"{v:.0f}", color=col, fontsize=11, weight="bold", ha="center", va="top",
+                    transform=ccrs.PlateCarree(), path_effects=pe)
 
 
 PL_VARS = {925: ("gh", "t", "u", "v"), 850: ("gh", "t", "u", "v"), 700: ("gh", "r", "u", "v"),
