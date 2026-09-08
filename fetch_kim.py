@@ -28,7 +28,7 @@ import requests
 import eccodes
 
 import sslfix  # noqa: F401
-from config import KIM_STEPS, DATA_DIR
+from config import KIM_STEPS, KIM_FAR_END, DATA_DIR, model_steps
 
 API = "https://apihub-pub.kma.go.kr/api/typ06/url/nwp_file_down.php"
 NWP = "k512"
@@ -140,9 +140,10 @@ def fetch(tmfc: str | None = None, max_minutes: float = 0.0, workers: int = 8) -
     t_start = time.time()
     got: dict[int, str | None] = {}
     n_skip = 0
+    steps = model_steps(int(tmfc[8:10]), 120, KIM_FAR_END)   # 3h→120h, 12h→288h (런 시각 정렬)
     with cf.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futs = {}
-        for step in KIM_STEPS:
+        for step in steps:
             if max_minutes and (time.time() - t_start) / 60 >= max_minutes:
                 n_skip += 1
                 continue
@@ -159,7 +160,7 @@ def fetch(tmfc: str | None = None, max_minutes: float = 0.0, workers: int = 8) -
     tmp_out = target + ".part"
     n_ok = n_fail = 0
     with open(tmp_out, "wb") as dst:
-        for step in KIM_STEPS:
+        for step in steps:
             path = got.get(step)
             if path is None:
                 if step in got:

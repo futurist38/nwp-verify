@@ -29,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from config import (CITIES, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX,
-                    MAP_STEPS, KST_OFFSET_H, OUT_DIR, DATA_DIR, VERIF_DIR)
+                    map_steps, KST_OFFSET_H, OUT_DIR, DATA_DIR, VERIF_DIR)
 
 warnings.filterwarnings("ignore")
 
@@ -368,7 +368,7 @@ def plot_maps(model_name, data, out_dir):
         plt.close(fig)
         n_saved += 1
 
-    for step_h in MAP_STEPS:
+    for step_h in map_steps(run.hour):      # 3h→120h, 12h→240h (00/12UTC 유효)
         t2m = _sel_step(data["t2m"], step_h)
         if t2m is None:
             continue

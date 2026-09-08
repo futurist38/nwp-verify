@@ -18,7 +18,7 @@ import time
 import requests
 
 import sslfix  # noqa: F401  (AVG TLS 검사 대응 — 모듈 주석 참조)
-from config import (GFS_STEPS, GFS_VARS, GFS_LEVELS,
+from config import (model_steps, GFS_FAR_END, GFS_VARS, GFS_LEVELS,
                     LON_MIN, LON_MAX, LAT_MIN, LAT_MAX, DATA_DIR)
 
 BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
@@ -86,7 +86,7 @@ def fetch(ymd: str | None = None, hh: str | None = None) -> str:
     tmp = target + ".part"
     n_ok, n_fail = 0, 0
     with open(tmp, "wb") as f:
-        for step in GFS_STEPS:
+        for step in model_steps(int(hh), 120, GFS_FAR_END):
             if step == 0 and f000_cache is not None:
                 f.write(f000_cache)
                 n_ok += 1

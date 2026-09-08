@@ -31,9 +31,9 @@ METEO_DATES: list[str] = []
 OBS_DATES: list[str] = []
 FD_DATES: list[str] = []
 HAS_MIDFCST = False    # export_midfcst 결과 (manifest 용)
-MAX_DAYS = 45          # 모델 지도 보존 일수 (WebP 전환 후 하루 ~11MB → 약 500MB)
-UPPER_MAX_DAYS = 14    # 고도별 기압장 보존 일수 (7패널×21스텝×2모델 ≈ 17MB/일 — 2026-09-07)
-UPPER_PANELS = {"sfc", "p925", "p850", "p700", "p500", "p300", "p200"}
+MAX_DAYS = 14          # 모델 지도 보존 일수 (2026-09-08 사용자: 2주면 충분. 하루 ~40MB)
+UPPER_MAX_DAYS = 7     # 고도별 기압장(925~200) 보존 일수 (하루 ~90MB — 2026-09-08 사용자: 7일, 그림 크기 유지)
+UPPER_PANELS = {"p925", "p850", "p700", "p500", "p300", "p200"}   # sfc(지상장)는 일반 지도와 같이 MAX_DAYS
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
 

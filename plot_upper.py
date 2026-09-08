@@ -266,10 +266,15 @@ def _render_levels(model: str, fields: dict, lats, lons, run, out_dir: str) -> i
     return n
 
 
+def _sfc_ok(run, step: int) -> bool:
+    """지상장 스텝 규칙(2026-09-08): 120h 까지 6h, 그 뒤 12h — 유효시각이 00/12UTC."""
+    return (step % 6 == 0) if step <= 120 else ((run.hour + step) % 12 == 0)
+
+
 def _render_sfc(model: str, fields: dict, msl_key, lats, lons, run, out_dir: str, every=1) -> int:
     n = 0
     for step in sorted(fields.get(msl_key, {})):
-        if step % (6 * every):
+        if not _sfc_ok(run, step):
             continue
         t = fields.get(("2t", "heightAboveGround", 2), {}).get(step)
         if t is not None:

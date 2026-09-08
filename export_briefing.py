@@ -24,7 +24,7 @@ from config import CITIES, CITY_OBS_STN, VERIF_DIR
 
 REP6 = ["서울", "대전", "대구", "부산", "광주", "강릉"]     # 상세를 싣는 도시
 COAST = ["인천", "강릉", "부산", "제주"]                       # 바람 요약(서해안·동해안·남해안·제주)
-DAYS = 7
+DAYS = 10          # 2026-09-08: 10일(ECMWF 240h·중기예보 D+10 과 맞춤)
 MODELS = ["ECMWF", "GFS", "KIM"]
 SHORT = {"ECMWF": "EC", "GFS": "GFS", "KIM": "KIM"}
 SPREAD_WARN = 5.0

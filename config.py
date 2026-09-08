@@ -28,15 +28,24 @@ CITIES = [
 # ── 예측 시간 설정 ─────────────────────────────────────────
 # ECMWF 오픈데이터: 0~144h는 3h 간격, 150~240h는 6h 간격
 ECMWF_STEPS = list(range(0, 145, 3)) + list(range(150, 241, 6))
-# GFS: 0~120h 3h 간격 (필요하면 384h까지 연장 가능)
-GFS_STEPS = list(range(0, 121, 3))
-# KIM(k512): 3h 간격, 288h까지 제공. 스텝당 원본 76MB(추출 후 ~2MB)라
-# API허브 트래픽을 고려해 72h까지만 수신 (2026-08-21)
-KIM_STEPS = list(range(0, 73, 3))
+# ── 스텝 규칙 (2026-09-08 사용자 확정): **5일(120h)까지 3h, 그 뒤는 12h — 유효시각이 00·12UTC 가 되게** ──
+#   00/12z 런은 132,144,…  06/18z 런은 126,138,… 처럼 런 시각에 맞춰 어긋나게 잡는다.
+def model_steps(run_hour: int, dense_end: int = 120, far_end: int = 240, far_every: int = 12) -> list[int]:
+    dense = list(range(0, dense_end + 1, 3))
+    far = [s for s in range(dense_end + 1, far_end + 1) if (run_hour + s) % far_every == 0]
+    return dense + far
 
-# 지도 그림을 그릴 리드타임(시간). CSV/미티오그램은 전체 스텝 사용.
-# 2026-08-21 사용자 확정: 3시간 간격, 120시간까지 (기존 6h/72h)
-MAP_STEPS = list(range(0, 121, 3))
+# GFS: 본 파일(기온·운량·강수·일사) 240h(10일). 지상장은 fetch_upper 가 384h 까지 따로.
+GFS_FAR_END = 240
+# KIM(k512): 3h 간격 288h 제공, 스텝당 원본 84MB. 3h 120h + 12h 288h(12일) = 55스텝 ≈ 4.6GB/런 (2026-09-08 확장)
+KIM_FAR_END = 288
+KIM_STEPS = model_steps(0, 120, KIM_FAR_END)      # 기본(00z). 실제는 fetch_kim 이 런 시각으로 다시 만든다
+
+# 지도 그림 리드타임: 3h→120h, 12h→240h(10일). CSV/미티오그램은 전체 스텝.
+MAP_FAR_END = 240
+def map_steps(run_hour: int) -> list[int]:
+    return model_steps(run_hour, 120, MAP_FAR_END)
+MAP_STEPS = map_steps(0)
 
 # KST = UTC + 9
 KST_OFFSET_H = 9

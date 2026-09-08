@@ -213,7 +213,7 @@ function drawPanel(o) {
     let out = "", pen = false, gap = 0;
     for (let i = o.i0; i <= o.i1; i++) {
       const v = arr && arr[i];
-      if (v == null) { gap++; if (gap > 1) pen = false; continue; }
+      if (v == null) { gap++; if (gap > 3) pen = false; continue; }   // 12h 간격(3칸 비움)까지 이어 그림
       gap = 0;
       out += (pen ? "L" : "M") + f1(X(i)) + " " + f1(Y(v)) + " ";
       pen = true;
