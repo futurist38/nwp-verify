@@ -229,7 +229,8 @@
     <div id="verifDailyC" class="tablewrap"></div>
     <h3 id="verifDailySH">일사 W/m² (3시간 평균, 낮 시간만)</h3>
     <div id="verifDailyS" class="tablewrap"></div>
-    <p class="note">같은 유효시각에 런이 여럿이면 최단 리드(최신 런) 값.
+    <p class="note"><b>2026-09-08부터 운량 채점 기준 변경</b> — 모델 운량을 최근접 1점이 아니라 3×3 격자 평균으로 추출(A/B 채점 결과, MAE −12%). 기온은 최근접 그대로. 그 이전 날짜의 운량 오차와 직접 비교하지 마세요.
+       같은 유효시각에 런이 여럿이면 최단 리드(최신 런) 값.
        셀 배경: <b style="color:#c22">과대(+)=빨강</b> · <b style="color:#1a7a3c">저평가(−)=초록</b>,
        진할수록 |오차| 큼 (기온 ±3℃ · 운량 ±40%p · 일사 ±200W/m²에서 포화).
        일사 실측 = ASOS 시간 일사합을 W/m²로 환산해 같은 창으로 평균.</p>

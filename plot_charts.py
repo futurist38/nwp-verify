@@ -466,15 +466,28 @@ def city_series(model_name, data):
             return None
         return round(float(da_city.isel(step=idx_map[sh])), ndigits)
 
+    # 지점 추출 (2026-09-08 검증으로 확정, README 실측 기록): 기온·일사·강수는 **최근접 1점**,
+    # 운량(전운량·층별)은 **3×3 격자 평균**. A/B 채점(EC·GFS·KIM 24런, ASOS 10지점): 기온은 최근접이 최선
+    # (육지가중은 강릉 1.39→3.80 으로 악화 — 주변 '육지'가 태백산맥), 운량은 3×3 평균이 MAE −12%.
+    # 이날부터 운량 채점 기준이 바뀌었으므로 그 이전 scores 와 직접 비교하지 말 것.
+    BOX_MEAN_VARS = ("tcc", "lcc", "mcc", "hcc")
+
+    def _city(da, lat, lon, box):
+        if not box:
+            return da.sel(latitude=lat, longitude=lon, method="nearest")
+        j = int(np.argmin(np.abs(da.latitude.values - lat)))
+        i = int(np.argmin(np.abs(da.longitude.values - lon)))
+        return da.isel(latitude=slice(max(0, j - 1), j + 2),
+                       longitude=slice(max(0, i - 1), i + 2)).mean(("latitude", "longitude"))
+
     for name, lat, lon, is_rep in CITIES:
-        sel = dict(latitude=lat, longitude=lon, method="nearest")
         series = {}
         for key in ("t2m", "tcc", "lcc", "mcc", "hcc", "dswrf", "tp"):
             da = data.get(key)
             if da is None:
                 series[key] = (None, {})
             else:
-                da_city = da.sel(**sel)
+                da_city = _city(da, lat, lon, key in BOX_MEAN_VARS)
                 idx_map = {int(s): i for i, s in enumerate(_steps_h(da_city))}
                 series[key] = (da_city, idx_map)
         # 창 길이(win_h): 일사·강수 공통 (2026-09-06). 없으면(구 자료) NaN → 검증이 옛 규약 적용
