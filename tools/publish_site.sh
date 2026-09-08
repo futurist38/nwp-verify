@@ -26,7 +26,25 @@ for i in 1 2 3 4 5 6; do
     git --work-tree="$SITE" checkout -q FETCH_HEAD -- .
     git reset -q                       # 인덱스 원복 (--work-tree checkout 이 인덱스를 바꿈)
   fi
+  # ── Cloudflare R2 (2026-09-08): 그림은 R2, site-data 는 JSON·나우캐스트만. R2_BUCKET 이 비면 예전 방식 그대로 ──
+  if [ -n "${R2_BUCKET:-}" ]; then
+    export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+           RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+           RCLONE_CONFIG_R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" RCLONE_CONFIG_R2_ACL=private
+    # 보존 정리(업로드 시각 기준): 일반 지도·지상장 14일, 상층(925~200) 7일
+    rclone delete "r2:${R2_BUCKET}/archive" --min-age 14d -q || true
+    rclone delete "r2:${R2_BUCKET}/archive" --include "*_p[0-9][0-9][0-9].webp" --min-age 7d -q || true
+    rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null || : > .r2_listing
+    export R2_LISTING="$(pwd)/.r2_listing" IMG_BASE="${R2_PUBLIC_URL:-}"
+    echo "[publish] R2 목록 $(wc -l < .r2_listing)개, 접두어 ${IMG_BASE:-없음}"
+  fi
   python build_site.py --site-dir "$SITE" "$@"
+  if [ -n "${R2_BUCKET:-}" ] && [ -d "$SITE/archive" ]; then
+    # 새 그림 업로드(있는 것은 건너뜀) 후 site-data 에서는 뺀다 — Pages 1GB 상한 회피
+    rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --transfers 32 --checkers 32 -q \
+      && rm -rf "$SITE/archive" && echo "[publish] archive → R2 업로드 후 site-data 에서 제외" \
+      || echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 남긴다"
+  fi
   rm -f "$IDX"
   GIT_INDEX_FILE="$IDX" git --work-tree="$SITE" add -A
   TREE=$(GIT_INDEX_FILE="$IDX" git write-tree)

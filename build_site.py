@@ -622,10 +622,28 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
                 "max_days": MAX_DAYS, "dates": {}}
     if nowcast:
         manifest["nowcast"] = nowcast
-    for d in sorted(glob.glob(os.path.join(site_dir, "archive", "????????"))):
-        ymd = os.path.basename(d)
+    # 그림이 R2 에 있으면(2026-09-08 이관) 러너의 archive/ 에는 이번 산출만 있다 → R2 목록(R2_LISTING,
+    # `rclone lsf -R --files-only` 결과: "YYYYMMDD/파일명")과 합쳐 스캔한다. 파일명이 유일한 진실인 건 같다.
+    files: dict[str, set] = {}
+    for d in glob.glob(os.path.join(site_dir, "archive", "????????")):
+        files.setdefault(os.path.basename(d), set()).update(os.listdir(d))
+    listing = os.environ.get("R2_LISTING")
+    if listing and os.path.exists(listing):
+        cut = (dt.date.today() - dt.timedelta(days=MAX_DAYS)).strftime("%Y%m%d")
+        n_remote = 0
+        for line in open(listing, encoding="utf-8"):
+            line = line.strip()
+            if "/" not in line:
+                continue
+            ymd, fn = line.split("/", 1)
+            if len(ymd) == 8 and ymd.isdigit() and ymd >= cut:
+                files.setdefault(ymd, set()).add(fn); n_remote += 1
+        print(f"[site] R2 목록 병합: {n_remote}개")
+    if os.environ.get("IMG_BASE"):
+        manifest["img_base"] = os.environ["IMG_BASE"].rstrip("/")
+    for ymd in sorted(files):
         entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
-        for fn in sorted(os.listdir(d)):
+        for fn in sorted(files[ymd]):
             mo = OBS_RE.match(fn)
             if mo:
                 entry["obs"].setdefault(mo["var"], []).append(int(mo["hour"]))

@@ -13,6 +13,8 @@ const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
 const MODEL_SHORT = { ECMWF: "EC", GFS: "GFS", KIM: "KIM" };
 let MF = null;
 let state = { date: null, model: null, panel: null, stepIdx: 0, runs: {} };
+// 그림 저장소 접두어 — manifest.img_base 가 있으면(Cloudflare R2, 2026-09-08 이관) 거기서, 없으면 사이트 자체에서
+const IMG = () => (MF && MF.img_base) ? MF.img_base + "/" : "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -811,7 +813,7 @@ function renderPanelBtns() {
 }
 function imgPathFor(model, stepH) {
   const run = runOf(model);
-  return `archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
+  return `${IMG()}archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
 }
 function renderChart() {
   $("stepSlider").value = state.stepIdx;
@@ -1260,7 +1262,7 @@ function renderFresh() {
     // 위성 일사 일적산 그림 — 그 날짜 아카이브에 있으면 표시
     const sat = ((MF.dates[ymd] || {}).satsw || []).filter((f) => f.endsWith(".webp") || f.endsWith(".png"));
     $("satBlock").hidden = !sat.length;
-    if (sat.length) $("satImg").src = `archive/${ymd}/${sat[sat.length - 1]}?${Date.now()}`;
+    if (sat.length) $("satImg").src = `${IMG()}archive/${ymd}/${sat[sat.length - 1]}?${Date.now()}`;
   };
   $("dateSelO").onchange = onObsDate;
   if (odates.length) onObsDate();

@@ -26,6 +26,12 @@ env:
   PYTHONIOENCODING: utf-8
   PYTHONUNBUFFERED: "1"     # 로그 시각이 실제 진행과 맞게 — 단계별 소요를 나중에 잴 수 있다
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+  # Cloudflare R2 (2026-09-08, 그림 저장소). 비어 있으면 그림을 site-data 에 두는 예전 방식으로 동작
+  R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_BUCKET: ${{ vars.R2_BUCKET }}
+  R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
   GMAIL_ADDR: ${{ secrets.GMAIL_ADDR }}
   GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
@@ -74,7 +80,7 @@ jobs:
       - name: 시스템 의존성 (한글 폰트)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q fonts-nanum
+          sudo apt-get install -y -q fonts-nanum rclone
           rm -rf ~/.cache/matplotlib
 
       - name: Python 의존성

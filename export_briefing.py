@@ -195,7 +195,8 @@ def build(now: dt.datetime | None = None, site_dir: str | None = None) -> dict:
                 for st in (0, 24, 48, 72):
                     fn = f"{m.lower()}_{run}_f{st:03d}_{panel}.webp"
                     if os.path.exists(os.path.join(arch, fn)):
-                        links.setdefault(panel, {})[f"+{st}h"] = f"{SITE_URL}/archive/{today:%Y%m%d}/{fn}"
+                        base = os.environ.get("IMG_BASE", SITE_URL).rstrip("/")
+                        links.setdefault(panel, {})[f"+{st}h"] = f"{base}/archive/{today:%Y%m%d}/{fn}"
             if links:
                 out["charts"][m] = {"run": run, "links": links}
 

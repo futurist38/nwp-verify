@@ -44,6 +44,12 @@ env:
   PYTHONIOENCODING: utf-8
   PYTHONUNBUFFERED: "1"
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+  # Cloudflare R2 (2026-09-08, 그림 저장소). 비어 있으면 그림을 site-data 에 두는 예전 방식으로 동작
+  R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_BUCKET: ${{ vars.R2_BUCKET }}
+  R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
 
 jobs:
   # 외부 스케줄러의 토큰이 유출되더라도 workflow_dispatch 를 연타해 기상청 API 를
@@ -110,7 +116,7 @@ jobs:
       - name: 시스템 의존성 (한글 폰트)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q fonts-nanum
+          sudo apt-get install -y -q fonts-nanum rclone
           rm -rf ~/.cache/matplotlib
 
       - name: Python 의존성

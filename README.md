@@ -123,6 +123,21 @@ KIM(API허브)은 스텝 병렬 4 로 원본 2.3→5.9MB/s(25스텝 1.9GB ≈ 5.
 - 중기예보 기온 `fct_afs_wc.php` 는 apihub-pub 에서 일반키 OK, `tmfc1~tmfc2` 범위 조회 가능(백필 도시당 1회). 10도시 예보구역 코드는 `kma_midfcst.py REGS`.
 - GK2A SWRAD KO: `DSR`(uint16 ×0.1 W/m²) 900×900, CLA 와 같은 LCC 격자. netCDF4 는 **윈도우 한글 경로를 못 열어** 메모리 모드로 읽는다.
 
+### 그림 저장소 Cloudflare R2 (2026-09-08 이관)
+
+Pages 1GB 상한 때문에 지도·상층 그림(`archive/`)은 **R2(무료 10GB)** 에 두고 site-data 에는 JSON·나우캐스트만 남긴다.
+`tools/publish_site.sh` 가 `R2_BUCKET` 이 있을 때만 다음을 한다: R2 보존 정리(14일, 상층 7일) → `rclone lsf` 목록 →
+`build_site.py` 가 목록+이번 산출로 manifest 생성(`img_base` 기록) → 새 그림 `rclone copy` → `site_build/archive` 삭제.
+비밀값이 없으면 예전처럼 site-data 에 그림을 넣는다. 뷰어는 `manifest.img_base` 접두어로 그림을 찾는다.
+
+**설정 절차 (1회)**
+1. Cloudflare 대시보드 → R2 → 버킷 생성(예: `nwp-verify-img`) → Settings → **Public access: r2.dev 허용** → 주소 `https://pub-….r2.dev` 복사
+2. R2 → Manage R2 API Tokens → 토큰 생성(권한 **Object Read & Write**, 버킷 한정) → Access Key ID / Secret 복사
+3. GitHub 저장소 Settings → Secrets: `R2_ACCOUNT_ID`(Cloudflare 계정 ID), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` /
+   Variables: `R2_BUCKET`(버킷명), `R2_PUBLIC_URL`(r2.dev 주소)
+4. 다음 daily 가 첫 실행에서 site-data 의 기존 그림 전부(~650MB)를 R2 로 올리고 site-data 에서 뺀다 — 이 한 번은 10분쯤 더 걸린다
+주의: 토큰·주소를 대화나 커밋에 붙이지 말 것. 로컬 미리보기(DRY_RUN)는 R2 없이 그대로 동작.
+
 ### 사이트 발행 방식 (2026-09-06 개편)
 
 두 워크플로(`daily-nwp`, `obs-hourly`)는 **서로 기다리지 않는다**. 예전에는 동시성 그룹을
