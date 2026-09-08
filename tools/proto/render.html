@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>브라우저 렌더링 시제품 — 지상·850·500</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Malgun Gothic", sans-serif; background: #f3f5f8; color: #222; max-width: 1240px; margin: 0 auto; padding: 10px; }
+  h1 { font-size: 18px; margin: 6px 0 4px; }
+  .note { color: #777; font-size: 12px; margin-bottom: 8px; line-height: 1.5; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .grp { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid #dfe3e8; border-radius: 10px; background: #f7f9fb; }
+  .lab { font-size: 11px; font-weight: bold; color: #6b7480; background: #e9edf2; padding: 2px 6px; border-radius: 6px; }
+  button { padding: 6px 11px; border: 1px solid #ccc; background: #fff; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  button.on { background: #444; color: #fff; border-color: #444; }
+  input[type=range] { width: 320px; accent-color: #2a6fd6; }
+  #wrap { position: relative; width: 100%; max-width: 1200px; aspect-ratio: 1200 / 840; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+  #wrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #cbar { display: block; width: 700px; max-width: 100%; }
+  #divider { position: absolute; top: 0; bottom: 0; width: 2px; background: #e01b24; cursor: ew-resize; z-index: 5; }
+  #divider::after { content: "◀ ▶"; position: absolute; top: 8px; left: -22px; background: #e01b24; color: #fff; font-size: 11px; padding: 2px 5px; border-radius: 4px; }
+  .tag { position: absolute; top: 8px; font-size: 13px; font-weight: bold; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.85); z-index: 4; }
+  #tagL { left: 8px; } #tagR { right: 8px; }
+  #tip { position: fixed; background: rgba(255,255,255,.96); border: 1px solid #bbb; border-radius: 6px; padding: 5px 8px; font-size: 12.5px; pointer-events: none; display: none; z-index: 9; white-space: nowrap; }
+  #cbar { height: 34px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>브라우저 렌더링 시제품 — 격자값을 받아 화면에서 그림</h1>
+<p class="note">그림 파일 없이 격자 자료(0.25°, 정수 압축)로 등치선·채움·해안선을 브라우저가 그립니다. 두 모델을 한 지도에 놓고 <b>빨간 선을 끌어</b> 좌우로 비교하고,
+   마우스를 올리면 그 지점의 값이 읽힙니다. 등고선 라벨은 선 중간에 자동 배치(간단 규칙). 자료: ECMWF·GFS 09-07 06z, 6시간 간격 +120h.</p>
+<div class="row">
+  <div class="grp"><span class="lab">층</span>
+    <button data-lev="sfc" class="on">지상 (해면기압+2m기온)</button>
+    <button data-lev="850">850hPa (지위고도+기온)</button>
+    <button data-lev="500">500hPa (지위고도+기온850색 대신 고도 색)</button></div>
+  <div class="grp"><span class="lab">왼쪽</span><select id="selL"></select></div>
+  <div class="grp"><span class="lab">오른쪽</span><select id="selR"></select></div>
+</div>
+<div class="row">
+  <div class="grp"><span class="lab">스텝</span><button id="prev">◀</button><input type="range" id="step" min="0" max="0" value="0"><button id="next">▶</button><button id="play">▶ 재생</button></div>
+  <span id="stepLab" style="font-size:13px;color:#555"></span>
+</div>
+<div id="wrap">
+  <canvas id="cL"></canvas><canvas id="cR"></canvas>
+  <div id="divider" style="left:50%"></div>
+  <div class="tag" id="tagL"></div><div class="tag" id="tagR"></div>
+</div>
+<canvas id="cbar"></canvas>
+<div id="tip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+"use strict";
+const W = 1200, H = 840, ML = 46, MR = 16, MT = 14, MB = 30;
+const LON0 = 100, LON1 = 150, LAT0 = 20, LAT1 = 55;
+const X = (lon) => ML + (lon - LON0) / (LON1 - LON0) * (W - ML - MR);
+const Y = (lat) => MT + (LAT1 - lat) / (LAT1 - LAT0) * (H - MT - MB);
+const LEV = {
+  sfc: { fill: "t2m", fs: 0.1, line: "msl", ls: 0.1, iv: 4, fmt: (v) => v.toFixed(0), vmin: -25, vmax: 35, unit: "℃", flab: "2m 기온", llab: "해면기압 hPa", cmap: d3.interpolateRdYlBu },
+  850: { fill: "t850", fs: 0.1, line: "gh850", ls: 1, iv: 30, fmt: (v) => v.toFixed(0), vmin: -25, vmax: 35, unit: "℃", flab: "850hPa 기온", llab: "지위고도 m", cmap: d3.interpolateRdYlBu },
+  500: { fill: "gh500", fs: 1, line: "gh500", ls: 1, iv: 60, fmt: (v) => v.toFixed(0), vmin: 5400, vmax: 5940, unit: "m", flab: "500hPa 지위고도", llab: "지위고도 m", cmap: d3.interpolateViridis },
+};
+let GRIDS = {}, lev = "sfc", stepIdx = 0, coast = [];
+
+async function load() {
+  const list = await (await fetch("grid/index.json").catch(() => null))?.json?.() ?? null;
+  const names = list || ["ecmwf_2026090706", "gfs_2026090706"];
+  for (const n of names) GRIDS[n] = await (await fetch(`grid/${n}.json`)).json();
+  coast = await (await fetch("grid/coast.json")).json();
+  const opts = Object.keys(GRIDS).map((n) => `<option value="${n}">${GRIDS[n].model} ${GRIDS[n].run.slice(4, 6)}-${GRIDS[n].run.slice(6, 8)} ${GRIDS[n].run.slice(8)}z</option>`).join("");
+  document.getElementById("selL").innerHTML = opts;
+  document.getElementById("selR").innerHTML = opts;
+  document.getElementById("selR").selectedIndex = Math.min(1, Object.keys(GRIDS).length - 1);
+  setup(); draw();
+}
+
+function steps() { const g = GRIDS[document.getElementById("selL").value]; return g ? g.steps : []; }
+
+function fieldAt(g, name, st) { const f = g.fields[name]; return f && f[String(st)]; }
+
+function drawOne(canvas, g, st, tag) {
+  const cfg = LEV[lev];
+  const ctx = canvas.getContext("2d");
+  canvas.width = W; canvas.height = H;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  const fill = fieldAt(g, cfg.fill, st), line = fieldAt(g, cfg.line, st);
+  const nx = g.nx, ny = g.ny;
+  const lonOf = (i) => g.lon0 + (g.lon1 - g.lon0) * i / (nx - 1);
+  const latOf = (j) => g.lat0 + (g.lat1 - g.lat0) * j / (ny - 1);   // lat0 는 북쪽(위) — read_fields 순서
+  if (!fill || !line) { ctx.fillStyle = "#888"; ctx.font = "16px sans-serif"; ctx.fillText("이 스텝에는 자료가 없습니다", ML + 20, MT + 40); return; }
+  // 채움: 격자 셀 사각형 (0.25° = 약 5.6px) — 부드럽게 보이도록 셀 경계로 그린다
+  const color = d3.scaleSequential(cfg.cmap).domain(lev === "500" ? [cfg.vmin, cfg.vmax] : [cfg.vmax, cfg.vmin]);
+  const cw = (W - ML - MR) / (nx - 1), ch = (H - MT - MB) / (ny - 1);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v = fill[j * nx + i] * cfg.fs;
+    ctx.fillStyle = color(v);
+    ctx.fillRect(X(lonOf(i)) - cw / 2, Y(latOf(j)) - ch / 2, cw + 0.6, ch + 0.6);
+  }
+  // 해안선·국경
+  ctx.lineWidth = 0.9; ctx.strokeStyle = "#444";
+  for (const ln of coast) {
+    ctx.beginPath(); ctx.lineWidth = ln.k === "coast" ? 0.9 : 0.5; ctx.strokeStyle = ln.k === "coast" ? "#333" : "#666";
+    ln.pts.forEach((p, k) => k ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])));
+    ctx.stroke();
+  }
+  // 한반도 표출 영역(다른 탭) 점선
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = "#1a5fb4"; ctx.lineWidth = 1;
+  ctx.strokeRect(X(120), Y(44), X(135) - X(120), Y(31) - Y(44)); ctx.setLineDash([]);
+  // 등치선: d3.contours (격자 좌표계 → 화면 좌표 변환)
+  const vals = Float64Array.from(line, (v) => v * cfg.ls);
+  const lo = Math.floor(d3.min(vals) / cfg.iv) * cfg.iv, hi = Math.ceil(d3.max(vals) / cfg.iv) * cfg.iv;
+  const thr = d3.range(lo, hi + cfg.iv, cfg.iv);
+  const cont = d3.contours().size([nx, ny]).thresholds(thr)(vals);
+  const gx = (i) => X(lonOf(i)), gy = (j) => Y(latOf(j));
+  ctx.lineWidth = 1.5; ctx.strokeStyle = "#000"; ctx.font = "bold 13px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const labels = [];
+  for (const c of cont) {
+    for (const poly of c.coordinates) for (const ring of poly) {
+      ctx.beginPath();
+      ring.forEach((p, k) => k ? ctx.lineTo(gx(p[0]), gy(p[1])) : ctx.moveTo(gx(p[0]), gy(p[1])));
+      ctx.stroke();
+      // 라벨: 링이 충분히 길면 1/3, 2/3 지점에 (거의 수평인 곳 우선)
+      if (ring.length > 40) {
+        for (const q of [0.33, 0.66]) {
+          let k = Math.floor(ring.length * q), best = k, bestSlope = 9;
+          for (let d = -8; d <= 8; d++) {
+            const a = ring[(k + d + ring.length) % ring.length], b = ring[(k + d + 2 + ring.length) % ring.length];
+            const s = Math.abs((gy(b[1]) - gy(a[1])) / ((gx(b[0]) - gx(a[0])) || 1e-6));
+            if (s < bestSlope) { bestSlope = s; best = (k + d + ring.length) % ring.length; }
+          }
+          const p = ring[best], x = gx(p[0]), y = gy(p[1]);
+          if (x < ML + 20 || x > W - MR - 20 || y < MT + 12 || y > H - MB - 12) continue;
+          if (labels.some((l) => Math.hypot(l[0] - x, l[1] - y) < 42)) continue;
+          labels.push([x, y, cfg.fmt(c.value)]);
+        }
+      }
+    }
+  }
+  for (const [x, y, t] of labels) {
+    const w = ctx.measureText(t).width + 6;
+    ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillRect(x - w / 2, y - 8, w, 16);
+    ctx.fillStyle = "#000"; ctx.fillText(t, x, y);
+  }
+  // 축 눈금
+  ctx.fillStyle = "#555"; ctx.font = "11px sans-serif"; ctx.textAlign = "center";
+  for (let lon = 110; lon <= 140; lon += 10) ctx.fillText(lon + "°E", X(lon), H - 10);
+  ctx.textAlign = "right";
+  for (let lat = 25; lat <= 55; lat += 5) ctx.fillText(lat + "°N", ML - 4, Y(lat) + 4);
+  const run = g.run, valid = new Date(Date.UTC(+run.slice(0, 4), +run.slice(4, 6) - 1, +run.slice(6, 8), +run.slice(8)) + (st + 9) * 3600e3);
+  const p2 = (n) => String(n).padStart(2, "0");
+  tag.textContent = `${g.model} 런 ${run.slice(4, 6)}-${run.slice(6, 8)} ${run.slice(8)}z +${st}h → 유효 ${p2(valid.getUTCMonth() + 1)}-${p2(valid.getUTCDate())} ${p2(valid.getUTCHours())}시 KST — ${cfg.llab} 등치선(${cfg.iv} 간격) · 색 ${cfg.flab}`;
+}
+
+function drawBar() {
+  const cfg = LEV[lev], c = document.getElementById("cbar"), ctx = c.getContext("2d");
+  c.width = 700; c.height = 34;
+  const color = d3.scaleSequential(cfg.cmap).domain(lev === "500" ? [cfg.vmin, cfg.vmax] : [cfg.vmax, cfg.vmin]);
+  for (let x = 0; x < 600; x++) { ctx.fillStyle = color(cfg.vmin + (cfg.vmax - cfg.vmin) * x / 600); ctx.fillRect(40 + x, 4, 1, 16); }
+  ctx.fillStyle = "#444"; ctx.font = "11px sans-serif"; ctx.textAlign = "center";
+  const n = 6;
+  for (let k = 0; k <= n; k++) { const v = cfg.vmin + (cfg.vmax - cfg.vmin) * k / n; ctx.fillText(v.toFixed(0), 40 + 600 * k / n, 31); }
+  ctx.textAlign = "left"; ctx.fillText(`${cfg.flab} (${cfg.unit})`, 646, 16);
+}
+
+function draw() {
+  const sts = steps(); if (!sts.length) return;
+  stepIdx = Math.min(stepIdx, sts.length - 1);
+  const st = sts[stepIdx];
+  document.getElementById("step").max = sts.length - 1; document.getElementById("step").value = stepIdx;
+  document.getElementById("stepLab").textContent = `+${st}h`;
+  drawOne(document.getElementById("cL"), GRIDS[document.getElementById("selL").value], st, document.getElementById("tagL"));
+  drawOne(document.getElementById("cR"), GRIDS[document.getElementById("selR").value], st, document.getElementById("tagR"));
+  drawBar(); applyClip();
+}
+
+function applyClip() {
+  const wrap = document.getElementById("wrap"), div = document.getElementById("divider");
+  const frac = parseFloat(div.style.left) / 100;
+  document.getElementById("cR").style.clipPath = `inset(0 0 0 ${(frac * 100).toFixed(2)}%)`;
+}
+
+function setup() {
+  document.querySelectorAll("button[data-lev]").forEach((b) => b.onclick = () => {
+    document.querySelectorAll("button[data-lev]").forEach((x) => x.classList.toggle("on", x === b)); lev = b.dataset.lev; draw();
+  });
+  document.getElementById("selL").onchange = draw; document.getElementById("selR").onchange = draw;
+  document.getElementById("step").oninput = (e) => { stepIdx = +e.target.value; draw(); };
+  document.getElementById("prev").onclick = () => { if (stepIdx > 0) { stepIdx--; draw(); } };
+  document.getElementById("next").onclick = () => { if (stepIdx < steps().length - 1) { stepIdx++; draw(); } };
+  let timer = null;
+  document.getElementById("play").onclick = (e) => {
+    if (timer) { clearInterval(timer); timer = null; e.target.textContent = "▶ 재생"; return; }
+    e.target.textContent = "⏸ 정지";
+    timer = setInterval(() => { stepIdx = (stepIdx + 1) % steps().length; draw(); }, 600);
+  };
+  // 스와이프 구분선
+  const wrap = document.getElementById("wrap"), div = document.getElementById("divider");
+  let dragging = false;
+  const setDiv = (clientX) => { const r = wrap.getBoundingClientRect(); const f = Math.max(0.02, Math.min(0.98, (clientX - r.left) / r.width)); div.style.left = (f * 100) + "%"; applyClip(); };
+  div.onmousedown = () => { dragging = true; };
+  window.onmouseup = () => { dragging = false; };
+  window.onmousemove = (e) => { if (dragging) setDiv(e.clientX); };
+  div.addEventListener("touchmove", (e) => { setDiv(e.touches[0].clientX); e.preventDefault(); }, { passive: false });
+  // 값 읽기
+  const tip = document.getElementById("tip");
+  wrap.onmousemove = (e) => {
+    if (dragging) return;
+    const r = wrap.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W, py = (e.clientY - r.top) / r.height * H;
+    const lon = LON0 + (px - ML) / (W - ML - MR) * (LON1 - LON0), lat = LAT1 - (py - MT) / (H - MT - MB) * (LAT1 - LAT0);
+    if (lon < LON0 || lon > LON1 || lat < LAT0 || lat > LAT1) { tip.style.display = "none"; return; }
+    const cfg = LEV[lev], st = steps()[stepIdx];
+    const rows = ["selL", "selR"].map((id) => {
+      const g = GRIDS[document.getElementById(id).value];
+      const i = Math.round((lon - g.lon0) / (g.lon1 - g.lon0) * (g.nx - 1)), j = Math.round((lat - g.lat0) / (g.lat1 - g.lat0) * (g.ny - 1));
+      const fl = fieldAt(g, cfg.fill, st), ln = fieldAt(g, cfg.line, st);
+      if (!fl) return `${g.model}: —`;
+      return `${g.model}: ${cfg.flab} ${(fl[j * g.nx + i] * cfg.fs).toFixed(1)}${cfg.unit} · ${cfg.llab.split(" ")[0]} ${(ln[j * g.nx + i] * cfg.ls).toFixed(0)}`;
+    });
+    tip.innerHTML = `<b>${lat.toFixed(2)}N ${lon.toFixed(2)}E</b><br>` + rows.join("<br>");
+    tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY - 40) + "px";
+  };
+  wrap.onmouseleave = () => { tip.style.display = "none"; };
+}
+load();
+</script>
+</body>
+</html>
