@@ -131,8 +131,13 @@ Pages 1GB 상한 때문에 지도·상층 그림(`archive/`)은 **R2(무료 10GB
 `UPPER_MAX_DAYS` 지나면 상층 p925~p200 만. `build_site.py` 로컬 정리와 같은 규칙) → `rclone lsf` 목록 →
 `build_site.py` 가 목록+이번 산출로 manifest 생성(`img_base` 기록) → 새 그림 `rclone copy --size-only` → `site_build/archive` 삭제.
 비밀값이 없으면 예전처럼 site-data 에 그림을 넣는다. 뷰어는 `manifest.img_base` 접두어로 그림을 찾는다(img 태그뿐이라 CORS 불필요).
+**회사망이 r2.dev 를 막는다(2026-09-09 실측: 회사 PC 는 차단 화면, 휴대폰은 정상)** → 최근 창은 site-data(github.io)에도 둔다:
+`build_site.LOCAL_DAYS_MAPS`(지도·위성, 7일)·`LOCAL_DAYS_UPPER`(지상 sfc·925~200, 3일) ≈ 700MB(하루 최대 170MB 실측)로 Pages 1GB 안.
+publish_site.sh 는 업로드 뒤 창 밖 파일을 site_build 에서 지우고 창 안에 빠진 것을 R2 에서 채운다(첫 전환·복구 때만 실제 내려받음).
+manifest 에 `local_cut {maps, upper}` 를 적고, 뷰어 `IMG(ymd, panel)` 은 그 날짜·패널이 창 안이면 사이트 자체 경로, 아니면 R2 를 쓰며
+실패하면(`onerror` → `imgFallback`) 반대쪽을 한 번 더 시도한다. 즉 회사에서는 최근 창만, 집·휴대폰에서는 14일 전부 보인다.
 버킷 한정 토큰은 버킷 목록 권한이 없어 `no_check_bucket=true` 로 rclone 의 버킷 확인을 끈다.
-로컬 끝-끝 시험(2026-09-08 통과): `rclone serve s3 <폴더> --auth-key k,s --addr 127.0.0.1:9333` 을 띄우고
+로컬 끝-끝 시험(2026-09-08·09 통과): `rclone serve s3 <폴더> --auth-key k,s --addr 127.0.0.1:9333` 을 띄우고
 `R2_ENDPOINT=http://127.0.0.1:9333 R2_BUCKET=<폴더 안 버킷명> … DRY_RUN=1 SITE_DIR=… tools/publish_site.sh "t" --hourly`.
 
 **설정 절차 (1회)**

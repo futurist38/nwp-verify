@@ -34,6 +34,17 @@ HAS_MIDFCST = False    # export_midfcst 결과 (manifest 용)
 MAX_DAYS = 14          # 모델 지도 보존 일수 (2026-09-08 사용자: 2주면 충분. 하루 ~40MB)
 UPPER_MAX_DAYS = 7     # 고도별 기압장(925~200) 보존 일수 (하루 ~90MB — 2026-09-08 사용자: 7일, 그림 크기 유지)
 UPPER_PANELS = {"p925", "p850", "p700", "p500", "p300", "p200"}   # sfc(지상장)는 일반 지도와 같이 MAX_DAYS
+# 그림이 R2 에 있어도 최근 창은 site-data(github.io)에 같이 둔다 — 회사망이 r2.dev 를 막는다(2026-09-09 실측).
+# 하루 최대 170MB(지상·상층 127 + 지도 42) → 지도 7일 + 지상·상층 3일 ≈ 700MB 로 Pages 1GB 안. 뷰어는 manifest.local_cut 으로 판단.
+LOCAL_DAYS_MAPS = 7    # 일반 지도·위성 일사: 이 날수 안이면 site-data 에도 있다
+LOCAL_DAYS_UPPER = 3   # 지상(sfc)·925~200: 이 날수 안이면 site-data 에도 있다
+
+
+def local_cuts() -> tuple[str, str]:
+    """(지도 창 시작일, 지상·상층 창 시작일) YYYYMMDD — publish_site.sh 의 복원·정리와 manifest 가 같은 값을 쓴다."""
+    today = dt.date.today()
+    return ((today - dt.timedelta(days=LOCAL_DAYS_MAPS - 1)).strftime("%Y%m%d"),
+            (today - dt.timedelta(days=LOCAL_DAYS_UPPER - 1)).strftime("%Y%m%d"))
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
 SITE_SRC = os.path.join(BASE_DIR, "site")
 
@@ -641,6 +652,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         print(f"[site] R2 목록 병합: {n_remote}개")
     if os.environ.get("IMG_BASE"):
         manifest["img_base"] = os.environ["IMG_BASE"].rstrip("/")
+        cm, cu = local_cuts()          # 이 날짜부터는 site-data 에도 있다(뷰어가 R2 대신 사이트 자체 경로를 쓴다)
+        manifest["local_cut"] = {"maps": cm, "upper": cu}
     for ymd in sorted(files):
         entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
         for fn in sorted(files[ymd]):

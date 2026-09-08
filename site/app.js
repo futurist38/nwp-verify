@@ -13,8 +13,26 @@ const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
 const MODEL_SHORT = { ECMWF: "EC", GFS: "GFS", KIM: "KIM" };
 let MF = null;
 let state = { date: null, model: null, panel: null, stepIdx: 0, runs: {} };
-// 그림 저장소 접두어 — manifest.img_base 가 있으면(Cloudflare R2, 2026-09-08 이관) 거기서, 없으면 사이트 자체에서
-const IMG = () => (MF && MF.img_base) ? MF.img_base + "/" : "";
+// 그림 위치 — manifest.img_base(Cloudflare R2, 2026-09-08 이관)가 있어도 최근 창(manifest.local_cut: 지도·지상상층 각각)은
+// 사이트 자체(github.io)에 같이 있다. 회사망이 r2.dev 를 막아서(2026-09-09 실측) 최근 며칠은 사이트에서, 그 전은 R2 에서.
+// 어긋나면(창 복원 실패 등) imgFallback 이 한 번 반대쪽을 시도한다.
+const IMG = (ymd, panel) => {
+  if (!MF || !MF.img_base) return "";
+  const lc = MF.local_cut;
+  if (lc && ymd) {
+    const cut = UPPER_ORDER.includes(panel) ? lc.upper : lc.maps;
+    if (cut && ymd >= cut) return "";
+  }
+  return MF.img_base + "/";
+};
+function imgFallback(img) {   // <img onerror>: 사이트 자체 ↔ R2 를 한 번 맞바꿔 본다
+  if (!MF || !MF.img_base || img.dataset.fb) return;
+  img.dataset.fb = "1";
+  const base = MF.img_base + "/";
+  const src = img.getAttribute("src") || "";
+  if (src.startsWith(base)) img.src = src.slice(base.length);
+  else if (src.startsWith("archive/")) img.src = base + src;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -833,7 +851,7 @@ function renderPanelBtns() {
 }
 function imgPathFor(model, stepH) {
   const run = runOf(model);
-  return `${IMG()}archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
+  return `${IMG(state.date, state.panel)}archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
 }
 function renderChart() {
   $("stepSlider").value = state.stepIdx;
@@ -851,7 +869,7 @@ function renderChart() {
       if (!panelSteps(e).includes(stepH) || !e.panels.includes(state.panel)) return "";
       return `<div class="cmp-item">`
            + `<div class="cmp-name">${m} <span>(런 ${fmtRun(e.run)} +${stepH}h)</span></div>`
-           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy"></div>`;
+           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy" onerror="imgFallback(this)"></div>`;
     }).join("");
     return;
   }
@@ -861,7 +879,7 @@ function renderChart() {
   const t = validEpoch(e.run, step);
   $("stepLabel").textContent =
     `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
-  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트">`;
+  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트" onerror="imgFallback(this)">`;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
     if (i >= 0 && i < steps.length) new Image().src = imgPathFor(state.model, steps[i]);
   });
@@ -1282,7 +1300,10 @@ function renderFresh() {
     // 위성 일사 일적산 그림 — 그 날짜 아카이브에 있으면 표시
     const sat = ((MF.dates[ymd] || {}).satsw || []).filter((f) => f.endsWith(".webp") || f.endsWith(".png"));
     $("satBlock").hidden = !sat.length;
-    if (sat.length) $("satImg").src = `${IMG()}archive/${ymd}/${sat[sat.length - 1]}?${Date.now()}`;
+    if (sat.length) {
+      const si = $("satImg"); si.dataset.fb = ""; si.onerror = () => imgFallback(si);
+      si.src = `${IMG(ymd, "satsw")}archive/${ymd}/${sat[sat.length - 1]}?${Date.now()}`;
+    }
   };
   $("dateSelO").onchange = onObsDate;
   if (odates.length) onObsDate();

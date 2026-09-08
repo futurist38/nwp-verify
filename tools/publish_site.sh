@@ -35,7 +35,8 @@ for i in 1 2 3 4 5 6; do
            RCLONE_CONFIG_R2_ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}" RCLONE_CONFIG_R2_ACL=private
     # 보존 정리 — build_site.py 의 로컬 정리와 같은 규칙(날짜 폴더명 기준): MAX_DAYS 지나면 폴더째,
     # UPPER_MAX_DAYS 지나면 상층(p925~p200)만. 업로드 시각(modtime)으로 고르면 객체마다 HEAD 요청이라 폴더명으로 판정.
-    read -r MAXD UPD < <(python -c "import build_site as b; print(b.MAX_DAYS, b.UPPER_MAX_DAYS)" 2>/dev/null || echo "14 7")
+    # tr -d '\r': 윈도우 python 은 파이프에도 CRLF 를 쓴다 — 로컬 시험에서 "7\r" 이 들어가 숫자 비교가 깨졌다(2026-09-09)
+    read -r MAXD UPD < <({ python -c "import build_site as b; print(b.MAX_DAYS, b.UPPER_MAX_DAYS)" 2>/dev/null || echo "14 7"; } | tr -d '\r')
     CUT=$(date -u -d "-${MAXD} days" +%Y%m%d); CUT_UP=$(date -u -d "-${UPD} days" +%Y%m%d)
     for d in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
       [[ "$d" =~ ^[0-9]{8}$ ]] || continue
@@ -51,12 +52,39 @@ for i in 1 2 3 4 5 6; do
     echo "[publish] R2 목록 $(wc -l < .r2_listing)개, 접두어 ${IMG_BASE:-없음}"
   fi
   python build_site.py --site-dir "$SITE" "$@"
-  if [ -n "${R2_BUCKET:-}" ] && [ -d "$SITE/archive" ]; then
-    # 새 그림 업로드(있는 것은 건너뜀) 후 site-data 에서는 뺀다 — Pages 1GB 상한 회피
-    # --size-only: 그림은 한 번 만들면 안 바뀐다 — modtime 비교는 기존 객체마다 HEAD 요청이라 뺀다
-    rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --size-only --transfers 32 --checkers 32 -q \
-      && rm -rf "$SITE/archive" && echo "[publish] archive → R2 업로드 후 site-data 에서 제외" \
-      || echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 남긴다"
+  if [ -n "${R2_BUCKET:-}" ]; then
+    UP_OK=1
+    if [ -d "$SITE/archive" ]; then
+      # 새 그림 업로드(있는 것은 건너뜀). --size-only: 그림은 한 번 만들면 안 바뀐다 — modtime 비교는 객체마다 HEAD 라 뺀다
+      rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --size-only --transfers 32 --checkers 32 -q \
+        && echo "[publish] archive → R2 업로드" \
+        || { UP_OK=0; echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 다 남긴다"; }
+    fi
+    # 최근 창은 site-data(github.io)에도 둔다 — 회사망이 r2.dev 를 막는다(2026-09-09 실측). 창 = build_site.local_cuts()
+    # (지도 LOCAL_DAYS_MAPS일, 지상·상층 LOCAL_DAYS_UPPER일 — manifest.local_cut 과 같은 값). 창 밖은 지우고 창 안은 R2 에서
+    # 채운다(첫 전환·복구 때 내려받고 평소엔 목록 비교만). 업로드가 실패했으면 아무것도 지우지 않는다.
+    if [ "$UP_OK" = 1 ]; then
+      read -r CUT_LM CUT_LU < <(python -c "import build_site as b; print(*b.local_cuts())" | tr -d '\r')
+      mkdir -p "$SITE/archive"
+      for d in "$SITE"/archive/????????; do
+        [ -d "$d" ] || continue; n=$(basename "$d")
+        if [ "$n" -lt "$CUT_LM" ]; then rm -rf "$d"
+        elif [ "$n" -lt "$CUT_LU" ]; then
+          find "$d" -type f \( -name '*_f???_sfc.webp' -o -name '*_f???_p[0-9][0-9][0-9].webp' \) -delete
+        fi
+      done
+      {
+        for n in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
+          [[ "$n" =~ ^[0-9]{8}$ ]] && [ "$n" -ge "$CUT_LM" ] || continue
+          if [ "$n" -lt "$CUT_LU" ]; then echo "- /$n/*_f???_sfc.webp"; echo "- /$n/*_f???_p[0-9][0-9][0-9].webp"; fi
+          echo "+ /$n/**"
+        done
+        echo "- **"
+      } > .r2_filter
+      rclone copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --filter-from .r2_filter --size-only --transfers 32 --checkers 32 -q \
+        && echo "[publish] site-data 창 유지: 지도 ≥$CUT_LM, 지상·상층 ≥$CUT_LU — $(find "$SITE/archive" -type f | wc -l)장" \
+        || echo "::warning::[publish] R2→site-data 창 복원 실패 — 뷰어가 R2 로 대체 시도한다"
+    fi
   fi
   rm -f "$IDX"
   GIT_INDEX_FILE="$IDX" git --work-tree="$SITE" add -A
