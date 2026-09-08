@@ -213,7 +213,44 @@ PL_VARS = {925: ("gh", "t", "u", "v"), 850: ("gh", "t", "u", "v"), 700: ("gh", "
            500: ("gh", "u", "v"), 300: ("gh", "u", "v"), 200: ("gh", "u", "v")}
 
 
+CITY_PTS = [("서울", 37.571, 126.966), ("인천", 37.478, 126.625), ("수원", 37.257, 126.983), ("대전", 36.372, 127.372),
+            ("대구", 35.878, 128.653), ("전주", 35.841, 127.117), ("광주", 35.173, 126.891), ("부산", 35.105, 129.032),
+            ("강릉", 37.751, 128.891), ("제주", 33.514, 126.530)]
+
+
+def dump_city_values(model: str, fields: dict, lats, lons, run, out_dir: str):
+    """브리핑용 상층 도시값 — 원본을 지우기 전에 850 기온·700 상대습도·500 지위고도·300 풍속을 JSON 으로 (2026-09-08).
+    최근접 격자(기온·고도)·3×3 평균(습도·풍속 — 운량과 같은 이유로 평활)."""
+    import json
+    def pick(key, lat, lon, box):
+        d = fields.get(key, {})
+        out = {}
+        for st, arr in d.items():
+            j = int(np.argmin(np.abs(lats - lat))); i = int(np.argmin(np.abs(lons - lon)))
+            if box:
+                v = float(np.nanmean(arr[max(0, j - 1):j + 2, max(0, i - 1):i + 2]))
+            else:
+                v = float(arr[j, i])
+            out[str(st)] = round(v, 1)
+        return out
+    res = {"model": model, "run": run.strftime("%Y%m%d%H"), "cities": {}}
+    for name, lat, lon in CITY_PTS:
+        c = {"t850": {k: round(v - 273.15, 1) for k, v in pick(("t", "isobaricInhPa", 850), lat, lon, False).items()},
+             "r700": pick(("r", "isobaricInhPa", 700), lat, lon, True),
+             "gh500": pick(("gh", "isobaricInhPa", 500), lat, lon, False)}
+        u, v = pick(("u", "isobaricInhPa", 300), lat, lon, True), pick(("v", "isobaricInhPa", 300), lat, lon, True)
+        c["ws300"] = {k: round(float(np.hypot(u[k], v[k])), 1) for k in u if k in v}
+        res["cities"][name] = c
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, f"city_upper_{model.lower()}_{run:%Y%m%d%H}.json"), "w", encoding="utf-8") as fp:
+        json.dump(res, fp, ensure_ascii=False, separators=(",", ":"))
+
+
 def _render_levels(model: str, fields: dict, lats, lons, run, out_dir: str) -> int:
+    try:
+        dump_city_values(model, fields, lats, lons, run, out_dir)
+    except Exception as e:
+        print(f"[UPPER] {model} 도시값 저장 실패: {e}")
     n = 0
     for L, vs in PL_VARS.items():
         gh = fields.get(("gh", "isobaricInhPa", L), {})

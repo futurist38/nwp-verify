@@ -31,7 +31,9 @@ from kma_vilage import auth_key, fetch, issuances_for
 from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
 CITY_GRID = {"서울": (60, 127), "대전": (67, 100), "대구": (89, 90),
-             "부산": (98, 76), "광주": (58, 74), "강릉": (92, 131)}
+             "부산": (98, 76), "광주": (58, 74), "강릉": (92, 131),
+             # 브리핑용 서해안·제주 대표 (2026-09-08) — 예보-관측 탭 표출은 위 6곳만(build_site KMAF_CITIES)
+             "인천": (54, 125), "제주": (53, 38)}
 CACHE_DIR = os.path.join(VERIF_DIR, "kmafcst")
 # 표출할 발표시각 (2026-08-26 사용자 확정) — 전일 11·17시 + 당일 05·11·17시.
 # 8회 전부는 화면·API·저장 모두 과했고, 실무에서 보는 판은 이 다섯이다.
@@ -48,7 +50,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # 기온 외 함께 저장하는 카테고리 (2026-09-06, 하늘 띠 표출용). 같은 응답에 다 들어 있어
 # API 호출이 늘지 않는다. 캐시 키는 "도시#카테고리" — 기존 도시 키(TMP)와 공존.
-EXTRA_CATS = ("SKY", "PTY", "POP")
+EXTRA_CATS = ("SKY", "PTY", "POP", "WSD", "VEC")   # WSD 풍속(m/s)·VEC 풍향(deg) 2026-09-08 추가 — 같은 응답
 
 
 def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:

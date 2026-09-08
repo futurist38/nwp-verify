@@ -53,7 +53,7 @@ def copy_outputs(site_dir: str):
         dst = os.path.join(arch, ymd)
         os.makedirs(dst, exist_ok=True)
         for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff", "satsw", "upper"):
-            for png in glob.glob(os.path.join(day_dir, sub, "*.png")):
+            for png in glob.glob(os.path.join(day_dir, sub, "*.png")) + glob.glob(os.path.join(day_dir, sub, "city_upper_*.json")):
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
                 # 같은 파일명의 개선판 이미지가 배포에서 누락됨)
