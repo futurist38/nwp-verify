@@ -264,7 +264,9 @@
     </ul>
     <h3>브리핑 묶음 (값 파일)</h3>
     <p>앞으로 7일치 모델·관측·기상청 예보 값을 한 파일로 정리해 매 실행마다 덮어씁니다 — 그림 대신 값을 읽고 분석하는 용도.
-       <a href="briefing/latest.md" target="_blank">briefing/latest.md</a> · <a href="briefing/latest.json" target="_blank">latest.json</a></p>
+       <a href="briefing/latest.md" target="_blank">briefing/latest.md</a> · <a href="briefing/latest.json" target="_blank">latest.json</a>.
+       LLM 에 읽힐 때는 같은 주소가 캐시되므로 시각이 붙은 사본 <code>briefing/YYYYMMDDHH.md</code>(KST, 매시 :32 이후, 48시간 보존)를 쓰거나
+       <code>latest.md?t=숫자</code> 처럼 뒤에 값을 붙여 새 주소로 만드세요.</p>
     <p class="note" id="genInfo"></p>
   </section>
 </main>

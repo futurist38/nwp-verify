@@ -403,6 +403,15 @@ def export(site_dir: str) -> None:
     md = to_markdown(b)
     with open(os.path.join(od, "latest.md"), "w", encoding="utf-8") as fp:
         fp.write(md)
+    # 시각 붙은 사본 (2026-09-08 사용자): LLM 웹페치가 같은 URL 을 대화 안에서 캐시해 구버전을 다시 읽는다 →
+    # 매시 고유 주소 briefing/YYYYMMDDHH.md 를 만들고 48시간 지난 것은 지운다. 주소는 시계만 보고 만들 수 있다.
+    stamp = dt.datetime.now().strftime("%Y%m%d%H")
+    with open(os.path.join(od, f"{stamp}.md"), "w", encoding="utf-8") as fp:
+        fp.write(md)
+    cut = (dt.datetime.now() - dt.timedelta(hours=48)).strftime("%Y%m%d%H")
+    for fp_ in glob.glob(os.path.join(od, "??????????.md")):
+        if os.path.basename(fp_)[:10] < cut:
+            os.remove(fp_)
     print(f"[site] 브리핑 묶음: md {len(md.encode('utf-8')) / 1024:.0f}KB, 도시 {len(b['cities'])}, 특보 {len(b.get('warnings') or [])}건, "
           f"개황 {'있음' if b.get('overview') else '없음'}, 상층링크 {list(b.get('charts', {}).keys())}")
 
