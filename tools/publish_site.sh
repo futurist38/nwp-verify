@@ -28,20 +28,33 @@ for i in 1 2 3 4 5 6; do
   fi
   # ── Cloudflare R2 (2026-09-08): 그림은 R2, site-data 는 JSON·나우캐스트만. R2_BUCKET 이 비면 예전 방식 그대로 ──
   if [ -n "${R2_BUCKET:-}" ]; then
-    export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+    # NO_CHECK_BUCKET: 버킷 한정 토큰은 버킷 목록·생성 권한이 없어 rclone 의 버킷 확인이 403 으로 실패한다.
+    # R2_ENDPOINT 는 로컬 시험용(rclone serve s3) — 평소엔 비워 두면 Cloudflare 주소.
+    export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true \
            RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-           RCLONE_CONFIG_R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" RCLONE_CONFIG_R2_ACL=private
-    # 보존 정리(업로드 시각 기준): 일반 지도·지상장 14일, 상층(925~200) 7일
-    rclone delete "r2:${R2_BUCKET}/archive" --min-age 14d -q || true
-    rclone delete "r2:${R2_BUCKET}/archive" --include "*_p[0-9][0-9][0-9].webp" --min-age 7d -q || true
-    rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null || : > .r2_listing
+           RCLONE_CONFIG_R2_ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}" RCLONE_CONFIG_R2_ACL=private
+    # 보존 정리 — build_site.py 의 로컬 정리와 같은 규칙(날짜 폴더명 기준): MAX_DAYS 지나면 폴더째,
+    # UPPER_MAX_DAYS 지나면 상층(p925~p200)만. 업로드 시각(modtime)으로 고르면 객체마다 HEAD 요청이라 폴더명으로 판정.
+    read -r MAXD UPD < <(python -c "import build_site as b; print(b.MAX_DAYS, b.UPPER_MAX_DAYS)" 2>/dev/null || echo "14 7")
+    CUT=$(date -u -d "-${MAXD} days" +%Y%m%d); CUT_UP=$(date -u -d "-${UPD} days" +%Y%m%d)
+    for d in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
+      [[ "$d" =~ ^[0-9]{8}$ ]] || continue
+      if [ "$d" -lt "$CUT" ]; then
+        { rclone purge "r2:${R2_BUCKET}/archive/$d" -q && echo "[publish] R2 정리: $d 폴더 삭제"; } || true
+      elif [ "$d" -lt "$CUT_UP" ]; then
+        rclone delete "r2:${R2_BUCKET}/archive/$d" --include "*_f???_p[0-9][0-9][0-9].webp" -q || true
+      fi
+    done
+    rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
+      || { echo "::warning::[publish] R2 목록 조회 실패 — 이번 manifest 는 러너 산출만 반영"; : > .r2_listing; }
     export R2_LISTING="$(pwd)/.r2_listing" IMG_BASE="${R2_PUBLIC_URL:-}"
     echo "[publish] R2 목록 $(wc -l < .r2_listing)개, 접두어 ${IMG_BASE:-없음}"
   fi
   python build_site.py --site-dir "$SITE" "$@"
   if [ -n "${R2_BUCKET:-}" ] && [ -d "$SITE/archive" ]; then
     # 새 그림 업로드(있는 것은 건너뜀) 후 site-data 에서는 뺀다 — Pages 1GB 상한 회피
-    rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --transfers 32 --checkers 32 -q \
+    # --size-only: 그림은 한 번 만들면 안 바뀐다 — modtime 비교는 기존 객체마다 HEAD 요청이라 뺀다
+    rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --size-only --transfers 32 --checkers 32 -q \
       && rm -rf "$SITE/archive" && echo "[publish] archive → R2 업로드 후 site-data 에서 제외" \
       || echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 남긴다"
   fi

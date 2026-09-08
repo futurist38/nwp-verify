@@ -126,17 +126,36 @@ KIM(API허브)은 스텝 병렬 4 로 원본 2.3→5.9MB/s(25스텝 1.9GB ≈ 5.
 ### 그림 저장소 Cloudflare R2 (2026-09-08 이관)
 
 Pages 1GB 상한 때문에 지도·상층 그림(`archive/`)은 **R2(무료 10GB)** 에 두고 site-data 에는 JSON·나우캐스트만 남긴다.
-`tools/publish_site.sh` 가 `R2_BUCKET` 이 있을 때만 다음을 한다: R2 보존 정리(14일, 상층 7일) → `rclone lsf` 목록 →
-`build_site.py` 가 목록+이번 산출로 manifest 생성(`img_base` 기록) → 새 그림 `rclone copy` → `site_build/archive` 삭제.
-비밀값이 없으면 예전처럼 site-data 에 그림을 넣는다. 뷰어는 `manifest.img_base` 접두어로 그림을 찾는다.
+`tools/publish_site.sh` 가 `R2_BUCKET` 이 있을 때만 다음을 한다: R2 보존 정리(날짜 폴더명 기준 — `MAX_DAYS` 지나면 폴더째,
+`UPPER_MAX_DAYS` 지나면 상층 p925~p200 만. `build_site.py` 로컬 정리와 같은 규칙) → `rclone lsf` 목록 →
+`build_site.py` 가 목록+이번 산출로 manifest 생성(`img_base` 기록) → 새 그림 `rclone copy --size-only` → `site_build/archive` 삭제.
+비밀값이 없으면 예전처럼 site-data 에 그림을 넣는다. 뷰어는 `manifest.img_base` 접두어로 그림을 찾는다(img 태그뿐이라 CORS 불필요).
+버킷 한정 토큰은 버킷 목록 권한이 없어 `no_check_bucket=true` 로 rclone 의 버킷 확인을 끈다.
+로컬 끝-끝 시험(2026-09-08 통과): `rclone serve s3 <폴더> --auth-key k,s --addr 127.0.0.1:9333` 을 띄우고
+`R2_ENDPOINT=http://127.0.0.1:9333 R2_BUCKET=<폴더 안 버킷명> … DRY_RUN=1 SITE_DIR=… tools/publish_site.sh "t" --hourly`.
 
 **설정 절차 (1회)**
-1. Cloudflare 대시보드 → R2 → 버킷 생성(예: `nwp-verify-img`) → Settings → **Public access: r2.dev 허용** → 주소 `https://pub-….r2.dev` 복사
-2. R2 → Manage R2 API Tokens → 토큰 생성(권한 **Object Read & Write**, 버킷 한정) → Access Key ID / Secret 복사
-3. GitHub 저장소 Settings → Secrets: `R2_ACCOUNT_ID`(Cloudflare 계정 ID), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` /
-   Variables: `R2_BUCKET`(버킷명), `R2_PUBLIC_URL`(r2.dev 주소)
-4. 다음 daily 가 첫 실행에서 site-data 의 기존 그림 전부(~650MB)를 R2 로 올리고 site-data 에서 뺀다 — 이 한 번은 10분쯤 더 걸린다
-주의: 토큰·주소를 대화나 커밋에 붙이지 말 것. 로컬 미리보기(DRY_RUN)는 R2 없이 그대로 동작.
+0. Cloudflare 대시보드 → **R2 Object Storage** → 처음이면 결제수단(카드/PayPal) 등록을 요구한다 — 무료 한도(저장 10GB, A급 100만·B급 1,000만 요청/월, 송출 무료) 안이면 청구 없음. 여기는 월 1GB 미만·요청 수십만 건.
+1. **Create bucket**: 이름 `nwp-verify-img`, Location hint **APAC**, 저장 등급 Standard
+2. 버킷 → **Settings → Public Development URL(r2.dev)** → Enable → `https://pub-….r2.dev` 복사.
+   r2.dev 는 요청 속도 제한이 있는 개발용 주소라 개인 열람엔 충분하고, Cloudflare 에 둔 도메인이 있으면 Custom Domain 이 낫다(캐시·제한 없음).
+3. R2 개요 오른쪽 **Manage R2 API Tokens → Create API token**: 이름 `nwp-verify-actions`, Permissions **Object Read & Write**,
+   Specify bucket(s) → 이 버킷만, TTL Forever → Create. 화면에 한 번만 보이는 **Access Key ID · Secret Access Key** 와
+   엔드포인트 `https://<계정ID>.r2.cloudflarestorage.com` 의 **계정 ID**(R2 개요 오른쪽에도 있음)를 복사
+4. GitHub 등록 — 저장소 폴더에서 gh CLI(값은 프롬프트에 붙여 넣는다. 대화·커밋에 남기지 말 것):
+   ```
+   gh secret set R2_ACCOUNT_ID
+   gh secret set R2_ACCESS_KEY_ID
+   gh secret set R2_SECRET_ACCESS_KEY
+   gh variable set R2_BUCKET --body nwp-verify-img
+   gh variable set R2_PUBLIC_URL --body https://pub-….r2.dev
+   ```
+5. 확인: `gh workflow run obs-hourly.yml -f force=true` → 로그에 `[publish] R2 목록 …` 과 `archive → R2 업로드 후 site-data 에서 제외` →
+   사이트 그림 주소가 r2.dev 로 바뀌면 끝. **첫 실행은 기존 그림 ~650MB(1.3만 장)를 올리느라 5~10분 더 걸린다**(로컬 시험 1분).
+   실패해도 `::warning::` 만 내고 그림을 site-data 에 남기니 사이트는 깨지지 않는다.
+되돌리기: `R2_BUCKET` 변수를 지우면 다음 발행부터 예전 방식. 단 이미 R2 로 옮긴 그림은 site-data 에 없으므로
+`rclone copy r2:<버킷>/archive site_build/archive` 로 내려받아 한 번 발행해야 과거 날짜가 보인다.
+로컬 미리보기(DRY_RUN)는 R2 없이 그대로 동작.
 
 ### 사이트 발행 방식 (2026-09-06 개편)
 
