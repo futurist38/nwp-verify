@@ -705,10 +705,20 @@ function entry() { return MF.dates[state.date]; }
 const CMP = "모델비교";
 let firstChart = true;   // 첫 진입 시 현재 시각에 가장 가까운 스텝으로
 function cmpModels() { return Object.keys(entry().models); }
-function runOf(m) {
+function runsWith(m, panel) {   // 이 패널이 있는 런들(오름차순)
   const e = entry().models[m];
+  return Object.keys(e.runs).filter((k) => e.runs[k].panels.includes(panel)).sort();
+}
+function runOf(m, panel) {
+  // 고른 런(없으면 최신 런)에 이 패널이 없으면 그 패널이 있는 최신 런으로 (2026-09-08).
+  // 06/18z 런은 지상·상층만 있어서, 옛 방식(무조건 최신 런)은 9/7 ECMWF 처럼 최신 런이
+  // 상층 전용이면 기온·운량·강수 버튼이 통째로 사라졌다.
+  const e = entry().models[m];
+  const p = panel || state.panel;
   const r = state.runs[m];
-  return (r && e.runs[r]) ? r : e.latest;
+  if (r && e.runs[r] && e.runs[r].panels.includes(p)) return r;
+  const ok = runsWith(m, p);
+  return ok.length ? ok[ok.length - 1] : ((r && e.runs[r]) ? r : e.latest);
 }
 function runEntry(m) { const e = entry().models[m]; const r = runOf(m); return { run: r, ...e.runs[r] }; }
 function panelSteps(e, panel) {   // 패널이 있는 스텝만 (고도별은 6h 간격)
@@ -764,29 +774,39 @@ function renderRunSel() {
     const runs = Object.keys(e.runs).sort().reverse();
     if (runs.length < 2 && !compare) return "";
     const cur = runOf(m);
+    const tag = (r) => e.runs[r].panels.some((p) => PANEL_ORDER.includes(p)) ? "" : " (지상·상층만)";
     return `<label class="run-label">${compare ? m + " 런" : "런"}
       <select data-m="${m}">` + runs.map((r) =>
-        `<option value="${r}" ${r === cur ? "selected" : ""}>${fmtRun(r)}</option>`).join("")
+        `<option value="${r}" ${r === cur ? "selected" : ""}>${fmtRun(r)}${tag(r)}</option>`).join("")
       + `</select></label>`;
   }).join("");
   $("runGrp").hidden = !$("runSel").innerHTML.trim();
   $("runSel").querySelectorAll("select").forEach((s) => {
-    s.onchange = () => { state.runs[s.dataset.m] = s.value; renderPanelBtns(); };
+    s.onchange = () => {
+      state.runs[s.dataset.m] = s.value;
+      // 고른 런에 지금 패널이 없으면 그 런이 가진 첫 패널로 — 안 그러면 runOf 가 다른 런으로 되돌려 선택이 안 먹는다
+      const have = entry().models[s.dataset.m].runs[s.value].panels;
+      if (!have.includes(state.panel)) state.panel = PANEL_ORDER.concat(UPPER_ORDER).find((p) => have.includes(p)) || state.panel;
+      renderPanelBtns();
+    };
   });
 }
 function renderPanelBtns() {
   const compare = state.model === CMP;
   renderRunSel();
   let panels, uppers;
+  // 버튼은 그 날짜·모델의 '어느 런에든 있는' 패널 전부 — 런마다 패널 구성이 달라서(06/18z 는 지상·상층 전용)
+  // 런 하나만 보면 버튼이 사라진다. 그림은 runOf 가 패널 있는 런을 고른다.
+  const allPanels = (m) => { const st = new Set(); Object.values(entry().models[m].runs).forEach((r) => r.panels.forEach((p) => st.add(p))); return st; };
   if (compare) {
     const cnt = {};
-    cmpModels().forEach((m) => runEntry(m).panels.forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; }));
+    cmpModels().forEach((m) => allPanels(m).forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; }));
     panels = PANEL_ORDER.filter((p) => cnt[p] >= 2);
     uppers = UPPER_ORDER.filter((p) => cnt[p] >= 2);
   } else {
-    const have = runEntry(state.model).panels;
-    panels = PANEL_ORDER.filter((p) => have.includes(p));   // 목록에 없는 패널(옛 일사 등)은 숨긴다
-    uppers = UPPER_ORDER.filter((p) => have.includes(p));
+    const have = allPanels(state.model);
+    panels = PANEL_ORDER.filter((p) => have.has(p));   // 목록에 없는 패널(옛 일사 등)은 숨긴다
+    uppers = UPPER_ORDER.filter((p) => have.has(p));
   }
   const all = panels.concat(uppers);
   if (!all.includes(state.panel)) state.panel = all[0];
