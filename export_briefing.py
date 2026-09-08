@@ -47,7 +47,9 @@ def _load_csvs(sub: str, months, parse_col: str) -> pd.DataFrame:
 
 
 def _r(v, nd=1):
-    return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), nd)
+    if v is None or (isinstance(v, float) and np.isnan(v)) or (hasattr(v, "__float__") and np.isnan(float(v))):
+        return None
+    return int(round(float(v))) if nd == 0 else round(float(v), nd)
 
 
 def _sky(tcc, tp, win):
