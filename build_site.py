@@ -715,6 +715,12 @@ def main():
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
     nc = copy_nowcast(args.site_dir)
+    # 브리핑 묶음(앞 7일 값, 2026-09-08) — daily·hourly 양쪽에서 갱신(관측은 매시, 모델은 daily 커밋 기준)
+    try:
+        import export_briefing
+        export_briefing.export(args.site_dir)
+    except Exception as e:
+        print(f"[site] 브리핑 묶음 실패(계속): {e}")
     prune_kmafcst(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에
     build_manifest(args.site_dir, nc)
