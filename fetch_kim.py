@@ -55,7 +55,7 @@ def _head_is_grib(tmfc: str, ef: int, key: str) -> bool:
     try:
         r = requests.get(API, params={"nwp": NWP, "sub": "unis", "tmfc": tmfc,
                                       "ef": str(ef), "authKey": key},
-                         timeout=60, stream=True)
+                         timeout=(10, 30), stream=True)   # 연결 10초: 러너→API허브가 끊기는 시간대엔 빨리 포기(2026-09-09)
         head = next(r.iter_content(8), b"")
         r.close()
         return head[:4] == b"GRIB"
@@ -63,15 +63,22 @@ def _head_is_grib(tmfc: str, ef: int, key: str) -> bool:
         return False
 
 
-def find_latest_run(key: str) -> str:
-    """마지막 스텝(KIM_STEPS[-1])까지 존재하는 최신 런 탐색 (6시간 간격 역순)."""
-    now = dt.datetime.now(dt.timezone.utc)
-    for back_h in range(0, 49, 6):
-        t = now - dt.timedelta(hours=back_h)
-        tmfc = t.strftime("%Y%m%d") + f"{(t.hour // 6) * 6:02d}"
-        if _head_is_grib(tmfc, KIM_STEPS[-1], key):
-            return tmfc
-        time.sleep(0.3)
+def find_latest_run(key: str, attempts: int = 3, pause: int = 90) -> str:
+    """마지막 스텝(KIM_STEPS[-1])까지 존재하는 최신 런 탐색 (6시간 간격 역순).
+
+    GitHub 러너에서 API허브 연결이 통째로 끊기는 시간대가 있다(2026-09-09 실측: 9번 연속 60초 시간초과 → 12분 허비).
+    연결 10초에 포기하고, 한 바퀴 다 실패하면 pause 초 쉬고 attempts 번까지 다시 돈다."""
+    for attempt in range(1, attempts + 1):
+        now = dt.datetime.now(dt.timezone.utc)
+        for back_h in range(0, 49, 6):
+            t = now - dt.timedelta(hours=back_h)
+            tmfc = t.strftime("%Y%m%d") + f"{(t.hour // 6) * 6:02d}"
+            if _head_is_grib(tmfc, KIM_STEPS[-1], key):
+                return tmfc
+            time.sleep(0.3)
+        if attempt < attempts:
+            print(f"[KIM] 런 탐색 실패 ({attempt}/{attempts}) — {pause}초 뒤 재시도", flush=True)
+            time.sleep(pause)
     raise RuntimeError("최근 48시간 내 완결된 KIM 런을 찾지 못했습니다")
 
 
