@@ -36,12 +36,12 @@ UPPER_MAX_DAYS = 7     # 고도별 기압장(925~200) 보존 일수 (하루 ~90M
 UPPER_PANELS = {"p925", "p850", "p700", "p500", "p300", "p200"}   # sfc(지상장)는 일반 지도와 같이 MAX_DAYS
 # 그림이 R2 에 있어도 최근 창은 site-data(github.io)에 같이 둔다 — 회사망이 r2.dev 를 막는다(2026-09-09 실측).
 # 하루 최대 170MB(지상·상층 127 + 지도 42) → 지도 7일 + 지상·상층 3일 ≈ 700MB 로 Pages 1GB 안. 뷰어는 manifest.local_cut 으로 판단.
-LOCAL_DAYS_MAPS = 7    # 일반 지도·위성 일사: 이 날수 안이면 site-data 에도 있다
-LOCAL_DAYS_UPPER = 3   # 지상(sfc)·925~200: 이 날수 안이면 site-data 에도 있다
+LOCAL_DAYS_MAPS = 7    # 일반 지도·위성 일사·지상장(sfc — 2026-09-08 결정대로 지도와 같은 취급): 이 날수 안이면 site-data 에도 있다
+LOCAL_DAYS_UPPER = 3   # 925~200 상층: 이 날수 안이면 site-data 에도 있다
 
 
 def local_cuts() -> tuple[str, str]:
-    """(지도 창 시작일, 지상·상층 창 시작일) YYYYMMDD — publish_site.sh 의 복원·정리와 manifest 가 같은 값을 쓴다."""
+    """(지도·지상장 창 시작일, 925~200 상층 창 시작일) YYYYMMDD — publish_site.sh 의 복원·정리와 manifest 가 같은 값을 쓴다."""
     today = dt.date.today()
     return ((today - dt.timedelta(days=LOCAL_DAYS_MAPS - 1)).strftime("%Y%m%d"),
             (today - dt.timedelta(days=LOCAL_DAYS_UPPER - 1)).strftime("%Y%m%d"))

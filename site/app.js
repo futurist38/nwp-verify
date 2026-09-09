@@ -20,7 +20,7 @@ const IMG = (ymd, panel) => {
   if (!MF || !MF.img_base) return "";
   const lc = MF.local_cut;
   if (lc && ymd) {
-    const cut = UPPER_ORDER.includes(panel) ? lc.upper : lc.maps;
+    const cut = (UPPER_ORDER.includes(panel) && panel !== "sfc") ? lc.upper : lc.maps;   // 지상장은 지도 창(2026-09-08 결정)
     if (cut && ymd >= cut) return "";
   }
   return MF.img_base + "/";

@@ -61,7 +61,7 @@ for i in 1 2 3 4 5 6; do
         || { UP_OK=0; echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 다 남긴다"; }
     fi
     # 최근 창은 site-data(github.io)에도 둔다 — 회사망이 r2.dev 를 막는다(2026-09-09 실측). 창 = build_site.local_cuts()
-    # (지도 LOCAL_DAYS_MAPS일, 지상·상층 LOCAL_DAYS_UPPER일 — manifest.local_cut 과 같은 값). 창 밖은 지우고 창 안은 R2 에서
+    # (지도·지상장 LOCAL_DAYS_MAPS일, 925~200 상층 LOCAL_DAYS_UPPER일 — manifest.local_cut 과 같은 값). 창 밖은 지우고 창 안은 R2 에서
     # 채운다(첫 전환·복구 때 내려받고 평소엔 목록 비교만). 업로드가 실패했으면 아무것도 지우지 않는다.
     if [ "$UP_OK" = 1 ]; then
       read -r CUT_LM CUT_LU < <(python -c "import build_site as b; print(*b.local_cuts())" | tr -d '\r')
@@ -70,19 +70,19 @@ for i in 1 2 3 4 5 6; do
         [ -d "$d" ] || continue; n=$(basename "$d")
         if [ "$n" -lt "$CUT_LM" ]; then rm -rf "$d"
         elif [ "$n" -lt "$CUT_LU" ]; then
-          find "$d" -type f \( -name '*_f???_sfc.webp' -o -name '*_f???_p[0-9][0-9][0-9].webp' \) -delete
+          find "$d" -type f -name '*_f???_p[0-9][0-9][0-9].webp' -delete
         fi
       done
       {
         for n in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
           [[ "$n" =~ ^[0-9]{8}$ ]] && [ "$n" -ge "$CUT_LM" ] || continue
-          if [ "$n" -lt "$CUT_LU" ]; then echo "- /$n/*_f???_sfc.webp"; echo "- /$n/*_f???_p[0-9][0-9][0-9].webp"; fi
+          if [ "$n" -lt "$CUT_LU" ]; then echo "- /$n/*_f???_p[0-9][0-9][0-9].webp"; fi
           echo "+ /$n/**"
         done
         echo "- **"
       } > .r2_filter
       rclone copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --filter-from .r2_filter --size-only --transfers 32 --checkers 32 -q \
-        && echo "[publish] site-data 창 유지: 지도 ≥$CUT_LM, 지상·상층 ≥$CUT_LU — $(find "$SITE/archive" -type f | wc -l)장" \
+        && echo "[publish] site-data 창 유지: 지도·지상장 ≥$CUT_LM, 상층 ≥$CUT_LU — $(find "$SITE/archive" -type f | wc -l)장" \
         || echo "::warning::[publish] R2→site-data 창 복원 실패 — 뷰어가 R2 로 대체 시도한다"
     fi
   fi
