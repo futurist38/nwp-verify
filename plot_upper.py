@@ -111,13 +111,13 @@ def _ax(fig):
     import cartopy.feature as cfeature
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     ax.set_extent([UP_LON_MIN, UP_LON_MAX, UP_LAT_MIN, UP_LAT_MAX])
-    # 해안선은 흰 테두리(halo)를 두른 진한 선으로 채움·바람깃 위에(zorder) — 700 습도·200 풍속처럼 짙은 채움에서
+    # 해안선은 흰 테두리(halo)를 두른 진한 선으로 채움 위·등고선·바람깃 아래(zorder 1.5 — 시안 비교 후 사용자 선택) — 700 습도·200 풍속처럼 짙은 채움에서
     # 회색 가는 선이 묻혀 한반도조차 안 보였다(2026-09-09 사용자). 국경도 같은 방식, 더 가늘게.
     import matplotlib.patheffects as _pe
     halo = [_pe.withStroke(linewidth=2.8, foreground="white", alpha=0.9)]
     try:
-        ax.coastlines(resolution="50m", linewidth=1.1, color="#111", zorder=6, path_effects=halo)
-        ax.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor="#333", zorder=6,
+        ax.coastlines(resolution="50m", linewidth=1.1, color="#111", zorder=1.5, path_effects=halo)
+        ax.add_feature(cfeature.BORDERS, linewidth=0.5, edgecolor="#333", zorder=1.5,
                        path_effects=[_pe.withStroke(linewidth=1.8, foreground="white", alpha=0.8)])
     except Exception:
         pass
