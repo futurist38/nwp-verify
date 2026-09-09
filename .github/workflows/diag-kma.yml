@@ -1,0 +1,31 @@
+name: diag-kma
+# 진단용(2026-09-09): 러너에서 API허브 nwp_file_down(typ06) 이 응답하는지 — daily 의 KIM 런 탐색이 60초씩 시간초과.
+on:
+  workflow_dispatch:
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: typ06 KIM 파일 헤더·typ01 대조
+        env:
+          KEY: ${{ secrets.KMA_AUTH_KEY }}
+        run: |
+          set +e
+          for tmfc in 2026090812 2026090900; do
+            for ef in 288 120; do
+              s=$(date +%s.%N)
+              out=$(curl -s -m 45 -w " [http=%{http_code} t=%{time_total}s size=%{size_download}]" -r 0-63 \
+                "https://apihub-pub.kma.go.kr/api/typ06/url/nwp_file_down.php?nwp=k512&sub=unis&tmfc=$tmfc&ef=$ef&authKey=$KEY" | tr -d '\0' | cut -c1-120)
+              echo "typ06 unis $tmfc ef=$ef: $out"
+            done
+          done
+          echo "--- 상층(pres) 헤더"
+          curl -s -m 45 -w " [http=%{http_code} t=%{time_total}s size=%{size_download}]" -r 0-63 \
+            "https://apihub-pub.kma.go.kr/api/typ06/url/nwp_file_down.php?nwp=k512&sub=pres&tmfc=2026090812&ef=24&authKey=$KEY" | tr -d '\0' | cut -c1-120; echo
+          echo "--- typ01 ASOS 대조"
+          curl -s -m 30 -o /dev/null -w "typ01 kma_sfctm2 [http=%{http_code} t=%{time_total}s size=%{size_download}]\n" \
+            "https://apihub-pub.kma.go.kr/api/typ01/url/kma_sfctm2.php?stn=108&authKey=$KEY"
+          echo "--- DNS/TCP"
+          getent hosts apihub-pub.kma.go.kr
+          curl -s -m 20 -o /dev/null -w "root [http=%{http_code} connect=%{time_connect}s tls=%{time_appconnect}s]\n" https://apihub-pub.kma.go.kr/
