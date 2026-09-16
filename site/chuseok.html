@@ -16,7 +16,10 @@
   th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: center; white-space: nowrap; }
   th { background: #eee; }
   td.mid { background: #f0f4fa; }
-  td.chg { outline: 2px solid #e0a800; outline-offset: -2px; }
+  td.wx { background: #fff2cc; }
+  td { box-shadow: inset 0 3px 0 var(--bt, transparent), inset 0 -3px 0 var(--bb, transparent); }  /* 위=최고, 아래=최저 (border-collapse 와 무관) */
+  td.up-top { --bt: #c22; }  td.down-top { --bt: #1a5fb4; }
+  td.up-bot { --bb: #c22; }  td.down-bot { --bb: #1a5fb4; }
   .badge { font-size: 10px; color: #777; }
   .tabs button { font-size: 13px; padding: 4px 8px; margin: 0 4px 6px 0; border: 1px solid #bbb; background: #f6f6f6; border-radius: 6px; }
   .tabs button.on { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
@@ -38,7 +41,7 @@
     <h2 style="font-size:16px;margin:2px 0 8px">발표시각별 이력 — 행: 발표시각, 열: 도시</h2>
     <div class="tabs" id="dateTabs"></div>
     <div id="hist"></div>
-    <p class="note">칸 = 최고/최저 ℃ · 개황(·강수확률) · <span class="badge">중</span>/<span class="badge">단</span> = 중기/단기예보. 노란 테두리 = 직전 발표와 달라진 칸. 아직 예보가 없는 날짜는 표가 비어 있습니다.</p>
+    <p class="note">칸 = 최고/최저 ℃ · 개황(·강수확률) · <span class="badge">중</span>/<span class="badge">단</span> = 중기/단기예보. 칸 <b>위 테두리 = 최고기온</b>, <b>아래 테두리 = 최저기온</b>의 직전 발표 대비 변화(<span style="color:#c22">빨강 상승</span>·<span style="color:#1a5fb4">파랑 하락</span>), 노란 배경 = 개황 변화. 아직 예보가 없는 날짜는 표가 비어 있습니다.</p>
   </div>
   <div class="card">
     <h2 style="font-size:16px;margin:2px 0 8px">이번 발표에서 바뀐 것</h2>
@@ -89,8 +92,12 @@
         const rec = (m.cities[c][ds] || []).find((x) => x.issue === i.key);
         if (!rec) return '<td class="none">—</td>';
         const p = prev[c]; prev[c] = rec;
-        const changed = p && (p.tmax !== rec.tmax || p.tmin !== rec.tmin || (p.sky || "") !== (rec.sky || ""));
-        const cls = (rec.src === "mid" ? "mid" : "") + (changed ? " chg" : "");
+        let cls = rec.src === "mid" ? "mid" : "";
+        if (p) {
+          if ((p.sky || "") !== (rec.sky || "")) cls += " wx";
+          if (rec.tmax > p.tmax) cls += " up-top"; else if (rec.tmax < p.tmax) cls += " down-top";
+          if (rec.tmin > p.tmin) cls += " up-bot"; else if (rec.tmin < p.tmin) cls += " down-bot";
+        }
         return '<td class="' + cls + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? " " + rec.pop + "%" : "") + ' <span class="badge">' + (rec.src === "mid" ? "중" : "단") + "</span></td>";
       });
       return "<tr><th>" + i.label + "</th>" + cells.join("") + "</tr>";
