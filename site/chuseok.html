@@ -8,58 +8,72 @@
 <style>
   body { margin: 0; padding: 12px 14px 32px; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color: #222; background: #fafafa; }
   h1 { font-size: 20px; margin: 4px 0 2px; }
+  h2 { font-size: 16px; margin: 2px 0 8px; }
+  h3 { font-size: 14px; margin: 12px 0 4px; }
   .sub { color: #666; font-size: 13px; margin: 0 0 10px; }
   .stamp { font-size: 13px; color: #1a5fb4; margin: 0 0 10px; }
   .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px; margin: 0 0 14px; }
   img { max-width: 100%; height: auto; display: block; }
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
   th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: center; white-space: nowrap; }
   th { background: #eee; }
   td.mid { background: #f0f4fa; }
   td.wx { background: #fff2cc; }
-  td { box-shadow: inset 0 3px 0 var(--bt, transparent), inset 0 -3px 0 var(--bb, transparent); }  /* 위=최고, 아래=최저 (border-collapse 와 무관) */
-  td.up-top { --bt: #c22; }  td.down-top { --bt: #1a5fb4; }
-  td.up-bot { --bb: #c22; }  td.down-bot { --bb: #1a5fb4; }
+  td.none { color: #999; }
+  td { position: relative; }
+  /* 칸 테두리: 위쪽 절반(위 변 + 양옆 위 절반) = 최고기온 변화, 아래쪽 절반 = 최저기온 변화. 색은 인라인 --ct / --cb */
+  td.ft::before, td.fb::after { content: ""; position: absolute; left: 0; right: 0; height: 50%; pointer-events: none; border: 3px solid transparent; box-sizing: border-box; }
+  td.ft::before { top: 0; border-color: var(--ct); border-bottom: none; }
+  td.fb::after { bottom: 0; border-color: var(--cb); border-top: none; }
+  td .d { display: block; font-size: 11px; color: #555; }
+  tr.sum td, tr.sum th { background: #e6e6e6; font-weight: bold; }
+  tr.sum td { font-size: 12px; }
   .badge { font-size: 10px; color: #777; }
   .tabs button { font-size: 13px; padding: 4px 8px; margin: 0 4px 6px 0; border: 1px solid #bbb; background: #f6f6f6; border-radius: 6px; }
   .tabs button.on { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
   .digest { font-size: 13px; background: #fff8e1; border: 1px solid #f0d78c; border-radius: 6px; padding: 6px 8px; margin: 0 0 10px; }
-  h2 { font-size: 16px; }
-  td.none { color: #999; }
-  .up { color: #c22; } .down { color: #1a5fb4; }
+  .up { color: #8E0000; font-weight: bold; } .down { color: #0D3B70; font-weight: bold; } .eq { color: #777; }
   .note { font-size: 12px; color: #666; line-height: 1.5; }
   .tablewrap { overflow-x: auto; }
+  /* 변경 로그 */
+  table.log th, table.log td { text-align: left; white-space: normal; }
+  table.log tr.grp th { background: #e6e9ee; font-size: 13px; }
+  table.log tr.grp th span { float: right; font-weight: normal; color: #444; font-size: 12px; }
+  table.log td.city { font-weight: bold; width: 3.2em; text-align: center; white-space: nowrap; }
+  table.log td.tt { width: 11em; white-space: nowrap; line-height: 1.5; }
 </style>
 </head>
 <body>
   <h1>추석 연휴 예보 추적 — 8대도시 × 9/23~9/27</h1>
-  <p class="sub">기상청 단기예보(05·11·17시 발표)와 중기예보(06·18시 발표)를 발표시각 순으로 이어 붙여, 예보가 어떻게 바뀌어 왔는지 봅니다. 개인 연구용 페이지입니다.</p>
+  <p class="sub">기상청 단기예보(05·11·17시 발표)와 중기예보(06·18시 발표)를 발표시각 순으로 이어 붙여, 발표마다 기온·개황이 어떻게 바뀌었는지 봅니다. 개인 연구용 페이지입니다.</p>
   <p class="stamp" id="stamp">불러오는 중…</p>
 
   <p class="digest" id="digest"></p>
   <div class="card">
-    <h2 style="font-size:16px;margin:2px 0 8px">발표시각별 이력 — 행: 발표시각, 열: 도시</h2>
-    <div class="tabs" id="dateTabs"></div>
-    <div id="hist"></div>
-    <p class="note">칸 = 최고/최저 ℃ · 개황(·강수확률) · <span class="badge">중</span>/<span class="badge">단</span> = 중기/단기예보. 칸 <b>위 테두리 = 최고기온</b>, <b>아래 테두리 = 최저기온</b>의 직전 발표 대비 변화(<span style="color:#c22">빨강 상승</span>·<span style="color:#1a5fb4">파랑 하락</span>), 노란 배경 = 개황 변화. 아직 예보가 없는 날짜는 표가 비어 있습니다.</p>
-  </div>
-  <div class="card">
-    <h2 style="font-size:16px;margin:2px 0 8px">이번 발표에서 바뀐 것</h2>
+    <h2>이번 발표에서 바뀐 것</h2>
     <img id="rev" alt="변경 행렬" loading="lazy">
   </div>
 
   <div class="card">
-    <h2 style="font-size:16px;margin:2px 0 8px">최신 발표 요약</h2>
+    <h2>날짜별 변경 로그와 이력</h2>
+    <div class="tabs" id="dateTabs"></div>
+    <div id="hist"></div>
+    <p class="note">변경 로그 = 발표마다 <b>기온이나 개황이 바뀐 도시만</b>(비교 = 그 도시·날짜의 직전 발표). 이력표 = 발표시각(행) × 도시(열), 칸 = 최고/최저 ℃ · 개황(·강수확률) · Δ 직전 대비, <span class="badge">중</span>/<span class="badge">단</span> = 중기/단기예보.
+       칸 테두리 <b>위쪽 절반 = 최고기온</b>, <b>아래쪽 절반 = 최저기온</b>의 직전 발표 대비 변화(<span style="color:#D32F2F">빨강 상승</span>·<span style="color:#1E6FC0">파랑 하락</span>, 진할수록 큼: 1·2·3℃↑), 노란 배경 = 개황 변화. 마지막 행 = 첫 발표→최신 누적. 아직 예보가 없는 날짜는 비어 있습니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>최신 발표 요약</h2>
     <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
-    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저). 흰칸 = 단기예보, 연파랑 = 중기예보. 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
+    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저), 테두리 위/아래 절반 = 최고/최저 변화, 노랑 = 개황 변화(이전 개황→). 흰칸 = 단기예보, 연파랑 = 중기예보. 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
   </div>
 
   <div class="card">
     <img id="card" alt="추석 예보 요약 카드" loading="lazy">
   </div>
   <div class="card">
-    <img id="full" alt="추석 예보 추적 그림" loading="lazy">
-    <p class="note">칸마다 가로축 = 발표시각, 빨강 = 최고, 파랑 = 최저. ○ 중기예보(세로선 = 기상청 예보범위) · ■ 단기예보. 칸 아래 글자 = 최신 개황·강수확률.</p>
+    <img id="full" alt="추석 당일 예보 변경 로그 그림" loading="lazy">
+    <p class="note">추석 당일(9/25) 변경 로그 그림판. 한 장에 들어가지 않으면 최근 발표만 담고, 전체는 위 탭의 로그에서 봅니다.</p>
   </div>
 
   <p class="note">갱신: 발표 뒤 첫 시간별 실행(매시 25분 시작, 대체로 :32~:55 반영). 추적 기간 9/16 17시 발표 ~ 9/23 11시 발표. 8대도시 = 서울·인천·수원·원주·대전·대구·광주·부산.
@@ -77,52 +91,113 @@
   document.getElementById("rev").src = "chuseok/chuseok_revision.png?v=" + key;
   document.getElementById("digest").textContent = m.digest || "";
   document.getElementById("full").src = "chuseok/chuseok_latest.png?v=" + key;
-  // 이력표: 대상일마다 행=발표시각, 열=도시
+
+  const UP = ["#E57373", "#D32F2F", "#8E0000"], DOWN = ["#64B5F6", "#1E6FC0", "#0D3B70"];
+  const edge = (d) => { const a = Math.abs(d); if (!a) return null; const i = a < 2 ? 0 : (a < 3 ? 1 : 2); return d > 0 ? UP[i] : DOWN[i]; };
+  const sgn = (d) => (d > 0 ? "+" : "") + Math.round(d);
+  const frameAttr = (dmax, dmin) => {           // 칸 테두리 클래스·색 (위=최고, 아래=최저)
+    const ct = edge(dmax), cb = edge(dmin); let cls = "", st = "";
+    if (ct) { cls += " ft"; st += "--ct:" + ct + ";"; }
+    if (cb) { cls += " fb"; st += "--cb:" + cb + ";"; }
+    return { cls, st };
+  };
   const shortSky = (t) => (t || "-").replace("구름많음", "구름").replace("구름조금", "조금");
-  const hist = document.getElementById("hist");
-  const tables = {};
-  m.targets.forEach((ds) => { tables[ds] = ((ds) => {
-    const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8));
-    const title = (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : "");
+  const dateTitle = (ds) => { const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8)); return (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : ""); };
+  const norm = (t) => (t || "").trim().split(/\s+/).join(" ");
+
+  // 변경 로그: 발표마다 바뀐 도시만
+  const logHtml = (ds) => {
+    const groups = [];
+    (m.effective_issuances || []).forEach((i) => {
+      const k = i.key;
+      if (!m.city_order.some((c) => (m.cities[c][ds] || []).some((x) => x.issue === k))) return;
+      const g = { key: k, label: i.label, kind: i.kind, changed: [], unchanged: [], nw: [], missing: [], ho: [] };
+      m.city_order.forEach((c) => {
+        const recs = m.cities[c][ds] || [];
+        const rec = recs.find((x) => x.issue === k); const before = recs.filter((x) => x.issue < k);
+        if (!rec) { if (before.length) g.missing.push(c); return; }
+        if (!before.length) { g.nw.push(c); return; }
+        const pv = before[before.length - 1];
+        const dmax = rec.tmax - pv.tmax, dmin = rec.tmin - pv.tmin, wx = norm(rec.sky) !== norm(pv.sky), ho = pv.src === "mid" && rec.src === "short";
+        if (dmax || dmin || wx) g.changed.push({ c, pv, rec, dmax, dmin, wx, ho }); else if (ho) g.ho.push(c); else g.unchanged.push(c);
+      });
+      groups.push(g);
+    });
+    if (!groups.length) return "";
+    return "<h3>변경 로그</h3><div class='tablewrap'><table class='log'><tbody>" + groups.map((g) => {
+      const parts = [];
+      if (g.changed.length) parts.push("변경 " + g.changed.length + "도시");
+      if (g.unchanged.length) parts.push("변경 없음 " + g.unchanged.length);
+      if (g.ho.length) parts.push("중기→단기 전환(변경 없음) " + g.ho.join("·"));
+      if (g.nw.length) parts.push(g.nw.length === m.city_order.length ? "초기 기준선 8도시" : "신규 " + g.nw.join("·"));
+      if (g.missing.length) parts.push("미갱신 " + g.missing.join("·"));
+      const head = "<tr class='grp'><th colspan='3'>" + g.label + " " + (g.kind === "mid" ? "중기" : "단기") + " 발표<span>" + parts.join(" · ") + "</span></th></tr>";
+      const rows = g.changed.map((ch) => {
+        const f = frameAttr(ch.dmax, ch.dmin);
+        const t1 = ch.dmax ? "<span class='" + (ch.dmax > 0 ? "up" : "down") + "'>최고 " + Math.round(ch.pv.tmax) + "→" + Math.round(ch.rec.tmax) + " (" + sgn(ch.dmax) + ")</span>" : "<span class='eq'>최고 " + Math.round(ch.rec.tmax) + " (=)</span>";
+        const t2 = ch.dmin ? "<span class='" + (ch.dmin > 0 ? "up" : "down") + "'>최저 " + Math.round(ch.pv.tmin) + "→" + Math.round(ch.rec.tmin) + " (" + sgn(ch.dmin) + ")</span>" : "<span class='eq'>최저 " + Math.round(ch.rec.tmin) + " (=)</span>";
+        const sk = (ch.wx ? "<b>개황 " + (ch.pv.sky || "-") + " → " + (ch.rec.sky || "-") + "</b>" : "<span class='eq'>개황 " + (ch.rec.sky || "-") + " (=)</span>") + (ch.rec.pop != null ? " · 강수확률 " + ch.rec.pop + "%" : "") + (ch.ho ? " · 중기→단기 전환" : "");
+        return "<tr><td class='city'>" + ch.c + "</td><td class='tt" + f.cls + "' style='" + f.st + "'>" + t1 + "<br>" + t2 + "</td><td class='" + (ch.wx ? "wx" : "") + "'>" + sk + "</td></tr>";
+      }).join("");
+      return head + rows;
+    }).join("") + "</tbody></table></div>";
+  };
+
+  // 이력표: 행=발표시각, 열=도시, Δ 줄 + 합계 행
+  const histHtml = (ds) => {
     const rows = (m.effective_issuances || []).filter((i) => m.city_order.some((c) => (m.cities[c][ds] || []).some((x) => x.issue === i.key)));
-    if (!rows.length) return "<h3 style='font-size:14px;margin:10px 0 4px'>" + title + "</h3><p class='note'>아직 이 날짜의 예보가 없습니다.</p>";
+    if (!rows.length) return "<p class='note'>아직 이 날짜의 예보가 없습니다.</p>";
     const prev = {};
     const body = rows.map((i) => {
       const cells = m.city_order.map((c) => {
         const rec = (m.cities[c][ds] || []).find((x) => x.issue === i.key);
         if (!rec) return '<td class="none">—</td>';
         const p = prev[c]; prev[c] = rec;
-        let cls = rec.src === "mid" ? "mid" : "";
+        let cls = rec.src === "mid" ? "mid" : "", st = "", d = "기준";
         if (p) {
-          if ((p.sky || "") !== (rec.sky || "")) cls += " wx";
-          if (rec.tmax > p.tmax) cls += " up-top"; else if (rec.tmax < p.tmax) cls += " down-top";
-          if (rec.tmin > p.tmin) cls += " up-bot"; else if (rec.tmin < p.tmin) cls += " down-bot";
+          if (norm(p.sky) !== norm(rec.sky)) cls += " wx";
+          const f = frameAttr(rec.tmax - p.tmax, rec.tmin - p.tmin); cls += f.cls; st = f.st;
+          d = "Δ " + sgn(rec.tmax - p.tmax) + "/" + sgn(rec.tmin - p.tmin);
         }
-        return '<td class="' + cls + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? " " + rec.pop + "%" : "") + ' <span class="badge">' + (rec.src === "mid" ? "중" : "단") + "</span></td>";
+        return '<td class="' + cls + '" style="' + st + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? " " + rec.pop + "%" : "") + '<span class="d">' + d + "</span></td>";
       });
-      return "<tr><th>" + i.label + "</th>" + cells.join("") + "</tr>";
+      return "<tr><th>" + i.label + " <span class='badge'>" + (i.kind === "mid" ? "중" : "단") + "</span></th>" + cells.join("") + "</tr>";
     }).join("");
-    return "<h3 style='font-size:14px;margin:10px 0 4px'>" + title + "</h3><div class='tablewrap'><table><thead><tr><th>발표</th>" + m.city_order.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>";
-  })(ds); });
-  const tabs = document.getElementById("dateTabs");
+    const sum = "<tr class='sum'><th>처음→최신</th>" + m.city_order.map((c) => {
+      const recs = m.cities[c][ds] || [];
+      if (recs.length < 2) return "<td>비교 없음</td>";
+      let nwx = 0; for (let k = 1; k < recs.length; k++) if (norm(recs[k].sky) !== norm(recs[k-1].sky)) nwx++;
+      const a = recs[0], b = recs[recs.length - 1];
+      return "<td>Δ " + sgn(b.tmax - a.tmax) + "/" + sgn(b.tmin - a.tmin) + "<span class='d'>개황 변경 " + nwx + "회</span></td>";
+    }).join("") + "</tr>";
+    return "<h3>이력표</h3><div class='tablewrap'><table><thead><tr><th>발표</th>" + m.city_order.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" + body + sum + "</tbody></table></div>";
+  };
+
+  const hist = document.getElementById("hist"), tabs = document.getElementById("dateTabs");
+  const tables = {};
+  m.targets.forEach((ds) => { tables[ds] = "<h3 style='margin-top:4px'>" + dateTitle(ds) + "</h3>" + logHtml(ds) + histHtml(ds); });
   const showDate = (ds) => { hist.innerHTML = tables[ds]; tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.ds === ds)); };
   tabs.innerHTML = m.targets.map((ds) => "<button data-ds='" + ds + "'>" + ds.slice(4,6).replace(/^0/, "") + "/" + ds.slice(6,8).replace(/^0/, "") + (ds === "20260925" ? "★" : "") + "</button>").join("");
   tabs.querySelectorAll("button").forEach((b) => (b.onclick = () => showDate(b.dataset.ds)));
   showDate("20260925");
+
+  // 최신 발표 요약
   const thead = document.querySelector("#tbl thead"), tbody = document.querySelector("#tbl tbody");
-  const head = ["도시"].concat(m.targets.map((ds) => { const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8)); return (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : ""); }));
-  thead.innerHTML = "<tr>" + head.map((h) => "<th>" + h + "</th>").join("") + "</tr>";
+  thead.innerHTML = "<tr>" + ["도시"].concat(m.targets.map(dateTitle)).map((h) => "<th>" + h + "</th>").join("") + "</tr>";
   tbody.innerHTML = m.city_order.map((c) => {
     const cells = m.targets.map((ds) => {
       const recs = m.cities[c][ds] || [];
       if (!recs.length) return '<td class="none">—</td>';
       const l = recs[recs.length - 1];
       let s = "<b>" + Math.round(l.tmax) + " / " + Math.round(l.tmin) + "</b><br>" + (l.sky || "-") + (l.pop != null ? " " + l.pop + "%" : "");
+      let cls = l.src === "mid" ? "mid" : "", st = "";
       if (recs.length >= 2) {
-        const p = recs[recs.length - 2], dx = l.tmax - p.tmax, dn = l.tmin - p.tmin;
-        if (dx || dn) s += '<br><span class="' + ((Math.abs(dx) >= 2 || Math.abs(dn) >= 2) ? "up" : "") + '">Δ' + (dx >= 0 ? "+" : "") + dx + "/" + (dn >= 0 ? "+" : "") + dn + "</span>";
+        const p = recs[recs.length - 2], dx = l.tmax - p.tmax, dn = l.tmin - p.tmin, wx = norm(p.sky) !== norm(l.sky);
+        const f = frameAttr(dx, dn); cls += f.cls; st = f.st;
+        if (wx) cls += " wx";
+        if (dx || dn || wx) s += '<span class="d">' + ((dx || dn) ? "Δ " + sgn(dx) + "/" + sgn(dn) : "") + (wx ? (dx || dn ? " · " : "") + "개황 " + (p.sky || "-") + "→" : "") + "</span>";
       }
-      return '<td class="' + (l.src === "mid" ? "mid" : "") + '">' + s + "</td>";
+      return '<td class="' + cls + '" style="' + st + '">' + s + "</td>";
     });
     return "<tr><th>" + c + "</th>" + cells.join("") + "</tr>";
   }).join("");
