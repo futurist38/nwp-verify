@@ -43,7 +43,8 @@
     body { padding: 8px 6px 24px; font-size: 13px; }
     .card { padding: 6px; border-radius: 6px; }
     table { font-size: 10.5px; table-layout: fixed; width: 100%; }
-    th, td { padding: 3px 1px; white-space: normal; word-break: break-all; overflow-wrap: anywhere; line-height: 1.25; }
+    th, td { padding: 3px 1px; white-space: normal; word-break: normal; overflow-wrap: anywhere; line-height: 1.25; }
+    .pop { display: none; }
     th:first-child, td.city { width: 3.4em; }
     td .d { font-size: 9.5px; }
     tr.sum td { font-size: 10px; }
@@ -170,7 +171,7 @@
         const f = frameAttr(ch.dmax, ch.dmin);
         const t1 = ch.dmax ? "<span class='" + (ch.dmax > 0 ? "up" : "down") + "'>최고 " + Math.round(ch.pv.tmax) + "→" + Math.round(ch.rec.tmax) + " (" + sgn(ch.dmax) + ")</span>" : "<span class='eq'>최고 " + Math.round(ch.rec.tmax) + " (=)</span>";
         const t2 = ch.dmin ? "<span class='" + (ch.dmin > 0 ? "up" : "down") + "'>최저 " + Math.round(ch.pv.tmin) + "→" + Math.round(ch.rec.tmin) + " (" + sgn(ch.dmin) + ")</span>" : "<span class='eq'>최저 " + Math.round(ch.rec.tmin) + " (=)</span>";
-        const sk = (ch.wx ? "<b>개황 " + (ch.pv.sky || "-") + " → " + (ch.rec.sky || "-") + "</b>" : "<span class='eq'>개황 " + (ch.rec.sky || "-") + " (=)</span>") + (ch.rec.pop != null ? " · 강수확률 " + ch.rec.pop + "%" : "") + (ch.ho ? " · 중기→단기 전환" : "");
+        const sk = (ch.wx ? "<b>개황 " + (ch.pv.sky || "-") + " → " + (ch.rec.sky || "-") + "</b>" : "<span class='eq'>개황 " + (ch.rec.sky || "-") + " (=)</span>") + (ch.rec.pop != null ? '<span class="pop"> · 강수확률 ' + ch.rec.pop + "%</span>" : "") + (ch.ho ? " · 중기→단기 전환" : "");
         const sub = (ch.ho ? "중→단 " : "") + (ch.pv.issue !== g.prevCommon ? "← " + shortKey(ch.pv.issue) : "");
         return "<tr><td class='city'>" + ch.c + (sub ? "<span class='d' style='font-size:10px;font-weight:normal'>" + sub.trim() + "</span>" : "") + "</td><td class='tt" + f.cls + "' style='" + f.st + "'>" + t1 + "<br>" + t2 + "</td><td class='" + (ch.wx ? "wx" : "") + "'>" + sk + "</td></tr>";
       }).join("");
@@ -194,7 +195,7 @@
           const f = frameAttr(rec.tmax - p.tmax, rec.tmin - p.tmin); cls += f.cls; st = f.st;
           d = "Δ " + sgn(rec.tmax - p.tmax) + "/" + sgn(rec.tmin - p.tmin);
         }
-        return '<td class="' + cls + '" style="' + st + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? " " + rec.pop + "%" : "") + '<span class="d">' + d + "</span></td>";
+        return '<td class="' + cls + '" style="' + st + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? '<span class="pop"> ' + rec.pop + "%</span>" : "") + '<span class="d">' + d + "</span></td>";
       });
       return "<tr><th>" + i.label + " <span class='badge'>" + (i.kind === "mid" ? "중" : "단") + "</span></th>" + cells.join("") + "</tr>";
     }).join("");
@@ -224,7 +225,7 @@
       const recs = m.cities[c][ds] || [];
       if (!recs.length) return '<td class="none">—</td>';
       const l = recs[recs.length - 1];
-      let s = "<b>" + Math.round(l.tmax) + " / " + Math.round(l.tmin) + "</b><br>" + (l.sky || "-") + (l.pop != null ? " " + l.pop + "%" : "");
+      let s = "<b>" + Math.round(l.tmax) + " / " + Math.round(l.tmin) + "</b><br>" + (l.sky || "-") + (l.pop != null ? '<span class="pop"> ' + l.pop + "%</span>" : "");
       let cls = l.src === "mid" ? "mid" : "", st = "";
       if (recs.length >= 2) {
         const p = recs[recs.length - 2], dx = l.tmax - p.tmax, dn = l.tmin - p.tmin, wx = norm(p.sky) !== norm(l.sky);
