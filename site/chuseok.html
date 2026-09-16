@@ -6,16 +6,16 @@
 <meta name="robots" content="noindex">
 <title>추석 연휴 예보 추적</title>
 <style>
-  body { margin: 0; padding: 12px 14px 32px; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color: #222; background: #fafafa; }
-  h1 { font-size: 20px; margin: 4px 0 2px; }
-  h2 { font-size: 16px; margin: 2px 0 8px; }
-  h3 { font-size: 14px; margin: 12px 0 4px; }
-  .sub { color: #666; font-size: 13px; margin: 0 0 10px; }
-  .stamp { font-size: 13px; color: #1a5fb4; margin: 0 0 10px; }
+  body { margin: 0; padding: 12px 14px 32px; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color: #222; background: #fafafa; font-size: 15px; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  h2 { font-size: 18px; margin: 2px 0 8px; }
+  h3 { font-size: 16px; margin: 12px 0 4px; }
+  .sub { color: #666; font-size: 14px; margin: 0 0 10px; }
+  .stamp { font-size: 14px; color: #1a5fb4; margin: 0 0 10px; }
   .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px; margin: 0 0 14px; }
   img { max-width: 100%; height: auto; display: block; }
-  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-  th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: center; white-space: nowrap; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th, td { border: 1px solid #ddd; padding: 6px 5px; text-align: center; white-space: nowrap; }
   th { background: #eee; }
   td.mid { background: #f0f4fa; }
   td.wx { background: #fff2cc; }
@@ -25,25 +25,25 @@
   td.ft::before, td.fb::after { content: ""; position: absolute; left: 0; right: 0; height: 50%; pointer-events: none; border: 3px solid transparent; box-sizing: border-box; }
   td.ft::before { top: 0; border-color: var(--ct); border-bottom: none; }
   td.fb::after { bottom: 0; border-color: var(--cb); border-top: none; }
-  td .d { display: block; font-size: 11px; color: #555; }
+  td .d { display: block; font-size: 13px; color: #555; }
   tr.sum td, tr.sum th { background: #e6e6e6; font-weight: bold; }
-  tr.sum td { font-size: 12px; }
-  .badge { font-size: 10px; color: #777; }
-  .tabs button { font-size: 13px; padding: 4px 8px; margin: 0 4px 6px 0; border: 1px solid #bbb; background: #f6f6f6; border-radius: 6px; }
+  tr.sum td { font-size: 14px; }
+  .badge { font-size: 11px; color: #777; }
+  .tabs button { font-size: 15px; padding: 5px 10px; margin: 0 4px 6px 0; border: 1px solid #bbb; background: #f6f6f6; border-radius: 6px; }
   .tabs button.on { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
-  .digest { font-size: 13px; background: #fff8e1; border: 1px solid #f0d78c; border-radius: 6px; padding: 6px 8px; margin: 0 0 10px; }
+  .digest { font-size: 15px; background: #fff8e1; border: 1px solid #f0d78c; border-radius: 6px; padding: 6px 8px; margin: 0 0 10px; }
   .up { color: #8E0000; font-weight: bold; } .down { color: #0D3B70; font-weight: bold; } .eq { color: #777; }
-  .note { font-size: 12px; color: #666; line-height: 1.5; }
+  .note { font-size: 13px; color: #666; line-height: 1.5; }
   .tablewrap { overflow-x: auto; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 14px; }
   .two .card { margin: 0; }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
   /* 변경 로그 */
   table.log th, table.log td { text-align: left; white-space: normal; }
-  table.log tr.grp th { background: #e6e9ee; font-size: 13px; }
-  table.log tr.grp th span { float: right; font-weight: normal; color: #444; font-size: 12px; }
+  table.log tr.grp th { background: #e6e9ee; font-size: 15px; }
+  table.log tr.grp th span { float: right; font-weight: normal; color: #444; font-size: 13px; }
   table.log td.city { font-weight: bold; width: 3.2em; text-align: center; white-space: nowrap; }
-  table.log td.tt { width: 11em; white-space: nowrap; line-height: 1.5; }
+  table.log td.tt { width: 12em; white-space: nowrap; line-height: 1.5; }
 </style>
 </head>
 <body>

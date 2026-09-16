@@ -229,7 +229,7 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
     d = dt.datetime.strptime(ds, "%Y%m%d")
     dlabel = f"{d.month}/{d.day}({wd[d.weekday()]}){' 추석' if ds == '20260925' else ''}"
     groups = change_log(m, ds)
-    H_HEAD, H_ROW, H_GAP = 1.0, 2.0, 0.35
+    H_HEAD, H_ROW, H_GAP = 1.15, 2.3, 0.35
     def units(g): return H_HEAD + H_ROW * len(g["changed"]) + H_GAP
     # 뒤(최신)에서부터 채워 넣는다
     shown, total = [], 0.0
@@ -239,7 +239,7 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
         shown.insert(0, g); total += units(g)
     skipped = len(groups) - len(shown)
     fig_h = 0.175 * max(total, 4) + 1.25
-    fig, ax = plt.subplots(figsize=(9.0, fig_h)); ax.set_xlim(0, 1); ax.set_ylim(max(total, 3.0) + (0.8 if skipped else 0.2), -0.2); ax.axis("off")
+    fig, ax = plt.subplots(figsize=(9.6, fig_h)); ax.set_xlim(0, 1); ax.set_ylim(max(total, 3.0) + (0.8 if skipped else 0.2), -0.2); ax.axis("off")
     X_CITY, X_T0, X_T1, X_S0, X_S1 = 0.005, 0.105, 0.455, 0.465, 0.995
     y = 0.0
     if skipped:
@@ -255,7 +255,7 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
             ax.plot([x0 + xm, x0 + xm, x1 - xm, x1 - xm], [ym, y1 - 0.06, y1 - 0.06, ym], color=bot, lw=3, solid_capstyle="butt", solid_joinstyle="miter", zorder=3)
     for g in shown:
         ax.add_patch(Rectangle((0, y), 1, H_HEAD, facecolor="#e6e9ee", edgecolor="none", zorder=1))
-        ax.text(0.01, y + H_HEAD / 2, _issue_title(g), va="center", fontsize=10.5, weight="bold", color="#222", zorder=2)
+        ax.text(0.01, y + H_HEAD / 2, _issue_title(g), va="center", fontsize=12.5, weight="bold", color="#222", zorder=2)
         parts = []
         nc = len(g["changed"])
         if nc: parts.append(f"변경 {nc}도시")
@@ -264,35 +264,35 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
         if g["new"]:
             parts.append("초기 기준선 8도시" if len(g["new"]) == len(m["city_order"]) else "신규 " + "·".join(g["new"]))
         if g["missing"]: parts.append("미갱신 " + "·".join(g["missing"]))
-        ax.text(0.99, y + H_HEAD / 2, " · ".join(parts), va="center", ha="right", fontsize=8.5, color="#444", zorder=2)
+        ax.text(0.99, y + H_HEAD / 2, " · ".join(parts), va="center", ha="right", fontsize=10, color="#444", zorder=2)
         y += H_HEAD
         for ch in g["changed"]:
             pv, rc = ch["prev"], ch["rec"]
             ax.add_patch(Rectangle((0, y), 1, H_ROW, facecolor="white", edgecolor="#e0e0e0", lw=0.6, zorder=1))
-            ax.text(X_CITY + 0.045, y + H_ROW / 2, ch["city"], ha="center", va="center", fontsize=10.5, weight="bold", zorder=2)
+            ax.text(X_CITY + 0.045, y + H_ROW / 2, ch["city"], ha="center", va="center", fontsize=12.5, weight="bold", zorder=2)
             sub = []
             if ch["handoff"]: sub.append("중→단")
             if ch["prev"]["issue"] != g["prev_common"]: sub.append("← " + ch["prev"]["issue"][4:6] + "-" + ch["prev"]["issue"][6:8] + " " + ch["prev"]["issue"][8:10] + "시")
             if sub:
-                ax.text(X_CITY + 0.045, y + H_ROW * 0.82, " ".join(sub), ha="center", va="center", fontsize=6.3, color="#777", zorder=2)
+                ax.text(X_CITY + 0.045, y + H_ROW * 0.84, " ".join(sub), ha="center", va="center", fontsize=7.5, color="#777", zorder=2)
             # 기온 칸
             ax.add_patch(Rectangle((X_T0, y + 0.05), X_T1 - X_T0, H_ROW - 0.1, facecolor="white", edgecolor="#d0d0d0", lw=0.6, zorder=1))
             frame(X_T0, y + 0.05, X_T1, y + H_ROW - 0.05, _edge_color(ch["dmax"]), _edge_color(ch["dmin"]))
             t1 = f"최고 {pv['tmax']:.0f}→{rc['tmax']:.0f} ({_sgn(ch['dmax'])})" if ch["dmax"] else f"최고 {rc['tmax']:.0f} (=)"
             t2 = f"최저 {pv['tmin']:.0f}→{rc['tmin']:.0f} ({_sgn(ch['dmin'])})" if ch["dmin"] else f"최저 {rc['tmin']:.0f} (=)"
-            ax.text(X_T0 + 0.025, y + H_ROW * 0.31, t1, va="center", fontsize=9.5, color="#8E0000" if ch["dmax"] > 0 else ("#0D3B70" if ch["dmax"] < 0 else "#666"), weight="bold" if ch["dmax"] else "normal", zorder=4)
-            ax.text(X_T0 + 0.025, y + H_ROW * 0.69, t2, va="center", fontsize=9.5, color="#8E0000" if ch["dmin"] > 0 else ("#0D3B70" if ch["dmin"] < 0 else "#666"), weight="bold" if ch["dmin"] else "normal", zorder=4)
+            ax.text(X_T0 + 0.025, y + H_ROW * 0.31, t1, va="center", fontsize=11.5, color="#8E0000" if ch["dmax"] > 0 else ("#0D3B70" if ch["dmax"] < 0 else "#666"), weight="bold" if ch["dmax"] else "normal", zorder=4)
+            ax.text(X_T0 + 0.025, y + H_ROW * 0.69, t2, va="center", fontsize=11.5, color="#8E0000" if ch["dmin"] > 0 else ("#0D3B70" if ch["dmin"] < 0 else "#666"), weight="bold" if ch["dmin"] else "normal", zorder=4)
             # 개황 칸
             ax.add_patch(Rectangle((X_S0, y + 0.05), X_S1 - X_S0, H_ROW - 0.1, facecolor="#fff2cc" if ch["wx"] else "white", edgecolor="#d0d0d0", lw=0.6, zorder=1))
             sk = f"개황 {pv.get('sky') or '-'} → {rc.get('sky') or '-'}" if ch["wx"] else f"개황 {rc.get('sky') or '-'} (=)"
             if rc.get("pop") is not None: sk += f" · 강수확률 {rc['pop']}%"
             if ch["handoff"]: sk += " · 중기→단기 전환"
-            ax.text(X_S0 + 0.012, y + H_ROW / 2, sk, va="center", fontsize=9.5, color="#222" if ch["wx"] else "#666", weight="bold" if ch["wx"] else "normal", zorder=4, wrap=True)
+            ax.text(X_S0 + 0.012, y + H_ROW / 2, sk, va="center", fontsize=11.5, color="#222" if ch["wx"] else "#666", weight="bold" if ch["wx"] else "normal", zorder=4, wrap=True)
             y += H_ROW
         y += H_GAP
-    fig.suptitle(f"{dlabel} 예보 변경 로그 — 이전 발표 → 이번 발표에서 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=12, weight="bold", y=0.995)
+    fig.suptitle(f"{dlabel} 예보 변경 로그 — 이전 발표 → 이번 발표에서 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=13.5, weight="bold", y=0.995)
     fig.text(0.5, 0.006, "기온 칸 테두리 위쪽 절반 = 최고기온, 아래쪽 절반 = 최저기온 변화(빨강 상승·파랑 하락, 진할수록 큼: 1·2·3℃↑) · 노랑 = 개황 변화 · 비교 = 그 도시·날짜의 직전 유효 발표",
-             ha="center", fontsize=7.5, color="#555")
+             ha="center", fontsize=8.5, color="#555")
     fig.tight_layout(rect=[0, 0.02, 1, 0.975])
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fig.savefig(path, dpi=130); plt.close(fig)
@@ -309,7 +309,7 @@ def plot_card(m: dict, path: str) -> None:
             matplotlib.rc("font", family=f); break
     dates = m["targets"]; cities = m["city_order"]
     wd = ["월", "화", "수", "목", "금", "토", "일"]
-    fig, ax = plt.subplots(figsize=(8.0, 0.62 * len(cities) + 1.6))
+    fig, ax = plt.subplots(figsize=(9.0, 0.5 * len(cities) + 1.1))
     ax.axis("off")
     cols = []
     for ds in dates:
@@ -329,12 +329,12 @@ def plot_card(m: dict, path: str) -> None:
             row.append(txt); crow.append("#ffffff" if l["src"] == "short" else "#f0f4fa")
         cell.append(row); colors.append(crow)
     tbl = ax.table(cellText=cell, rowLabels=cities, colLabels=cols, cellColours=colors, loc="center", cellLoc="center")
-    tbl.auto_set_font_size(False); tbl.set_fontsize(8.5); tbl.scale(1.0, 2.6)
+    tbl.auto_set_font_size(False); tbl.set_fontsize(10.5); tbl.scale(1.0, 2.9)
     for (r, c), cl in tbl.get_celld().items():
         if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
     latest = m.get("latest_label") or "-"
-    fig.suptitle(f"추석 연휴 예보 · 8대도시 · 최신 발표 {latest}", fontsize=12, weight="bold", y=0.98)
-    fig.text(0.5, 0.02, "최고/최저 ℃ · 개황 · 강수확률 · Δ = 직전 발표 대비(최고/최저) · 흰칸 = 단기예보, 연파랑 = 중기예보", ha="center", fontsize=8, color="#555")
+    fig.suptitle(f"추석 연휴 예보 · 8대도시 · 최신 발표 {latest}", fontsize=14, weight="bold", y=0.98)
+    fig.text(0.5, 0.02, "최고/최저 ℃ · 개황 · 강수확률 · Δ = 직전 발표 대비(최고/최저) · 흰칸 = 단기예보, 연파랑 = 중기예보", ha="center", fontsize=9.5, color="#555")
     fig.savefig(path, dpi=150, bbox_inches="tight"); plt.close(fig)
 
 
@@ -500,7 +500,7 @@ def plot_revision(m: dict, cmp: dict, path: str) -> None:
     matplotlib.rcParams["axes.unicode_minus"] = False
     wd = ["월", "화", "수", "목", "금", "토", "일"]
     cities, dates = m["city_order"], m["targets"]
-    fig = plt.figure(figsize=(7.2, 7.2)); ax = fig.add_axes([0.09, 0.22, 0.89, 0.66]); ax.axis("off")   # 왼쪽 여백 = 도시 행머리
+    fig = plt.figure(figsize=(7.2, 7.2)); ax = fig.add_axes([0.09, 0.215, 0.895, 0.675]); ax.axis("off")   # 왼쪽 여백 = 도시 행머리
     cols = []
     for ds in dates:
         d = dt.datetime.strptime(ds, "%Y%m%d"); cols.append(f"{d.month}/{d.day}({wd[d.weekday()]})" + ("★" if ds == "20260925" else ""))
@@ -528,12 +528,12 @@ def plot_revision(m: dict, cmp: dict, path: str) -> None:
                 row.append(txt); crow.append("#ffe08a" if emph else ("#ffffff" if l["src"] == "short" else "#f0f4fa"))
         cell.append(row); colr.append(crow)
     tbl = ax.table(cellText=cell, rowLabels=cities, colLabels=cols, cellColours=colr, loc="center", cellLoc="center")
-    tbl.auto_set_font_size(False); tbl.set_fontsize(9); tbl.scale(1.0, 2.35)
+    tbl.auto_set_font_size(False); tbl.set_fontsize(11.5); tbl.scale(1.0, 3.0)
     for (r, c), cl in tbl.get_celld().items():
         if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
     _draw_edges(fig, tbl, edges)
-    fig.text(0.5, 0.955, f"추석 연휴 예보 변화 · {m.get('latest_label') or '-'} 발표", ha="center", fontsize=14, weight="bold")
-    fig.text(0.5, 0.915, "칸 위 = 직전 발표 대비 Δ최고/Δ최저 ℃ (· 무변경, ※ 개황 변화, 전환 = 중기→단기) · 칸 아래 = 최신 최고/최저·개황", ha="center", fontsize=8.5, color="#444")
+    fig.text(0.5, 0.958, f"추석 연휴 예보 변화 · {m.get('latest_label') or '-'} 발표", ha="center", fontsize=16, weight="bold")
+    fig.text(0.5, 0.918, "칸 위 = 직전 발표 대비 Δ최고/Δ최저 ℃ (· 무변경, ※ 개황 변화, 전환 = 중기→단기) · 칸 아래 = 최신 최고/최저·개황", ha="center", fontsize=9.5, color="#444")
     # 아래: 요약·상위 변경
     chg = sorted([(k, v) for k, v in cmp.items() if v["state"] in ("changed", "handoff") and (v["dmax"] or v["dmin"] or v["wx"])],
                  key=lambda kv: -max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0), 1.5 if kv[1]["wx"] else 0))
@@ -547,8 +547,8 @@ def plot_revision(m: dict, cmp: dict, path: str) -> None:
         lines.append(f"{d[4:6].lstrip('0')}/{d[6:8].lstrip('0')} {k[0]}: " + ", ".join(bits))
     y = 0.165; n_sum = len(textwrap.wrap(digest(m, cmp), 62)[:2] or [1])
     for i, ln in enumerate(lines):
-        fig.text(0.04, y - 0.028 * i, ln, fontsize=9 if i < n_sum else 8.5, color="#222" if i < n_sum else "#a04000", ha="left")
-    fig.text(0.5, 0.015, "흰칸 단기 · 연파랑 중기 · 노랑 = 개황 변화 · 회색 = 이번 발표 자료 없음 · 테두리 위/아래 절반 = 최고/최저 변화(빨강↑ 파랑↓, 진할수록 큼)", ha="center", fontsize=7.5, color="#555")
+        fig.text(0.03, y - 0.029 * i, ln, fontsize=10.5 if i < n_sum else 10, color="#222" if i < n_sum else "#a04000", ha="left")
+    fig.text(0.5, 0.006, "흰칸 단기 · 연파랑 중기 · 노랑 = 개황 변화 · 회색 = 자료 없음 · 테두리 위/아래 = 최고/최저 변화(빨강↑ 파랑↓)", ha="center", fontsize=8.5, color="#555")
     fig.savefig(path, dpi=150); plt.close(fig)
 
 
@@ -613,19 +613,19 @@ def plot_history(m: dict, out_dir: str) -> list[str]:
     for ds, rows, cell, colr, edges in per_date:
         d = dt.datetime.strptime(ds, "%Y%m%d")
         title = f"{d.month}/{d.day}({wd[d.weekday()]}){' 추석' if ds == '20260925' else ''} 예보 이력 — 행: 발표시각, 열: 도시 (최고/최저 ℃ · 개황)"
-        fig, ax = plt.subplots(figsize=(9.6, 0.47 * (max(len(rows), 1) + 1) + 1.1)); ax.axis("off")
+        fig, ax = plt.subplots(figsize=(11.5, 0.55 * (max(len(rows), 1) + 1) + 1.1)); ax.axis("off")
         if rows:
             rl = [i["label"] + (" 중" if i["kind"] == "mid" else " 단") for i in rows] + ["처음→최신"]
             tbl = ax.table(cellText=cell, rowLabels=rl, colLabels=cities, cellColours=colr, loc="center", cellLoc="center")
-            tbl.auto_set_font_size(False); tbl.set_fontsize(8.2); tbl.scale(1.0, 2.35)
+            tbl.auto_set_font_size(False); tbl.set_fontsize(10.5); tbl.scale(1.0, 2.7)
             for (r, c), cl in tbl.get_celld().items():
                 if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
                 if r == len(rows) + 1: cl.set_text_props(weight="bold")
             _draw_edges(fig, tbl, edges)
         else:
             ax.text(0.5, 0.5, "아직 이 날짜의 예보가 없습니다", ha="center", va="center", fontsize=10, color="#888")
-        fig.suptitle(title, fontsize=11, weight="bold", y=0.98)
-        fig.text(0.5, 0.02, "흰칸 단기 · 연파랑 중기 · Δ = 직전 발표 대비 최고/최저 · 노랑 = 개황 변화 · 칸 테두리 위/아래 절반 = 최고/최저 변화(빨강 상승·파랑 하락, 진할수록 큼) · 마지막 행 = 첫 발표→최신 누적", ha="center", fontsize=8, color="#555")
+        fig.suptitle(title, fontsize=13, weight="bold", y=0.98)
+        fig.text(0.5, 0.02, "흰칸 단기 · 연파랑 중기 · Δ = 직전 발표 대비 최고/최저 · 노랑 = 개황 변화 · 칸 테두리 위/아래 절반 = 최고/최저 변화(빨강 상승·파랑 하락, 진할수록 큼) · 마지막 행 = 첫 발표→최신 누적", ha="center", fontsize=9.5, color="#555")
         p = os.path.join(out_dir, f"chuseok_hist_{ds}.png"); fig.savefig(p, dpi=150, bbox_inches="tight"); plt.close(fig); paths.append(p)
     # 합본 (세로)
     from PIL import Image
