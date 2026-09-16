@@ -38,6 +38,25 @@
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 14px; }
   .two .card { margin: 0; }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  /* 모바일: 가로 스크롤 없이 한 화면에 — 표를 화면 폭에 맞추고 칸 안에서 줄바꿈 */
+  @media (max-width: 700px) {
+    body { padding: 8px 6px 24px; font-size: 13px; }
+    .card { padding: 6px; border-radius: 6px; }
+    table { font-size: 10.5px; table-layout: fixed; width: 100%; }
+    th, td { padding: 3px 1px; white-space: normal; word-break: break-all; overflow-wrap: anywhere; line-height: 1.25; }
+    th:first-child, td.city { width: 3.4em; }
+    td .d { font-size: 9.5px; }
+    tr.sum td { font-size: 10px; }
+    .badge { display: none; }
+    .tablewrap { overflow-x: visible; }
+    table.log th, table.log td { white-space: normal; }
+    table.log td.tt { width: 7.6em; font-size: 10.5px; line-height: 1.35; }
+    table.log tr.grp th span { float: none; display: block; font-size: 10px; }
+    td.ft::before, td.fb::after { border-width: 2px; }
+    .tabs button { font-size: 13px; padding: 4px 8px; }
+    .note, .sub, .stamp, .digest { font-size: 12px; }
+    h1 { font-size: 18px; } h2 { font-size: 15px; } h3 { font-size: 14px; }
+  }
   /* 변경 로그 */
   table.log th, table.log td { text-align: left; white-space: normal; }
   table.log tr.grp th { background: #e6e9ee; font-size: 15px; }
