@@ -85,14 +85,14 @@ def collect_short(t: dt.datetime, key: str) -> dict:
             ds = d.strftime("%Y%m%d")
             hours = [f"{ds}{h:02d}" for h in range(0, 24)]
             tmp = [f["TMP"][h] for h in hours if h in f["TMP"]]
-            if len(tmp) < 24:                       # 하루가 온전히 예보 범위에 들 때만 (부분 일자는 제외 — Sol 검토 9/16)
+            tmax = f["TMX"].get(f"{ds}15"); tmax_src = "TMX"
+            tmin = f["TMN"].get(f"{ds}06"); tmin_src = "TMN"
+            if tmax is None and len(tmp) == 24:     # 공식값이 없으면 하루 전체 시간값이 있을 때만 대체 (부분 일자 극값 금지)
+                tmax, tmax_src = max(tmp), "hourly"
+            if tmin is None and len(tmp) == 24:
+                tmin, tmin_src = min(tmp), "hourly"
+            if tmax is None or tmin is None:        # 9/23 11시 발표처럼 그 날 일부만 남은 경우 → 그 날짜는 이 발표에서 제외
                 continue
-            tmax = f["TMX"].get(f"{ds}15")
-            tmin = f["TMN"].get(f"{ds}06")
-            if tmax is None:
-                tmax = max(tmp)
-            if tmin is None:
-                tmin = min(tmp)
             # 개황: 낮(09~18시) 하늘상태 최빈값 + 강수형태 유무, 강수확률 낮 최대
             day_h = [f"{ds}{h:02d}" for h in range(9, 19)]
             skys = [int(f["SKY"][h]) for h in day_h if h in f["SKY"]]
@@ -104,8 +104,11 @@ def collect_short(t: dt.datetime, key: str) -> dict:
             txt = SKY_TXT.get(sky, "?") if sky else "?"
             if kinds:
                 txt += "·" + "/".join(PTY_TXT.get(p, "강수") for p in kinds)
+            all_pty = sorted({int(f["PTY"][h]) for h in hours if h in f["PTY"] and int(f["PTY"][h])})
             days[ds] = {"tmax": float(tmax), "tmin": float(tmin), "sky": txt,
-                        "pop": (max(pops) if pops else None), "src": "short"}
+                        "pop": (max(pops) if pops else None), "src": "short",
+                        "tmax_src": tmax_src, "tmin_src": tmin_src, "n_hours": len(tmp),
+                        "pty_day": [PTY_TXT.get(p, "강수") for p in all_pty]}   # 하루 전체 강수형태(낮 창 밖 포함)
         res[city] = days
     return res
 
@@ -142,13 +145,17 @@ def collect_mid(t: dt.datetime, key: str) -> dict:
             n = (d - t.date()).days
             if ta is None or f"taMax{n}" not in ta:
                 continue
+            def _r(k):
+                v = ta.get(k)
+                return float(v) if v is not None and str(v) != "" else None
             rec = {"tmax": float(ta[f"taMax{n}"]), "tmin": float(ta[f"taMin{n}"]),
-                   "tmax_l": float(ta.get(f"taMax{n}Low", 0)), "tmax_h": float(ta.get(f"taMax{n}High", 0)),
-                   "tmin_l": float(ta.get(f"taMin{n}Low", 0)), "tmin_h": float(ta.get(f"taMin{n}High", 0)),
-                   "sky": None, "pop": None, "src": "mid"}
+                   "tmax_l": _r(f"taMax{n}Low"), "tmax_h": _r(f"taMax{n}High"),
+                   "tmin_l": _r(f"taMin{n}Low"), "tmin_h": _r(f"taMin{n}High"),
+                   "sky": None, "sky_am": None, "sky_pm": None, "pop": None, "src": "mid"}
             if land:
                 if f"wf{n}Am" in land:
                     am, pm = land.get(f"wf{n}Am", ""), land.get(f"wf{n}Pm", "")
+                    rec["sky_am"], rec["sky_pm"] = am, pm
                     rec["sky"] = am if am == pm else f"{am}/{pm}"
                     pops = [land.get(f"rnSt{n}Am"), land.get(f"rnSt{n}Pm")]
                     pops = [int(p) for p in pops if p is not None]
@@ -230,8 +237,9 @@ def plot(m: dict, path: str) -> None:
                     ax.plot(xs, ys, "-o", ms=3.5, lw=1.2, color=color)
                     for x, y, rec in zip(xs, ys, recs):
                         if rec["src"] == "mid":
-                            lo, hi = rec.get(f"{var}_l", 0) or 0, rec.get(f"{var}_h", 0) or 0
-                            ax.plot([x, x], [y - lo, y + hi], color=color, lw=0.8, alpha=0.5)
+                            lo, hi = rec.get(f"{var}_l") or 0, rec.get(f"{var}_h") or 0
+                            if lo or hi:
+                                ax.plot([x, x], [y - lo, y + hi], color=color, lw=0.8, alpha=0.5)
                         else:
                             ax.plot(x, y, "s", ms=5, color=color)   # 단기예보 = 네모
                     ax.annotate(f"{ys[-1]:.0f}", (xs[-1], ys[-1]), xytext=(4, 0), textcoords="offset points",
@@ -308,6 +316,126 @@ def plot_card(m: dict, path: str) -> None:
     fig.text(0.5, 0.02, "최고/최저 ℃ · 개황 · 강수확률 · Δ = 직전 발표 대비(최고/최저) · 흰칸 = 단기예보, 연파랑 = 중기예보", ha="center", fontsize=8, color="#555")
     fig.savefig(path, dpi=150, bbox_inches="tight"); plt.close(fig)
 
+
+
+def compare_cells(m: dict) -> dict:
+    """칸(도시, 대상일)마다 최신 발표 기준 비교 상태 (Astra 제안 9/17):
+       none(예보 없음) / not_updated(이번 발표엔 이 칸 자료 없음) / new(첫 기록) / handoff(중기→단기 첫 전환) / changed / unchanged.
+       Δ 는 그 칸의 직전 유효 기록 대비. 개황 변화는 표시 문자열 비교(강수확률 제외)."""
+    latest = m.get("latest_key")
+    out = {}
+    for city in m["city_order"]:
+        for ds in m["targets"]:
+            recs = m["cities"][city][ds]
+            if not recs:
+                out[(city, ds)] = {"state": "none", "latest": None, "prev": None, "dmax": None, "dmin": None, "wx": False}
+                continue
+            l = recs[-1]
+            if l["issue"] != latest:
+                out[(city, ds)] = {"state": "not_updated", "latest": l, "prev": None, "dmax": None, "dmin": None, "wx": False}
+                continue
+            if len(recs) == 1:
+                out[(city, ds)] = {"state": "new", "latest": l, "prev": None, "dmax": None, "dmin": None, "wx": False}
+                continue
+            p = recs[-2]
+            dmax, dmin = l["tmax"] - p["tmax"], l["tmin"] - p["tmin"]
+            wx = (l.get("sky") or "") != (p.get("sky") or "")
+            if l["src"] == "short" and p["src"] == "mid":
+                state = "handoff"
+            else:
+                state = "changed" if (dmax or dmin or wx) else "unchanged"
+            out[(city, ds)] = {"state": state, "latest": l, "prev": p, "dmax": dmax, "dmin": dmin, "wx": wx}
+    return out
+
+
+def digest(m: dict, cmp: dict) -> str:
+    """카톡 설명·페이지 머리 한 줄: 발표 · 갱신/변경 칸 수 · 최대 기온 변경 · 개황 변화 · 전환."""
+    label = m.get("latest_label") or "-"
+    upd = [v for v in cmp.values() if v["state"] in ("new", "handoff", "changed", "unchanged")]
+    new = [v for v in cmp.values() if v["state"] == "new"]
+    if upd and len(new) == len(upd):
+        n_none = sum(1 for v in cmp.values() if v["state"] == "none")
+        return f"{label} 발표 · 초기 기준선 {len(new)}칸 기록" + (f" · 미발표 {n_none}칸" if n_none else "") + " · 비교는 다음 발표부터"
+    chg = [(k, v) for k, v in cmp.items() if v["state"] in ("changed", "handoff")]
+    parts = [f"{label} 발표 · 갱신 {len(upd)}칸 중 변경 {len(chg)}칸"]
+    if chg:
+        k, v = max(chg, key=lambda kv: max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0)))
+        d = k[1]; which = "최고" if abs(v["dmax"]) >= abs(v["dmin"]) else "최저"
+        a, b = (v["prev"]["tmax"], v["latest"]["tmax"]) if which == "최고" else (v["prev"]["tmin"], v["latest"]["tmin"])
+        if a != b:
+            parts.append(f"최대 변경 {d[4:6].lstrip('0')}/{d[6:8].lstrip('0')} {k[0]} {which} {a:.0f}→{b:.0f}℃")
+        wx = [k for k, v in chg if v["wx"]]
+        if wx:
+            k0 = wx[0]; parts.append(f"개황 변화 {len(wx)}칸(예: {k0[1][4:6].lstrip('0')}/{k0[1][6:8].lstrip('0')} {k0[0]} {cmp[k0]['prev'].get('sky') or '-'}→{cmp[k0]['latest'].get('sky') or '-'})")
+        ho = sum(1 for _, v in chg if v["state"] == "handoff")
+        if ho:
+            parts.append(f"중기→단기 전환 {ho}칸")
+    n_new = len(new)
+    if n_new:
+        parts.append(f"신규 {n_new}칸")
+    return " · ".join(parts)
+
+
+def plot_revision(m: dict, cmp: dict, path: str) -> None:
+    """카톡 카드: 변경 행렬 8도시 × 5일 — 칸 = 이번 발표의 Δ최고/Δ최저(직전 유효 기록 대비).
+       신규 / · (무변경) / 미갱신 / 전환 표기. 강조: |Δ|≥2 또는 개황 변화. 아래에 최신 절대값 표는 두지 않는다(페이지 담당)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+    for f in ("Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", "Noto Sans KR"):
+        if any(f == x.name for x in font_manager.fontManager.ttflist):
+            matplotlib.rc("font", family=f); break
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    wd = ["월", "화", "수", "목", "금", "토", "일"]
+    cities, dates = m["city_order"], m["targets"]
+    fig = plt.figure(figsize=(7.2, 7.2)); ax = fig.add_axes([0.09, 0.22, 0.89, 0.66]); ax.axis("off")   # 왼쪽 여백 = 도시 행머리
+    cols = []
+    for ds in dates:
+        d = dt.datetime.strptime(ds, "%Y%m%d"); cols.append(f"{d.month}/{d.day}({wd[d.weekday()]})" + ("★" if ds == "20260925" else ""))
+    cell, colr = [], []
+    for city in cities:
+        row, crow = [], []
+        for ds in dates:
+            v = cmp[(city, ds)]; st = v["state"]; l = v["latest"]
+            if st == "none":
+                row.append("—"); crow.append("#f4f4f4")
+            elif st == "not_updated":
+                row.append(f"미갱신\n{l['tmax']:.0f}/{l['tmin']:.0f}"); crow.append("#ececec")
+            elif st == "new":
+                row.append(f"신규\n{l['tmax']:.0f}/{l['tmin']:.0f} {_short_sky(l.get('sky'))}"); crow.append("#ffffff" if l["src"] == "short" else "#f0f4fa")
+            else:
+                dmax, dmin = v["dmax"], v["dmin"]
+                txt = f"{dmax:+.0f}/{dmin:+.0f}" if (dmax or dmin) else "·"
+                if st == "handoff":
+                    txt = "전환 " + txt
+                if v["wx"]:
+                    txt += " ※"
+                txt += f"\n{l['tmax']:.0f}/{l['tmin']:.0f} {_short_sky(l.get('sky'))}"
+                emph = abs(dmax) >= 2 or abs(dmin) >= 2 or v["wx"]
+                row.append(txt); crow.append("#ffe08a" if emph else ("#ffffff" if l["src"] == "short" else "#f0f4fa"))
+        cell.append(row); colr.append(crow)
+    tbl = ax.table(cellText=cell, rowLabels=cities, colLabels=cols, cellColours=colr, loc="center", cellLoc="center")
+    tbl.auto_set_font_size(False); tbl.set_fontsize(9); tbl.scale(1.0, 2.35)
+    for (r, c), cl in tbl.get_celld().items():
+        if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
+    fig.text(0.5, 0.955, f"추석 연휴 예보 변화 · {m.get('latest_label') or '-'} 발표", ha="center", fontsize=14, weight="bold")
+    fig.text(0.5, 0.915, "칸 위 = 직전 발표 대비 Δ최고/Δ최저 ℃ (· 무변경, ※ 개황 변화, 전환 = 중기→단기) · 칸 아래 = 최신 최고/최저·개황", ha="center", fontsize=8.5, color="#444")
+    # 아래: 요약·상위 변경
+    chg = sorted([(k, v) for k, v in cmp.items() if v["state"] in ("changed", "handoff") and (v["dmax"] or v["dmin"] or v["wx"])],
+                 key=lambda kv: -max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0), 1.5 if kv[1]["wx"] else 0))
+    lines = [digest(m, cmp)]
+    for k, v in chg[:3]:
+        d = k[1]; bits = []
+        if v["dmax"]: bits.append(f"최고 {v['prev']['tmax']:.0f}→{v['latest']['tmax']:.0f}")
+        if v["dmin"]: bits.append(f"최저 {v['prev']['tmin']:.0f}→{v['latest']['tmin']:.0f}")
+        if v["wx"]: bits.append(f"개황 {v['prev'].get('sky') or '-'}→{v['latest'].get('sky') or '-'}")
+        lines.append(f"{d[4:6].lstrip('0')}/{d[6:8].lstrip('0')} {k[0]}: " + ", ".join(bits))
+    y = 0.16
+    for i, ln in enumerate(lines):
+        fig.text(0.04, y - 0.03 * i, ln, fontsize=9 if i == 0 else 8.5, color="#222" if i == 0 else "#a04000", ha="left")
+    fig.text(0.5, 0.015, "흰칸 단기예보 · 연파랑 중기예보 · 노랑 = |Δ|≥2℃ 또는 개황 변화 · 회색 = 이번 발표에 이 칸 자료 없음 · 전체 이력은 페이지에서", ha="center", fontsize=7.5, color="#555")
+    fig.savefig(path, dpi=150); plt.close(fig)
 
 
 def _short_sky(txt):
@@ -395,8 +523,13 @@ def main():
         plot(m, os.path.join(OUT, "chuseok_latest.png"))
         plot_card(m, os.path.join(OUT, "chuseok_card.png"))
         plot_history(m, OUT)
+        cmp = compare_cells(m)
+        plot_revision(m, cmp, os.path.join(OUT, "chuseok_revision.png"))
+        m["digest"] = digest(m, cmp)
+        m["cell_states"] = {f"{c}|{d}": v["state"] for (c, d), v in cmp.items()}
+        json.dump(m, open(os.path.join(OUT, "chuseok.json"), "w", encoding="utf-8"), ensure_ascii=False)
         if m.get("latest_key"):                     # 발표 키가 붙은 불변 사본 — 카톡은 이 주소가 실제로 서비스되는지 확인한 뒤 보낸다
-            for base in ("chuseok_latest", "chuseok_card", "chuseok_history", "chuseok_hist_20260925"):
+            for base in ("chuseok_latest", "chuseok_card", "chuseok_history", "chuseok_hist_20260925", "chuseok_revision"):
                 shutil.copy2(os.path.join(OUT, base + ".png"), os.path.join(OUT, base + "_" + m["latest_key"] + ".png"))
         print(f"[추석] 그림 → {OUT}/chuseok_latest.png, chuseok_card.png, chuseok_history.png (+ 키 사본)")
 

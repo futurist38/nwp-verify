@@ -12,6 +12,8 @@
 "tmin_l": 2.0,
 "tmin_h": 2.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -23,6 +25,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -34,6 +38,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -45,6 +51,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -58,6 +66,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -69,6 +79,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -80,6 +92,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -91,6 +105,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -104,6 +120,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -115,6 +133,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -126,6 +146,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -137,6 +159,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -150,6 +174,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -161,6 +187,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -172,6 +200,8 @@
 "tmin_l": 0.0,
 "tmin_h": 2.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -183,6 +213,8 @@
 "tmin_l": 0.0,
 "tmin_h": 2.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -196,6 +228,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -207,6 +241,8 @@
 "tmin_l": 0.0,
 "tmin_h": 2.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -218,6 +254,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -229,6 +267,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -242,6 +282,8 @@
 "tmin_l": 2.0,
 "tmin_h": 2.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -253,6 +295,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -264,6 +308,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -275,6 +321,8 @@
 "tmin_l": 0.0,
 "tmin_h": 2.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -288,6 +336,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -299,6 +349,8 @@
 "tmin_l": 0.0,
 "tmin_h": 2.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -310,6 +362,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -321,6 +375,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
@@ -334,6 +390,8 @@
 "tmin_l": 1.0,
 "tmin_h": 1.0,
 "sky": "맑음",
+"sky_am": "맑음",
+"sky_pm": "맑음",
 "pop": 10,
 "src": "mid"
 },
@@ -345,6 +403,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -356,6 +416,8 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 },
@@ -367,11 +429,13 @@
 "tmin_l": 0.0,
 "tmin_h": 1.0,
 "sky": "구름많음",
+"sky_am": null,
+"sky_pm": null,
 "pop": 20,
 "src": "mid"
 }
 }
 },
 "n_days": 32,
-"fetched_utc": "2026-09-16 14:21"
+"fetched_utc": "2026-09-16 15:03"
 }

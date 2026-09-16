@@ -68,7 +68,7 @@ def wait_published(url: str, tries: int = 12, pause: int = 10) -> bool:
 
 
 def send(token: str, key: str, label: str, summary: str) -> None:
-    card = f"{SITE}/chuseok/chuseok_hist_20260925_{key}.png"   # 카드 이미지 = 추석 당일(9/25) 예보 이력표 (발표 키 사본)
+    card = f"{SITE}/chuseok/chuseok_revision_{key}.png"        # 카드 이미지 = 이번 발표 변경 행렬(8도시×5일, Δ) — Astra 제안 9/17
     full = f"{SITE}/chuseok/chuseok_history_{key}.png"          # 버튼 = 5일 전체 이력표 합본
     page = f"{SITE}/chuseok.html"
     if not wait_published(card):
@@ -98,13 +98,7 @@ def main():
     last_sent = open(SENT, encoding="utf-8").read().strip() if os.path.exists(SENT) else ""
     if key == last_sent and not (a.test or a.force):
         print(f"[카톡] 이미 보낸 발표({label}) — 생략"); return
-    # 요약 문구: 도시별 추석 당일(9/25) 최고/최저 + 개황
-    parts = []
-    for c in m["city_order"]:
-        recs = m["cities"][c].get("20260925") or []
-        if recs:
-            l = recs[-1]; parts.append(f"{c} {l['tmax']:.0f}/{l['tmin']:.0f} {l.get('sky') or ''}")
-    summary = "9/25 추석: " + " · ".join(parts) if parts else "대상일 예보 갱신"
+    summary = m.get("digest") or "대상일 예보 갱신"
     send(access_token(), key, label, summary)
     os.makedirs(os.path.dirname(SENT), exist_ok=True)
     open(SENT, "w", encoding="utf-8").write(key)
