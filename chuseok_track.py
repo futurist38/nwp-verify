@@ -424,16 +424,17 @@ def plot_revision(m: dict, cmp: dict, path: str) -> None:
     # 아래: 요약·상위 변경
     chg = sorted([(k, v) for k, v in cmp.items() if v["state"] in ("changed", "handoff") and (v["dmax"] or v["dmin"] or v["wx"])],
                  key=lambda kv: -max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0), 1.5 if kv[1]["wx"] else 0))
-    lines = [digest(m, cmp)]
+    import textwrap
+    lines = textwrap.wrap(digest(m, cmp), 62)[:2] or [digest(m, cmp)]   # 요약이 길면 두 줄로
     for k, v in chg[:3]:
         d = k[1]; bits = []
         if v["dmax"]: bits.append(f"최고 {v['prev']['tmax']:.0f}→{v['latest']['tmax']:.0f}")
         if v["dmin"]: bits.append(f"최저 {v['prev']['tmin']:.0f}→{v['latest']['tmin']:.0f}")
         if v["wx"]: bits.append(f"개황 {v['prev'].get('sky') or '-'}→{v['latest'].get('sky') or '-'}")
         lines.append(f"{d[4:6].lstrip('0')}/{d[6:8].lstrip('0')} {k[0]}: " + ", ".join(bits))
-    y = 0.16
+    y = 0.165; n_sum = len(textwrap.wrap(digest(m, cmp), 62)[:2] or [1])
     for i, ln in enumerate(lines):
-        fig.text(0.04, y - 0.03 * i, ln, fontsize=9 if i == 0 else 8.5, color="#222" if i == 0 else "#a04000", ha="left")
+        fig.text(0.04, y - 0.028 * i, ln, fontsize=9 if i < n_sum else 8.5, color="#222" if i < n_sum else "#a04000", ha="left")
     fig.text(0.5, 0.015, "흰칸 단기예보 · 연파랑 중기예보 · 노랑 = |Δ|≥2℃ 또는 개황 변화 · 회색 = 이번 발표에 이 칸 자료 없음 · 전체 이력은 페이지에서", ha="center", fontsize=7.5, color="#555")
     fig.savefig(path, dpi=150); plt.close(fig)
 
