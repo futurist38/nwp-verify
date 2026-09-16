@@ -254,9 +254,8 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
         if bot:
             ax.plot([x0 + xm, x0 + xm, x1 - xm, x1 - xm], [ym, y1 - 0.06, y1 - 0.06, ym], color=bot, lw=3, solid_capstyle="butt", solid_joinstyle="miter", zorder=3)
     for g in shown:
-        kind = "중기" if g["kind"] == "mid" else "단기"
         ax.add_patch(Rectangle((0, y), 1, H_HEAD, facecolor="#e6e9ee", edgecolor="none", zorder=1))
-        ax.text(0.01, y + H_HEAD / 2, f"{g['label']} {kind} 발표", va="center", fontsize=10.5, weight="bold", color="#222", zorder=2)
+        ax.text(0.01, y + H_HEAD / 2, _issue_title(g), va="center", fontsize=10.5, weight="bold", color="#222", zorder=2)
         parts = []
         nc = len(g["changed"])
         if nc: parts.append(f"변경 {nc}도시")
@@ -271,8 +270,11 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
             pv, rc = ch["prev"], ch["rec"]
             ax.add_patch(Rectangle((0, y), 1, H_ROW, facecolor="white", edgecolor="#e0e0e0", lw=0.6, zorder=1))
             ax.text(X_CITY + 0.045, y + H_ROW / 2, ch["city"], ha="center", va="center", fontsize=10.5, weight="bold", zorder=2)
-            if ch["handoff"]:
-                ax.text(X_CITY + 0.045, y + H_ROW * 0.82, "중→단", ha="center", va="center", fontsize=6.5, color="#777", zorder=2)
+            sub = []
+            if ch["handoff"]: sub.append("중→단")
+            if ch["prev"]["issue"] != g["prev_common"]: sub.append("← " + ch["prev"]["issue"][4:6] + "-" + ch["prev"]["issue"][6:8] + " " + ch["prev"]["issue"][8:10] + "시")
+            if sub:
+                ax.text(X_CITY + 0.045, y + H_ROW * 0.82, " ".join(sub), ha="center", va="center", fontsize=6.3, color="#777", zorder=2)
             # 기온 칸
             ax.add_patch(Rectangle((X_T0, y + 0.05), X_T1 - X_T0, H_ROW - 0.1, facecolor="white", edgecolor="#d0d0d0", lw=0.6, zorder=1))
             frame(X_T0, y + 0.05, X_T1, y + H_ROW - 0.05, _edge_color(ch["dmax"]), _edge_color(ch["dmin"]))
@@ -288,7 +290,7 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
             ax.text(X_S0 + 0.012, y + H_ROW / 2, sk, va="center", fontsize=9.5, color="#222" if ch["wx"] else "#666", weight="bold" if ch["wx"] else "normal", zorder=4, wrap=True)
             y += H_ROW
         y += H_GAP
-    fig.suptitle(f"{dlabel} 예보 변경 로그 — 발표마다 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=12, weight="bold", y=0.995)
+    fig.suptitle(f"{dlabel} 예보 변경 로그 — 이전 발표 → 이번 발표에서 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=12, weight="bold", y=0.995)
     fig.text(0.5, 0.006, "기온 칸 테두리 위쪽 절반 = 최고기온, 아래쪽 절반 = 최저기온 변화(빨강 상승·파랑 하락, 진할수록 큼: 1·2·3℃↑) · 노랑 = 개황 변화 · 비교 = 그 도시·날짜의 직전 유효 발표",
              ha="center", fontsize=7.5, color="#555")
     fig.tight_layout(rect=[0, 0.02, 1, 0.975])
@@ -362,11 +364,13 @@ def change_log(m: dict, ds: str) -> list[dict]:
     """대상일 ds 의 발표별 변경 로그(발표 순). 도시마다 그 도시·날짜의 직전 유효 기록과 비교.
     group = {key,label,kind, changed:[{city,prev,rec,dmax,dmin,wx,handoff}], unchanged:[city], new:[city], missing:[city], handoff_only:[city]}"""
     cities = m["city_order"]; out = []
+    lab = {i["key"]: i for i in m["issuances"]}
     for i in m["effective_issuances"]:
         k = i["key"]
         if not any(x["issue"] == k for c in cities for x in m["cities"][c][ds]):
             continue
-        g = {"key": k, "label": i["label"], "kind": i["kind"], "changed": [], "unchanged": [], "new": [], "missing": [], "handoff_only": []}
+        g = {"key": k, "label": i["label"], "kind": i["kind"], "changed": [], "unchanged": [], "new": [], "missing": [], "handoff_only": [],
+             "prev_of": {}, "prev_common": None, "prev_label": None, "prev_kind": None}
         for c in cities:
             recs = m["cities"][c][ds]
             rec = next((x for x in recs if x["issue"] == k), None)
@@ -377,7 +381,7 @@ def change_log(m: dict, ds: str) -> list[dict]:
                 continue
             if not before:
                 g["new"].append(c); continue
-            pv = before[-1]
+            pv = before[-1]; g["prev_of"][c] = pv["issue"]
             dmax, dmin = rec["tmax"] - pv["tmax"], rec["tmin"] - pv["tmin"]
             wx = _sky(rec.get("sky")) != _sky(pv.get("sky"))
             ho = pv["src"] == "mid" and rec["src"] == "short"
@@ -387,8 +391,22 @@ def change_log(m: dict, ds: str) -> list[dict]:
                 g["handoff_only"].append(c)
             else:
                 g["unchanged"].append(c)
+        if g["prev_of"]:                                   # 가장 많은 도시가 비교한 이전 발표 = 머리띠의 '→' 왼쪽
+            pk = max(set(g["prev_of"].values()), key=lambda x: (list(g["prev_of"].values()).count(x), x))
+            g["prev_common"] = pk
+            g["prev_label"] = lab[pk]["label"] if pk in lab else pk
+            g["prev_kind"] = lab[pk]["kind"] if pk in lab else ""
         out.append(g)
     return out
+
+
+def _issue_title(g: dict) -> str:
+    """머리띠 제목: '09-16 18시 중기 → 09-17 06시 중기 발표' (이전 발표가 없으면 '09-16 18시 중기 발표')."""
+    kind = "중기" if g["kind"] == "mid" else "단기"
+    if g["prev_common"]:
+        pk = "중기" if g["prev_kind"] == "mid" else "단기"
+        return f"{g['prev_label']} {pk} → {g['label']} {kind} 발표"
+    return f"{g['label']} {kind} 발표"
 
 
 def _draw_edges(fig, tbl, edges):
