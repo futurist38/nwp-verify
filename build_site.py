@@ -745,6 +745,13 @@ def main():
         HAS_MIDFCST = export_midfcst(args.site_dir)
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
+    # 추석 예보 추적 (2026-09-16~23, 임시): output/chuseok 의 그림·JSON 을 그대로 실어 카톡 카드가 참조한다
+    src_ch = os.path.join(OUT_DIR, "chuseok")
+    if os.path.isdir(src_ch):
+        dst_ch = os.path.join(args.site_dir, "chuseok"); os.makedirs(dst_ch, exist_ok=True)
+        for fn in os.listdir(src_ch):
+            if fn.endswith((".png", ".json")):
+                shutil.copy2(os.path.join(src_ch, fn), dst_ch)
     nc = copy_nowcast(args.site_dir)
     # 브리핑 묶음(앞 7일 값, 2026-09-08) — daily·hourly 양쪽에서 갱신(관측은 매시, 모델은 daily 커밋 기준)
     try:

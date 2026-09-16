@@ -58,6 +58,19 @@ document.querySelectorAll("#tabs button").forEach((b) => {
     $("tab-" + b.dataset.tab).classList.add("on");
   };
 });
+// 추석 예보 탭: chuseok.json 의 최신 발표 키로 그림 주소를 바꿔 브라우저 캐시를 피한다 (2026-09-16 임시 기능)
+fetch("chuseok/chuseok.json?t=" + Date.now()).then((r) => (r.ok ? r.json() : null)).then((m) => {
+  if (!m) return;
+  const key = m.latest_key || "";
+  if (key) { $("chuseokCard").src = "chuseok/chuseok_card.png?v=" + key; $("chuseokFull").src = "chuseok/chuseok_latest.png?v=" + key; }
+  $("chuseokStamp").textContent = "최신 발표 " + (m.latest_label || "-") + " · 생성 " + (m.generated_kst || "") + " KST";
+}).catch(() => {});
+// ?tab=이름 으로 열면 그 탭을 바로 보여준다 (2026-09-16: 카톡 카드의 '사이트' 버튼이 ?tab=chuseok 으로 연다)
+{
+  const want = new URLSearchParams(location.search).get("tab");
+  const btn = want && document.querySelector('#tabs button[data-tab="' + want + '"]');
+  if (btn && !btn.hidden) btn.click();
+}
 
 // ── 방향키 탐색: 활성 탭의 이전/다음 버튼에 연결 ──
 const ARROW_BTN = { "tab-charts": ["stepPrev", "stepNext"],

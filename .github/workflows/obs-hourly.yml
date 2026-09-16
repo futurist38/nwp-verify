@@ -130,6 +130,13 @@ jobs:
         # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
         run: timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
 
+      # 추석 예보 추적 (2026-09-16~23 임시, 사용자 요청): 8대도시 × 9/23~27 예보를 발표시각별로 캐시·그림.
+      # 단기 05/11/17시·중기 06/18시 발표 뒤 첫 시간별 실행(:25)에서 잡힌다. 9/23 11시 발표 이후엔 새 발표가 없어 자연 종료.
+      - name: 추석 예보 추적
+        run: |
+          if [ "$(TZ=Asia/Seoul date +%Y%m%d)" -ge 20260924 ]; then echo "추적 기간 종료"; exit 0; fi
+          timeout 300 python chuseok_track.py || echo "::warning::추석 추적 실패 — 계속"
+
       - name: 나우캐스트 가중치 (Release 자산)
         id: ncw
         env:
@@ -154,6 +161,33 @@ jobs:
           git config user.name "nwp-bot"
           git config user.email "actions@users.noreply.github.com"
           tools/publish_site.sh "obs $(date '+%Y-%m-%d %H:%M KST')" --hourly
+
+      # 추석 예보 카드 카톡 발송 — 발행된 PNG 주소를 쓰므로 발행 뒤. 새 발표가 있을 때만(마지막 발송 키 파일) 보낸다.
+      - name: 추석 예보 카톡 발송
+        continue-on-error: true
+        env:
+          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+        run: |
+          if [ "$(TZ=Asia/Seoul date +%Y%m%d)" -ge 20260924 ]; then echo "추적 기간 종료"; exit 0; fi
+          if [ -z "$KAKAO_REFRESH_TOKEN" ]; then echo "::notice::KAKAO 시크릿 없음 — 발송 생략"; exit 0; fi
+          timeout 120 python kakao_send.py || echo "::warning::카톡 발송 실패 — 계속"
+
+      # 추석 추적 캐시·발송 마커 커밋 — 나우캐스트 단계와 무관하게 항상 (마커가 안 남으면 같은 카드를 매시 재발송한다)
+      - name: 추석 추적 캐시 커밋
+        continue-on-error: true
+        run: |
+          git add verification/chuseok 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "추석 예보 추적 $(date '+%Y-%m-%d %H:%M KST')"
+            ok=0
+            for i in 1 2 3; do
+              git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && ok=1 && break
+              echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
+            done
+            [ "$ok" = 1 ] || echo "::error::추석 캐시 push 실패 — 다음 실행에서 카드가 재발송될 수 있음"
+          fi
 
       # 검증 CSV 커밋은 사이트 발행 뒤에 — 실패해도 관측/나우캐스트 표출은 이미 배포됨.
       # (2026-08-25: 이 단계가 앞에 있다가 실패해 관측 갱신이 4시간 멈춤. 작업트리에
