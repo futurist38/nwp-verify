@@ -14,6 +14,7 @@ HSL 합성은 ECMWF Newsletter No.101 방식의 근사 구현:
 """
 import argparse
 import glob
+import re
 import os
 import warnings
 import datetime as dt
@@ -234,10 +235,39 @@ def load_gfs(path):
     return out
 
 
+def load_kim_nc(path):
+    """KIM NE57 npz (fetch_kim_nc.py, 2026-09-16 — API허브 NC 격자 조회): load_kim 과 같은 구조로.
+    npz 는 SI 원단위(K·Pa·0~1·W/m²·mm) — 여기서 °C·% 로 바꾼다. lats 는 북→남, step 은 정수 시간."""
+    z = np.load(path, allow_pickle=False)
+    lats, lons = z["lats"].astype(float), z["lons"].astype(float)
+    run = dt.datetime.strptime(str(z["run"]), "%Y%m%d%H")
+
+    def da(arr, steps, win=None):
+        d = xr.DataArray(arr.astype(np.float32), dims=("step", "latitude", "longitude"),
+                         coords={"step": np.array(steps, dtype="timedelta64[h]"),
+                                 "latitude": lats, "longitude": lons})
+        if win is not None:
+            d = d.assign_coords(win_h=("step", np.asarray(win)))
+        return d
+
+    steps = z["steps"]
+    out = {"run": run, "src": "NE57_nc", "t2m": da(z["t2m"] - 273.15, steps), "dswrf": None, "tp": None}
+    for key, name in (("tcc", "tcld"), ("lcc", "lcld"), ("mcc", "mcld"), ("hcc", "hcld")):
+        out[key] = da(z[name] * 100.0, steps) if name in z.files else None
+    if "dswrf" in z.files and z["dswrf"].shape[0]:
+        out["dswrf"] = da(z["dswrf"], z["dswrf_steps"], z["dswrf_win"])
+    if "tp" in z.files and z["tp"].shape[0]:
+        out["tp"] = da(z["tp"], z["tp_steps"], z["tp_win"])
+    return out
+
+
 def load_kim(path):
     """KIM(k512, fetch_kim.py로 변수 추출된 파일): t2m(°C), tcc/lcc/mcc/hcc(%), dswrf.
     실측(2026-08-21): 층별 운량 typeOfLevel은 'unknown'이라 shortName으로만 필터.
-    일사는 avg_sdswrf(구간 평균) — GFS와 동일하게 dswrf 키에 담는다."""
+    일사는 avg_sdswrf(구간 평균) — GFS와 동일하게 dswrf 키에 담는다.
+    .npz 면 NC 조회 산출(fetch_kim_nc.py) — GRIB 중단(2026-10-01) 대응."""
+    if path.lower().endswith(".npz"):
+        return load_kim_nc(path)
     out = {"tcc": None, "lcc": None, "mcc": None, "hcc": None, "dswrf": None, "tp": None}
     ds_t = _subset(_open(path, {"shortName": "2t"}))
     out["t2m"] = ds_t["t2m"] - 273.15
@@ -405,7 +435,7 @@ def plot_maps(model_name, data, out_dir):
             l = _sel_step(data["lcc"], step_h)
             m = _sel_step(data["mcc"], step_h)
             h = _sel_step(data["hcc"], step_h)
-            if all(x is not None for x in (l, m, h)):
+            if all(x is not None and np.isfinite(x.values).any() for x in (l, m, h)):   # 결손층(전부 NaN)이면 생략 (2026-09-16)
                 rgb = hsl_composite(l.values, m.values, h.values)
                 origin = "upper" if t2m.latitude[0] > t2m.latitude[-1] else "lower"
 
@@ -477,8 +507,12 @@ def city_series(model_name, data):
             return da.sel(latitude=lat, longitude=lon, method="nearest")
         j = int(np.argmin(np.abs(da.latitude.values - lat)))
         i = int(np.argmin(np.abs(da.longitude.values - lon)))
-        return da.isel(latitude=slice(max(0, j - 1), j + 2),
-                       longitude=slice(max(0, i - 1), i + 2)).mean(("latitude", "longitude"))
+        # 상자 크기는 **지리적 면적(~0.75°)을 고정**해 격자 간격에서 정한다 (2026-09-16). 0.25°(EC·GFS)·0.23°(옛 KIM k512)
+        # 격자에서는 종전과 같은 3×3. KIM NE57 1/12° 격자는 9×9(0.75°) — 같은 런 대조에서 옛 계열과 MAE 2.3%p(3×3 이면 5.6).
+        dlat = float(np.abs(np.diff(da.latitude.values)).mean()) if da.latitude.size > 1 else 0.25
+        half = max(1, int(0.375 / dlat))
+        return da.isel(latitude=slice(max(0, j - half), j + half + 1),
+                       longitude=slice(max(0, i - half), i + half + 1)).mean(("latitude", "longitude"))
 
     for name, lat, lon, is_rep in CITIES:
         series = {}
@@ -490,16 +524,13 @@ def city_series(model_name, data):
                 da_city = _city(da, lat, lon, key in BOX_MEAN_VARS)
                 idx_map = {int(s): i for i, s in enumerate(_steps_h(da_city))}
                 series[key] = (da_city, idx_map)
-        # 창 길이(win_h): 일사·강수 공통 (2026-09-06). 없으면(구 자료) NaN → 검증이 옛 규약 적용
-        win_da = None
-        for key in ("dswrf", "tp"):
-            if series[key][0] is not None and "win_h" in series[key][0].coords:
-                win_da = series[key]
-                break
+        # 창 길이(win_h): 일사·강수 공통 (2026-09-06). 없으면(구 자료) NaN → 검증이 옛 규약 적용.
+        # 2026-09-16: 스텝마다 일사 창이 있으면 그것, 없으면 강수 창 — KIM NC 는 120h 뒤 일사가 없고 강수만 12h 창.
+        win_das = [series[key] for key in ("dswrf", "tp")
+                   if series[key][0] is not None and "win_h" in series[key][0].coords]
         for sh in _steps_h(series["t2m"][0]):
             sh = int(sh)
-            win = (int(win_da[0].win_h.values[win_da[1][sh]])
-                   if win_da is not None and sh in win_da[1] else None)
+            win = next((int(wd[0].win_h.values[wd[1][sh]]) for wd in win_das if sh in wd[1]), None)
             rows.append({
                 "model": model_name,
                 "run_utc": run.strftime("%Y-%m-%d %H:00"),
@@ -515,6 +546,7 @@ def city_series(model_name, data):
                 "dswrf_avg_Wm2": _at(*series["dswrf"], sh, 0),
                 "tp_mm": _at(*series["tp"], sh, 1),
                 "win_h": win,
+                "src": data.get("src"),      # 2026-09-16: KIM NC 격자 = "NE57_nc" (검증 시계열 구분), 그 외 None
             })
     return pd.DataFrame(rows)
 
@@ -565,8 +597,19 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ecmwf", default=None, help="ECMWF GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--gfs", default=None, help="GFS GRIB 경로 (생략 시 data/ 최신)")
-    p.add_argument("--kim", default=None, help="KIM GRIB 경로 (생략 시 data/ 최신)")
+    p.add_argument("--kim", default=None, help="KIM 경로 — NC npz 또는 GRIB (생략 시 data/ 최신 npz→grib2)")
     args = p.parse_args()
+
+    def latest_kim():
+        """KIM 은 NC npz(kim_NE57_{run}.npz)와 GRIB(kim_k512_{run}.grib2)이 공존할 수 있다(2026-09-16 전환기).
+        **런이 가장 최신인 파일**을 고르고, 같은 런이면 npz. 이름 끝의 런(YYYYMMDDHH)으로 비교한다."""
+        cands = []
+        for pat, pref in (("kim_*.npz", 1), ("kim_*.grib2", 0)):
+            for f in glob.glob(os.path.join(DATA_DIR, pat)):
+                m = re.search(r"_(\d{10})\.(npz|grib2)$", os.path.basename(f))
+                if m:
+                    cands.append((m.group(1), pref, f))
+        return max(cands)[2] if cands else None
 
     def latest(pattern):
         files = sorted(f for f in glob.glob(os.path.join(DATA_DIR, pattern))
@@ -575,7 +618,7 @@ def main():
 
     ec_path = args.ecmwf or latest("ecmwf_*.grib2")
     gfs_path = args.gfs or latest("gfs_*.grib2")
-    kim_path = args.kim or latest("kim_*.grib2")
+    kim_path = args.kim or latest_kim()
     if not ec_path and not gfs_path and not kim_path:
         raise SystemExit("판독할 GRIB이 없습니다. fetch_ecmwf.py / fetch_gfs.py 먼저 실행")
 

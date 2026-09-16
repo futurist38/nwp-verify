@@ -310,17 +310,57 @@ def render_gfs(path: str, out_dir: str) -> int:
     return _render_levels("GFS", f, lats, lons, run, out_dir) + _render_sfc("GFS", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir)
 
 
+_NC_SFC = {"psl": ("prmsl", "meanSea", 0), "t2m": ("2t", "heightAboveGround", 2)}
+_NC_PL = {"hgt": "gh", "T": "t", "u": "u", "v": "v", "rh": "r"}
+
+
+def read_fields_npz(path: str) -> tuple[dict, np.ndarray, np.ndarray, dt.datetime]:
+    """fetch_kim_nc.py 산출(npz) → read_fields 와 같은 {(sn, tol, lev): {step: 2D}} (2026-09-16).
+    지상 npz(kim_NE57_*.npz): psl·t2m → prmsl·2t. 상층 npz(upper_kim_*.npz): hgt_925 … → gh/t/u/v/r.
+    npz 는 SI 원단위(K·Pa·m·m/s·%) 그대로라 GRIB 판독과 같은 값 규약이다. 상층은 동아시아 전역이라 자르지 않는다."""
+    z = np.load(path, allow_pickle=False)
+    lats, lons, steps = z["lats"].astype(float), z["lons"].astype(float), [int(s) for s in z["steps"]]
+    sfc_steps = [int(s) for s in z["sfc_steps"]] if "sfc_steps" in z.files else steps   # 상층 npz 의 지상장은 별도 스텝
+    run = dt.datetime.strptime(str(z["run"]), "%Y%m%d%H")
+    out: dict = {}
+    for name in z.files:
+        if name in _NC_SFC:
+            key, sts = _NC_SFC[name], sfc_steps
+        elif "_" in name and name.split("_")[0] in _NC_PL and name.split("_")[1].isdigit():
+            v, L = name.split("_")
+            key, sts = (_NC_PL[v], "isobaricInhPa", int(L)), steps
+        else:
+            continue
+        arr = z[name]
+        if arr.ndim != 3 or arr.shape[0] != len(sts):
+            continue
+        out[key] = {st: arr[i] for i, st in enumerate(sts) if np.isfinite(arr[i]).any()}
+    return out, lats, lons, run
+
+
 def render_kim(path: str | None, out_dir: str, pres_path: str | None = None) -> int:
-    """지상은 unis 파일(prmsl·2t), 상층은 fetch_kim_pres.py 가 남긴 upper_kim_{run}.grib2 (2026-09-08)."""
+    """지상은 unis 파일(prmsl·2t) 또는 NC npz(psl·t2m), 상층은 fetch_kim_pres.py 의 upper_kim_{run}.grib2
+    또는 fetch_kim_nc.py --upper 의 upper_kim_{run}.npz (2026-09-16, GRIB 중단 대응)."""
     n = 0
-    if path and os.path.exists(path):
-        f, lats, lons, run = read_fields(path, {("prmsl", "meanSea", 0), ("2t", "heightAboveGround", 2)})
-        n += _render_sfc("KIM", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir) if f else 0
+    sfc_done = False
     if pres_path and os.path.exists(pres_path):
-        want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
-        g, la, lo, r = read_fields(pres_path, want)
+        if pres_path.lower().endswith(".npz"):
+            g, la, lo, r = read_fields_npz(pres_path)
+            # NC 상층 npz 는 동아시아 지상장(psl·t2m)도 담는다 — 한반도만 있는 지상 npz 로는 동아시아 지도를 못 그린다
+            if ("prmsl", "meanSea", 0) in g and ("2t", "heightAboveGround", 2) in g:
+                ns = _render_sfc("KIM", g, ("prmsl", "meanSea", 0), la, lo, r, out_dir)
+                n += ns; sfc_done = ns > 0        # 실제로 한 장이라도 그렸을 때만 — 빈 사전이면 GRIB 대체를 막지 않는다
+        else:
+            want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
+            g, la, lo, r = read_fields(pres_path, want)
         if g:
             n += _render_levels("KIM", g, la, lo, r, out_dir)
+    if path and os.path.exists(path) and not sfc_done:
+        if path.lower().endswith(".npz"):
+            print("[UPPER] KIM 지상 npz 는 한반도 영역뿐 — 동아시아 지상장은 upper_kim npz 가 있어야 그린다")
+        else:
+            f, lats, lons, run = read_fields(path, {("prmsl", "meanSea", 0), ("2t", "heightAboveGround", 2)})
+            n += _render_sfc("KIM", f, ("prmsl", "meanSea", 0), lats, lons, run, out_dir) if f else 0
     return n
 
 
@@ -350,8 +390,19 @@ def main():
     if gf:
         n = render_gfs(gf, out_dir); print(f"[UPPER] GFS {n}장"); total += n
         raw.append(gf)
-    km = None if a.no_kim else latest(f"kim_*_{tag}.grib2")
-    kp = None if a.no_kim else latest(f"upper_kim_{tag}.grib2")
+    def latest_run(pats):
+        """npz/grib2 가 공존하면 **런이 최신인 파일**, 같은 런이면 npz (plot_charts.latest_kim 과 같은 규칙)."""
+        import re
+        cands = []
+        for pat, pref in pats:
+            for f in glob.glob(os.path.join(DATA_DIR, pat)):
+                m = re.search(r"(\d{10})\.(npz|grib2)$", os.path.basename(f))
+                if m:
+                    cands.append((m.group(1), pref, f))
+        return max(cands)[2] if cands else None
+
+    km = None if a.no_kim else latest_run([(f"kim_*_{tag}.npz", 1), (f"kim_*_{tag}.grib2", 0)])
+    kp = None if a.no_kim else latest_run([(f"upper_kim_{tag}.npz", 1), (f"upper_kim_{tag}.grib2", 0)])
     if km or kp:
         n = render_kim(km, out_dir, kp); print(f"[UPPER] KIM {n}장 (지상 {'있음' if km else '없음'}, 상층 {'있음' if kp else '없음'})"); total += n
         if kp:

@@ -26,6 +26,9 @@ env:
   PYTHONIOENCODING: utf-8
   PYTHONUNBUFFERED: "1"     # 로그 시각이 실제 진행과 맞게 — 단계별 소요를 나중에 잴 수 있다
   KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+  # KIM NC 격자 조회(fetch_kim_nc.py)는 기관키가 필요하다 (2026-09-16, GRIB 중단 대응). 비어 있으면 스크립트가 즉시 실패하고
+  # 10/1 전까지는 GRIB(fetch_kim.py)으로 대체한다.
+  KMA_INSTITUTION_AUTH_KEY: ${{ secrets.KMA_INSTITUTION_AUTH_KEY }}
   # Cloudflare R2 (2026-09-08, 그림 저장소). 비어 있으면 그림을 site-data 에 두는 예전 방식으로 동작
   R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -93,9 +96,12 @@ jobs:
         run: |
           timeout 900  python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패/시간초과 — 계속"
           timeout 600  python fetch_gfs.py   || echo "::warning::GFS 수신 실패/시간초과 — 계속"
-          # KIM은 25스텝×76MB. 스크립트 내부 상한(--max-minutes)이 받은 스텝까지 살린다;
-          # 바깥 timeout 은 그 상한이 안 먹을 때의 마지막 안전판
-          timeout 2100 python fetch_kim.py --max-minutes 28 || echo "::warning::KIM 수신 실패/시간초과 — 계속"
+          # KIM (2026-09-16 전환): 1순위 NC 격자 조회(기관키, ~500요청·200MB, 실측 1분). 실패하면 2026-10-01 전까지만
+          # GRIB(k512, 25스텝×76MB)으로 대체 — 그날부터 GRIB 생산이 끊기므로(API허브 공지 9/11) 시도하지 않는다.
+          # 두 경로 다 실패하면 이 런은 KIM 없이 발행한다 (옛 파일을 쓰지 않는다 — 러너는 매번 빈 data/ 로 시작).
+          timeout 600 python fetch_kim_nc.py --max-minutes 8 \
+            || { [ "$(date -u +%Y%m%d)" -lt 20261001 ] && timeout 1500 python fetch_kim.py --max-minutes 20; } \
+            || echo "::warning::KIM 수신 실패(NC·GRIB 모두) — 이 런은 KIM 없이 계속"
           python plot_charts.py
           python verify.py archive || echo "::warning::archive 실패 — 계속"
 
@@ -107,8 +113,11 @@ jobs:
         run: |
           # 고도별 기압장 (2026-09-07): ECMWF pl ≈ 200MB + GFS 14MB → 그림만 남기고 원본 삭제
           timeout 1200 python fetch_upper.py || echo "::warning::상층 수신 실패/시간초과 — 계속"
-          # KIM 상층: 302MB/스텝 × 13 ≈ 3.9GB 를 스트리밍, 필요한 47MB 만 보존 (2026-09-08)
-          timeout 1200 python fetch_kim_pres.py --max-minutes 15 || echo "::warning::KIM 상층 수신 실패/시간초과 — 계속"
+          # KIM 상층+동아시아 지상장 (2026-09-16 전환): NC 격자 조회(1/4° 추출, ~340요청). 1단계가 고른 런을 그대로 쓴다.
+          # 실패 시 2026-10-01 전까지만 GRIB(fetch_kim_pres.py, 3.9GB 스트리밍)으로 대체.
+          timeout 600 python fetch_kim_nc.py --upper --max-minutes 8 \
+            || { [ "$(date -u +%Y%m%d)" -lt 20261001 ] && timeout 1200 python fetch_kim_pres.py --max-minutes 15; } \
+            || echo "::warning::KIM 상층 수신 실패(NC·GRIB 모두) — 계속"
           timeout 900  python plot_upper.py --delete-raw || echo "::warning::상층 지도 실패/시간초과 — 계속"
           timeout 600 python verify.py score   || echo "::warning::score 실패/시간초과 — 계속"
           timeout 300 python verify.py report  || echo "::warning::report 실패/시간초과 — 계속"
