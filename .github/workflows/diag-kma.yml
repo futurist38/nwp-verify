@@ -26,6 +26,13 @@ jobs:
           echo "--- typ01 ASOS 대조"
           curl -s -m 30 -o /dev/null -w "typ01 kma_sfctm2 [http=%{http_code} t=%{time_total}s size=%{size_download}]\n" \
             "https://apihub-pub.kma.go.kr/api/typ01/url/kma_sfctm2.php?stn=108&authKey=$KEY"
+          echo "--- typ01 KIM NC 격자 조회 (기관키, 2026-09-16: fetch_kim_nc 런 탐색이 러너에서만 실패하는 원인 진단)"
+          IKEY="${{ secrets.KMA_INSTITUTION_AUTH_KEY }}"
+          echo "institution key length: ${#IKEY}"
+          for tmfc in $(date -u -d '-1 day' +%Y%m%d)00 $(date -u -d '-1 day' +%Y%m%d)12; do
+            out=$(curl -s -m 60 -w " [http=%{http_code} t=%{time_total}s size=%{size_download}]"               "https://apihub-pub.kma.go.kr/api/typ01/cgi-bin/url/nph-kim_nc_xy_txt2?group=KIMG&nwp=NE57&data=U&name=t2m&level=0&map=S&sub=1441,1453,1621,1609&tmfc=$tmfc&hf=288&disp=A&help=1&authKey=$IKEY"               | iconv -f euc-kr -t utf-8 2>/dev/null | tr -d '\0' | head -c 400 | sed "s/$IKEY/***/g")
+            echo "typ01 kim_nc $tmfc hf=288: $out"
+          done
           echo "--- DNS/TCP"
           getent hosts apihub-pub.kma.go.kr
           curl -s -m 20 -o /dev/null -w "root [http=%{http_code} connect=%{time_connect}s tls=%{time_appconnect}s]\n" https://apihub-pub.kma.go.kr/

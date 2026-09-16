@@ -156,13 +156,17 @@ def _get(session, key, sub, tmfc, hf, name, data="U", level=0, tries=3):
     raise RuntimeError(f"{name}/{level} hf={hf}: {_redact(last, key)}")
 
 
+_probe_log = []
+
+
 def _available(session, key, tmfc, hf, sub) -> bool:
     try:
         _get(session, key, sub, tmfc, hf, "t2m", tries=1)
         return True
     except AuthError:
         raise
-    except Exception:                               # noqa: BLE001
+    except Exception as e:                          # noqa: BLE001
+        _probe_log.append(f"{tmfc} hf={hf}: {_redact(e, key)[:140]}")
         return False
 
 
@@ -175,6 +179,9 @@ def find_latest_run(session, key, sub, last_step: int, attempts: int = 3, pause:
             tmfc = t.strftime("%Y%m%d") + f"{(t.hour // 6) * 6:02d}"
             if _available(session, key, tmfc, last_step, sub):
                 return tmfc
+        # 실패 사유를 남긴다 (러너에서 왜 못 찾았는지 — 연결 끊김·오류 응답·파싱 — 를 로그로 구분, 2026-09-16)
+        for line in _probe_log[-3:]:
+            print(f"[KIM-NC]  탐색 실패 사유: {line}", flush=True)
         if attempt < attempts:
             print(f"[KIM-NC] 런 탐색 실패 ({attempt}/{attempts}) — {pause}초 뒤 재시도", flush=True)
             time.sleep(pause)
