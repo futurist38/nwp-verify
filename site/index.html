@@ -24,7 +24,6 @@
     <button data-tab="meteo">Meteogram</button>
     <button data-tab="kmaf">예보-관측</button>
     <button data-tab="verif">NWP-관측 검증</button>
-    <button data-tab="chuseok">추석 예보</button>
     <button data-tab="about">소개</button>
   </nav>
 </header>
@@ -269,18 +268,6 @@
     <div class="imgwrap"><img id="maeSw" src="verif/mae_curve_dswrf.png" alt="일사 MAE" loading="lazy" onerror="this.closest('.imgwrap').hidden=true"></div>
     <h2>오답노트 사례</h2>
     <ul id="caseList"></ul>
-  </section>
-
-  <section id="tab-chuseok" class="tab card">
-    <h2 style="margin-top:0">추석 연휴 예보 추적 — 8대도시 × 9/23~9/27</h2>
-    <p class="note" style="font-size:13px;color:#444">
-      기상청 <b>단기예보</b>(05·11·17시 발표, 발표 후 3일 이내)와 <b>중기예보</b>(06·18시 발표, D+4~D+10)를 발표시각 순으로 늘어놓아
-      <b>예보가 어떻게 바뀌어 왔는지</b> 봅니다. 최고(빨강)·최저(파랑) 기온, 중기예보는 기상청이 붙인 예보 범위(세로선), 칸 아래는 최신 개황과 강수확률입니다.
-      아직 발표되지 않은 날짜는 비워 두고 나오는 대로 채웁니다. 9/16 17시 발표부터 9/23 11시 발표까지 추적하며,
-      발표 뒤 첫 시간별 실행(약 :25~:55)에 갱신됩니다. 8대도시 = 서울·인천·수원·원주·대전·대구·광주·부산.</p>
-    <p id="chuseokStamp" class="step-label"></p>
-    <div class="imgwrap"><img id="chuseokCard" src="chuseok/chuseok_card.png" alt="추석 예보 요약표" loading="lazy" onerror="this.closest('.imgwrap').hidden=true"></div>
-    <div class="imgwrap"><img id="chuseokFull" src="chuseok/chuseok_latest.png" alt="추석 예보 추적 그림" loading="lazy" onerror="this.closest('.imgwrap').hidden=true"></div>
   </section>
 
   <section id="tab-about" class="tab card">

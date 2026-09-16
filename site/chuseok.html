@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>추석 연휴 예보 추적</title>
+<style>
+  body { margin: 0; padding: 12px 14px 32px; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color: #222; background: #fafafa; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: #666; font-size: 13px; margin: 0 0 10px; }
+  .stamp { font-size: 13px; color: #1a5fb4; margin: 0 0 10px; }
+  .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px; margin: 0 0 14px; }
+  img { max-width: 100%; height: auto; display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: center; white-space: nowrap; }
+  th { background: #eee; }
+  td.mid { background: #f0f4fa; }
+  td.none { color: #999; }
+  .up { color: #c22; } .down { color: #1a5fb4; }
+  .note { font-size: 12px; color: #666; line-height: 1.5; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+  <h1>추석 연휴 예보 추적 — 8대도시 × 9/23~9/27</h1>
+  <p class="sub">기상청 단기예보(05·11·17시 발표)와 중기예보(06·18시 발표)를 발표시각 순으로 이어 붙여, 예보가 어떻게 바뀌어 왔는지 봅니다. 개인 연구용 페이지입니다.</p>
+  <p class="stamp" id="stamp">불러오는 중…</p>
+
+  <div class="card">
+    <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저). 흰칸 = 단기예보, 연파랑 = 중기예보(기온에 ±예보범위가 붙음). 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
+  </div>
+
+  <div class="card">
+    <img id="card" alt="추석 예보 요약 카드" loading="lazy">
+  </div>
+  <div class="card">
+    <img id="full" alt="추석 예보 추적 그림" loading="lazy">
+    <p class="note">칸마다 가로축 = 발표시각, 빨강 = 최고, 파랑 = 최저. ○ 중기예보(세로선 = 기상청 예보범위) · ■ 단기예보. 칸 아래 글자 = 최신 개황·강수확률.</p>
+  </div>
+
+  <p class="note">갱신: 발표 뒤 첫 시간별 실행(매시 25분 시작, 대체로 :32~:55 반영). 추적 기간 9/16 17시 발표 ~ 9/23 11시 발표. 8대도시 = 서울·인천·수원·원주·대전·대구·광주·부산.
+     자료 출처: 기상청 API허브 단기예보·중기예보.</p>
+
+<script>
+(async () => {
+  const wd = ["월","화","수","목","금","토","일"];
+  let m = null;
+  try { const r = await fetch("chuseok/chuseok.json?t=" + Date.now()); if (r.ok) m = await r.json(); } catch (e) {}
+  if (!m) { document.getElementById("stamp").textContent = "아직 발행된 자료가 없습니다."; return; }
+  const key = m.latest_key || "";
+  document.getElementById("stamp").textContent = "최신 발표 " + (m.latest_label || "-") + " · 페이지 생성 " + (m.generated_kst || "") + " KST";
+  document.getElementById("card").src = "chuseok/chuseok_card.png?v=" + key;
+  document.getElementById("full").src = "chuseok/chuseok_latest.png?v=" + key;
+  const thead = document.querySelector("#tbl thead"), tbody = document.querySelector("#tbl tbody");
+  const head = ["도시"].concat(m.targets.map((ds) => { const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8)); return (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : ""); }));
+  thead.innerHTML = "<tr>" + head.map((h) => "<th>" + h + "</th>").join("") + "</tr>";
+  tbody.innerHTML = m.city_order.map((c) => {
+    const cells = m.targets.map((ds) => {
+      const recs = m.cities[c][ds] || [];
+      if (!recs.length) return '<td class="none">—</td>';
+      const l = recs[recs.length - 1];
+      let s = "<b>" + Math.round(l.tmax) + " / " + Math.round(l.tmin) + "</b><br>" + (l.sky || "-") + (l.pop != null ? " " + l.pop + "%" : "");
+      if (recs.length >= 2) {
+        const p = recs[recs.length - 2], dx = l.tmax - p.tmax, dn = l.tmin - p.tmin;
+        if (dx || dn) s += '<br><span class="' + ((Math.abs(dx) >= 2 || Math.abs(dn) >= 2) ? "up" : "") + '">Δ' + (dx >= 0 ? "+" : "") + dx + "/" + (dn >= 0 ? "+" : "") + dn + "</span>";
+      }
+      return '<td class="' + (l.src === "mid" ? "mid" : "") + '">' + s + "</td>";
+    });
+    return "<tr><th>" + c + "</th>" + cells.join("") + "</tr>";
+  }).join("");
+})();
+</script>
+</body>
+</html>

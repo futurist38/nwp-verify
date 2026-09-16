@@ -70,7 +70,7 @@ def wait_published(url: str, tries: int = 12, pause: int = 10) -> bool:
 def send(token: str, key: str, label: str, summary: str) -> None:
     card = f"{SITE}/chuseok/chuseok_card_{key}.png"        # 발표 키가 붙은 불변 파일 (chuseok_track 이 사본 생성)
     full = f"{SITE}/chuseok/chuseok_latest_{key}.png"
-    page = f"{SITE}/?tab=chuseok"
+    page = f"{SITE}/chuseok.html"
     if not wait_published(card):
         raise SystemExit(f"발행본에서 {card} 를 아직 받을 수 없음 — 다음 실행에 재시도")
     tpl = {"object_type": "feed",
