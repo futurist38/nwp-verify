@@ -68,8 +68,8 @@ def wait_published(url: str, tries: int = 12, pause: int = 10) -> bool:
 
 
 def send(token: str, key: str, label: str, summary: str) -> None:
-    card = f"{SITE}/chuseok/chuseok_card_{key}.png"        # 발표 키가 붙은 불변 파일 (chuseok_track 이 사본 생성)
-    full = f"{SITE}/chuseok/chuseok_latest_{key}.png"
+    card = f"{SITE}/chuseok/chuseok_hist_20260925_{key}.png"   # 카드 이미지 = 추석 당일(9/25) 예보 이력표 (발표 키 사본)
+    full = f"{SITE}/chuseok/chuseok_history_{key}.png"          # 버튼 = 5일 전체 이력표 합본
     page = f"{SITE}/chuseok.html"
     if not wait_published(card):
         raise SystemExit(f"발행본에서 {card} 를 아직 받을 수 없음 — 다음 실행에 재시도")
@@ -78,7 +78,7 @@ def send(token: str, key: str, label: str, summary: str) -> None:
                        "description": summary[:200],
                        "image_url": card,
                        "link": {"web_url": full, "mobile_web_url": full}},
-           "buttons": [{"title": "전체 추적 그림", "link": {"web_url": full, "mobile_web_url": full}},
+           "buttons": [{"title": "5일 전체 이력표", "link": {"web_url": full, "mobile_web_url": full}},
                        {"title": "사이트", "link": {"web_url": page, "mobile_web_url": page}}]}
     r = requests.post("https://kapi.kakao.com/v2/api/talk/memo/default/send",
                       headers={"Authorization": "Bearer " + token},

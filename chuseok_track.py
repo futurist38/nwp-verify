@@ -309,6 +309,75 @@ def plot_card(m: dict, path: str) -> None:
     fig.savefig(path, dpi=150, bbox_inches="tight"); plt.close(fig)
 
 
+
+def _short_sky(txt):
+    if not txt:
+        return "-"
+    return (txt.replace("구름많음", "구름").replace("구름조금", "조금").replace("소나기", "소낙")
+               .replace("빗방울", "빗방울"))
+
+
+def plot_history(m: dict, out_dir: str) -> list[str]:
+    """대상일마다 이력표 그림: 행 = 발표시각(자료 있는 것), 열 = 8도시, 칸 = 최고/최저 개황. 직전 행 대비 변한 칸은 색.
+    chuseok_hist_{YYYYMMDD}.png 5장 + 전체를 세로로 이어 붙인 chuseok_history.png."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+    for f in ("Malgun Gothic", "NanumGothic", "Noto Sans CJK KR", "Noto Sans KR"):
+        if any(f == x.name for x in font_manager.fontManager.ttflist):
+            matplotlib.rc("font", family=f); break
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    wd = ["월", "화", "수", "목", "금", "토", "일"]
+    cities = m["city_order"]; iss = m["effective_issuances"]
+    paths = []
+    n_rows_total = 0
+    per_date = []
+    for ds in m["targets"]:
+        rows = [i for i in iss if any(x["issue"] == i["key"] for c in cities for x in m["cities"][c][ds])]
+        cell, colr = [], []
+        prev = {c: None for c in cities}
+        for i in rows:
+            row, crow = [], []
+            for c in cities:
+                rec = next((x for x in m["cities"][c][ds] if x["issue"] == i["key"]), None)
+                if rec is None:
+                    row.append("—"); crow.append("#f4f4f4"); continue
+                txt = f"{rec['tmax']:.0f}/{rec['tmin']:.0f} {_short_sky(rec.get('sky'))}"
+                col = "#ffffff" if rec["src"] == "short" else "#f0f4fa"
+                p = prev[c]
+                if p is not None and (p["tmax"] != rec["tmax"] or p["tmin"] != rec["tmin"] or (p.get("sky") or "") != (rec.get("sky") or "")):
+                    col = "#fff2cc"                 # 직전 발표와 달라진 칸
+                row.append(txt); crow.append(col); prev[c] = rec
+            cell.append(row); colr.append(crow)
+        per_date.append((ds, rows, cell, colr))
+        n_rows_total += max(len(rows), 1)
+    # 날짜별 개별 그림 + 합본
+    for ds, rows, cell, colr in per_date:
+        d = dt.datetime.strptime(ds, "%Y%m%d")
+        title = f"{d.month}/{d.day}({wd[d.weekday()]}){' 추석' if ds == '20260925' else ''} 예보 이력 — 행: 발표시각, 열: 도시 (최고/최저 ℃ · 개황)"
+        fig, ax = plt.subplots(figsize=(9.6, 0.42 * max(len(rows), 1) + 1.3)); ax.axis("off")
+        if rows:
+            tbl = ax.table(cellText=cell, rowLabels=[i["label"] for i in rows], colLabels=cities, cellColours=colr, loc="center", cellLoc="center")
+            tbl.auto_set_font_size(False); tbl.set_fontsize(8.5); tbl.scale(1.0, 1.55)
+            for (r, c), cl in tbl.get_celld().items():
+                if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
+        else:
+            ax.text(0.5, 0.5, "아직 이 날짜의 예보가 없습니다", ha="center", va="center", fontsize=10, color="#888")
+        fig.suptitle(title, fontsize=11, weight="bold", y=0.98)
+        fig.text(0.5, 0.02, "흰칸 = 단기예보 · 연파랑 = 중기예보 · 노랑 = 직전 발표와 달라짐", ha="center", fontsize=8, color="#555")
+        p = os.path.join(out_dir, f"chuseok_hist_{ds}.png"); fig.savefig(p, dpi=150, bbox_inches="tight"); plt.close(fig); paths.append(p)
+    # 합본 (세로)
+    from PIL import Image
+    ims = [Image.open(p) for p in paths]
+    w = max(im.width for im in ims); h = sum(im.height for im in ims) + 10 * (len(ims) - 1)
+    canvas = Image.new("RGB", (w, h), "white"); y = 0
+    for im in ims:
+        canvas.paste(im, (0, y)); y += im.height + 10
+    hp = os.path.join(out_dir, "chuseok_history.png"); canvas.save(hp); paths.append(hp)
+    return paths
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--backfill", default="2026091617", help="추적 시작 발표(YYYYMMDDHH, KST). 기본 9/16 17시(사용자 지정 시작)")
@@ -325,10 +394,11 @@ def main():
         import shutil
         plot(m, os.path.join(OUT, "chuseok_latest.png"))
         plot_card(m, os.path.join(OUT, "chuseok_card.png"))
+        plot_history(m, OUT)
         if m.get("latest_key"):                     # 발표 키가 붙은 불변 사본 — 카톡은 이 주소가 실제로 서비스되는지 확인한 뒤 보낸다
-            for base in ("chuseok_latest", "chuseok_card"):
+            for base in ("chuseok_latest", "chuseok_card", "chuseok_history", "chuseok_hist_20260925"):
                 shutil.copy2(os.path.join(OUT, base + ".png"), os.path.join(OUT, base + "_" + m["latest_key"] + ".png"))
-        print(f"[추석] 그림 → {OUT}/chuseok_latest.png, chuseok_card.png (+ 키 사본)")
+        print(f"[추석] 그림 → {OUT}/chuseok_latest.png, chuseok_card.png, chuseok_history.png (+ 키 사본)")
 
 
 if __name__ == "__main__":

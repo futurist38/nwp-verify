@@ -16,6 +16,8 @@
   th, td { border: 1px solid #ddd; padding: 5px 4px; text-align: center; white-space: nowrap; }
   th { background: #eee; }
   td.mid { background: #f0f4fa; }
+  td.chg { background: #fff2cc; }
+  h2 { font-size: 16px; }
   td.none { color: #999; }
   .up { color: #c22; } .down { color: #1a5fb4; }
   .note { font-size: 12px; color: #666; line-height: 1.5; }
@@ -28,8 +30,15 @@
   <p class="stamp" id="stamp">불러오는 중…</p>
 
   <div class="card">
+    <h2 style="font-size:16px;margin:2px 0 8px">발표시각별 이력 — 행: 발표시각, 열: 도시</h2>
+    <div id="hist"></div>
+    <p class="note">칸 = 최고/최저 ℃ · 개황(·강수확률). 흰칸 = 단기예보, 연파랑 = 중기예보, <span style="background:#fff2cc">노랑</span> = 직전 발표와 달라진 칸. 아직 예보가 없는 날짜는 표가 비어 있습니다.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:16px;margin:2px 0 8px">최신 발표 요약</h2>
     <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
-    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저). 흰칸 = 단기예보, 연파랑 = 중기예보(기온에 ±예보범위가 붙음). 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
+    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저). 흰칸 = 단기예보, 연파랑 = 중기예보. 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
   </div>
 
   <div class="card">
@@ -53,6 +62,28 @@
   document.getElementById("stamp").textContent = "최신 발표 " + (m.latest_label || "-") + " · 페이지 생성 " + (m.generated_kst || "") + " KST";
   document.getElementById("card").src = "chuseok/chuseok_card.png?v=" + key;
   document.getElementById("full").src = "chuseok/chuseok_latest.png?v=" + key;
+  // 이력표: 대상일마다 행=발표시각, 열=도시
+  const shortSky = (t) => (t || "-").replace("구름많음", "구름").replace("구름조금", "조금");
+  const hist = document.getElementById("hist");
+  hist.innerHTML = m.targets.map((ds) => {
+    const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8));
+    const title = (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : "");
+    const rows = (m.effective_issuances || []).filter((i) => m.city_order.some((c) => (m.cities[c][ds] || []).some((x) => x.issue === i.key)));
+    if (!rows.length) return "<h3 style='font-size:14px;margin:10px 0 4px'>" + title + "</h3><p class='note'>아직 이 날짜의 예보가 없습니다.</p>";
+    const prev = {};
+    const body = rows.map((i) => {
+      const cells = m.city_order.map((c) => {
+        const rec = (m.cities[c][ds] || []).find((x) => x.issue === i.key);
+        if (!rec) return '<td class="none">—</td>';
+        const p = prev[c]; prev[c] = rec;
+        const changed = p && (p.tmax !== rec.tmax || p.tmin !== rec.tmin || (p.sky || "") !== (rec.sky || ""));
+        const cls = changed ? "chg" : (rec.src === "mid" ? "mid" : "");
+        return '<td class="' + cls + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? " " + rec.pop + "%" : "") + "</td>";
+      });
+      return "<tr><th>" + i.label + "</th>" + cells.join("") + "</tr>";
+    }).join("");
+    return "<h3 style='font-size:14px;margin:10px 0 4px'>" + title + "</h3><div class='tablewrap'><table><thead><tr><th>발표</th>" + m.city_order.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" + body + "</tbody></table></div>";
+  }).join("");
   const thead = document.querySelector("#tbl thead"), tbody = document.querySelector("#tbl tbody");
   const head = ["도시"].concat(m.targets.map((ds) => { const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8)); return (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : ""); }));
   thead.innerHTML = "<tr>" + head.map((h) => "<th>" + h + "</th>").join("") + "</tr>";
