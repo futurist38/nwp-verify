@@ -65,15 +65,20 @@ class AuthError(RuntimeError):
     """403 — 키 문제. 재시도·탐색 없이 즉시 종료."""
 
 
+def _clean_key(raw: str) -> str:
+    """앞뒤 공백·따옴표 제거. 실측(2026-09-16): GitHub 시크릿에 따옴표째 들어가 길이 24(정상 22)가 되자 API 가 400 을 돌려줬다."""
+    return raw.strip().strip("\"'").strip()
+
+
 def _auth_key() -> str:
     key = os.environ.get("KMA_INSTITUTION_AUTH_KEY")
-    if key:
-        return key.strip()
+    if key and _clean_key(key):
+        return _clean_key(key)
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(env_path):
         m = re.search(r"KMA_INSTITUTION_AUTH_KEY\s*=\s*(\S+)", open(env_path, encoding="utf-8").read())
         if m:
-            return m.group(1)
+            return _clean_key(m.group(1))
     raise RuntimeError("KMA_INSTITUTION_AUTH_KEY가 없습니다 (NC 조회는 기관키 필요 — 일반키 KMA_AUTH_KEY 는 403)")
 
 
@@ -361,6 +366,7 @@ def main():
     p.add_argument("--max-minutes", type=float, default=8.0)
     a = p.parse_args()
     key = _auth_key()
+    print(f"[KIM-NC] 기관키 길이 {len(key)}자 (정상 22자)", flush=True)
     os.makedirs(DATA_DIR, exist_ok=True)
     sess = requests.Session()
     probe_sub = sub_box(LON_MIN, LON_MAX, LAT_MIN, LAT_MAX)

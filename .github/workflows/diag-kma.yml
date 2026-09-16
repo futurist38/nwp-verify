@@ -7,6 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: fetch_kim_nc 실제 수신 (지상, 3분 상한 — 2026-09-16 러너 진단)
+        env:
+          KMA_INSTITUTION_AUTH_KEY: ${{ secrets.KMA_INSTITUTION_AUTH_KEY }}
+        run: |
+          pip install -q requests numpy truststore
+          timeout 300 python fetch_kim_nc.py --run "$(date -u -d '-1 day' +%Y%m%d)" 12 --max-minutes 3 --workers 4 || echo "::warning::fetch_kim_nc exit=$?"
+          ls -la data/ 2>/dev/null || true
       - name: typ06 KIM 파일 헤더·typ01 대조
         env:
           KEY: ${{ secrets.KMA_AUTH_KEY }}
