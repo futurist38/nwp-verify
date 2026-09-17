@@ -2,8 +2,8 @@
 """
 카카오톡 "나에게 보내기" — 추석 예보 추적 카드 발송 (2026-09-16).
 
-동작: refresh 토큰으로 access 토큰을 받고, 최신 발표 카드(사이트에 발행된 PNG 주소)를 피드 메시지로 보낸다.
-      같은 발표를 두 번 보내지 않도록 verification/chuseok/_kakao_sent.txt 에 마지막 발송 발표 키를 남긴다(커밋 대상).
+동작: refresh 토큰으로 access 토큰을 받고, 최신 05·11·17시 검토 카드(사이트에 발행된 PNG 주소)를 피드 메시지로 보낸다.
+      같은 검토본을 두 번 보내지 않도록 verification/chuseok/_kakao_sent.txt 에 마지막 발송 키를 남긴다(커밋 대상).
 환경변수(또는 .env): KAKAO_REST_KEY, KAKAO_REFRESH_TOKEN, (선택) KAKAO_CLIENT_SECRET
 사용: python kakao_send.py            # 새 발표가 있을 때만 발송
       python kakao_send.py --test     # 표시 여부와 무관하게 1회 발송(로컬 시험)
@@ -68,13 +68,13 @@ def wait_published(url: str, tries: int = 12, pause: int = 10) -> bool:
 
 
 def send(token: str, key: str, label: str, summary: str) -> None:
-    card = f"{SITE}/chuseok/chuseok_revision_{key}.png"        # 카드 이미지 = 이번 발표 변경 행렬(8도시×5일, Δ) — Astra 제안 9/17
+    card = f"{SITE}/chuseok/chuseok_revision_{key}.png"        # 카드 이미지 = 이번 검토 변경 행렬(8도시×5일, Δ)
     full = f"{SITE}/chuseok/chuseok_history_{key}.png"          # 버튼 = 5일 전체 이력표 합본
     page = f"{SITE}/chuseok.html"
     if not wait_published(card):
         raise SystemExit(f"발행본에서 {card} 를 아직 받을 수 없음 — 다음 실행에 재시도")
     tpl = {"object_type": "feed",
-           "content": {"title": f"추석 연휴 예보 · 8대도시 · {label} 발표",
+           "content": {"title": f"추석 연휴 예보 · 8대도시 · {label} 검토본",
                        "description": summary[:200],
                        "image_url": card,
                        "link": {"web_url": full, "mobile_web_url": full}},
@@ -94,10 +94,10 @@ def main():
     m = json.load(open(os.path.join(OUT_DIR, "chuseok", "chuseok.json"), encoding="utf-8"))
     key, label = m.get("latest_key"), m.get("latest_label")
     if not key:
-        print("[카톡] 대상일 자료가 있는 발표 없음"); return
+        print("[카톡] 대상일 자료가 있는 검토본 없음"); return
     last_sent = open(SENT, encoding="utf-8").read().strip() if os.path.exists(SENT) else ""
     if key == last_sent and not (a.test or a.force):
-        print(f"[카톡] 이미 보낸 발표({label}) — 생략"); return
+        print(f"[카톡] 이미 보낸 검토본({label}) — 생략"); return
     summary = m.get("digest") or "대상일 예보 갱신"
     send(access_token(), key, label, summary)
     os.makedirs(os.path.dirname(SENT), exist_ok=True)

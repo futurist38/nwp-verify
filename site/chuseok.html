@@ -68,34 +68,34 @@
 </head>
 <body>
   <h1>추석 연휴 예보 추적 — 8대도시 × 9/23~9/27</h1>
-  <p class="sub">기상청 단기예보(05·11·17시 발표)와 중기예보(06·18시 발표)를 발표시각 순으로 이어 붙여, 발표마다 기온·개황이 어떻게 바뀌었는지 봅니다. 개인 연구용 페이지입니다.</p>
+  <p class="sub">05·11·17시마다 그 시점의 최신 연휴 예보를 저장해 직전 검토본과 비교합니다. 중기예보를 기본으로 쓰고, 단기예보가 나온 날짜만 단기값으로 바꿉니다. 개인 연구용 페이지입니다.</p>
   <p class="stamp" id="stamp">불러오는 중…</p>
 
   <p class="digest" id="digest"></p>
   <div class="two">
     <div class="card">
-      <h2>예보 변화 — 이번 발표에서 바뀐 것</h2>
+      <h2>예보 변화 — 이번 검토에서 바뀐 것</h2>
       <img id="rev" alt="변경 행렬" loading="lazy">
     </div>
     <div class="card">
-      <h2>최신 발표 예보 — 추석 연휴</h2>
+      <h2>최신 검토 예보 — 추석 연휴</h2>
       <img id="card" alt="추석 연휴 예보 요약 카드" loading="lazy">
     </div>
   </div>
 
   <div class="card">
-    <h2>최신 발표 요약</h2>
+    <h2>최신 검토 요약</h2>
     <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
-    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 그 칸에 자료가 있는 직전 발표 대비(최고/최저), 테두리 위/아래 절반 = 최고/최저 변화, 노랑 = 개황 변화(이전 개황→). 흰칸 = 단기예보, 연파랑 = 중기예보. 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
+    <p class="note">최고/최저 ℃ · 개황 · 강수확률. <b>Δ</b> = 직전 검토 대비(최고/최저), 테두리 위/아래 절반 = 최고/최저 변화, 노랑 = 개황 변화(이전 개황→). 흰칸 = 단기예보, 연파랑 = 중기예보. 빈칸 = 아직 그 날짜까지 예보가 나오지 않음.</p>
   </div>
 
   <div class="card">
     <h2>날짜별 이력표와 변경 로그</h2>
     <div class="tabs" id="dateTabs"></div>
     <div id="hist"></div>
-    <p class="note">이력표 = 발표시각(행) × 도시(열), 칸 = 최고/최저 ℃ · 개황(·강수확률) · Δ 직전 대비, <span class="badge">중</span>/<span class="badge">단</span> = 중기/단기예보, 마지막 행 = 첫 발표→최신 누적.
-       변경 로그 = <b>이전 발표 → 이번 발표</b>에서 <b>기온이나 개황이 바뀐 도시만</b>(비교 = 그 도시·날짜의 직전 발표, 다르면 도시 아래 '←' 표기).
-       칸 테두리 <b>위쪽 절반 = 최고기온</b>, <b>아래쪽 절반 = 최저기온</b>의 직전 발표 대비 변화(<span style="color:#D32F2F">빨강 상승</span>·<span style="color:#1E6FC0">파랑 하락</span>, 진할수록 큼: 1·2·3℃↑), 노란 배경 = 개황 변화. 아직 예보가 없는 날짜는 비어 있습니다.</p>
+    <p class="note">이력표 = 검토시각(행) × 도시(열), 칸 = 최고/최저 ℃ · 개황(·강수확률) · Δ 직전 대비, 흰칸/연파랑 = 단기/중기예보, 마지막 행 = 첫 검토→최신 누적.
+       변경 로그 = <b>이전 검토 → 이번 검토</b>에서 <b>기온이나 개황이 바뀐 도시만</b>(비교 = 그 도시·날짜의 직전 검토, 다르면 도시 아래 '←' 표기).
+       칸 테두리 <b>위쪽 절반 = 최고기온</b>, <b>아래쪽 절반 = 최저기온</b>의 직전 검토 대비 변화(<span style="color:#D32F2F">빨강 상승</span>·<span style="color:#1E6FC0">파랑 하락</span>, 진할수록 큼: 1·2·3℃↑), 노란 배경 = 개황 변화. 아직 예보가 없는 날짜는 비어 있습니다.</p>
   </div>
 
   <div class="card">
@@ -104,7 +104,7 @@
     <p class="note">한 장에 들어가지 않으면 최근 발표만 담고, 전체는 위 탭의 로그에서 봅니다.</p>
   </div>
 
-  <p class="note">갱신: 발표 뒤 첫 시간별 실행(매시 25분 시작, 대체로 :32~:55 반영). 추적 기간 9/16 17시 발표 ~ 9/23 11시 발표. 8대도시 = 서울·인천·수원·원주·대전·대구·광주·부산.
+  <p class="note">갱신: 05·11·17시 예보 뒤 첫 시간별 실행(대체로 각 시각 :32~:55 반영). 추적 기간 9/16 17시 검토 ~ 9/23 11시 검토. 8대도시 = 서울·인천·수원·원주·대전·대구·광주·부산.
      자료 출처: 기상청 API허브 단기예보·중기예보.</p>
 
 <script>
@@ -114,7 +114,7 @@
   try { const r = await fetch("chuseok/chuseok.json?t=" + Date.now()); if (r.ok) m = await r.json(); } catch (e) {}
   if (!m) { document.getElementById("stamp").textContent = "아직 발행된 자료가 없습니다."; return; }
   const key = m.latest_key || "";
-  document.getElementById("stamp").textContent = "최신 발표 " + (m.latest_label || "-") + " · 페이지 생성 " + (m.generated_kst || "") + " KST";
+  document.getElementById("stamp").textContent = "최신 검토 " + (m.latest_label || "-") + " · 페이지 생성 " + (m.generated_kst || "") + " KST";
   document.getElementById("card").src = "chuseok/chuseok_card.png?v=" + key;
   document.getElementById("rev").src = "chuseok/chuseok_revision.png?v=" + key;
   document.getElementById("digest").textContent = m.digest || "";
@@ -133,7 +133,7 @@
   const dateTitle = (ds) => { const d = new Date(ds.slice(0,4), ds.slice(4,6) - 1, ds.slice(6,8)); return (d.getMonth()+1) + "/" + d.getDate() + "(" + wd[(d.getDay()+6)%7] + ")" + (ds === "20260925" ? " 추석" : ""); };
   const norm = (t) => (t || "").trim().split(/\s+/).join(" ");
 
-  // 변경 로그: 발표마다 바뀐 도시만
+  // 변경 로그: 검토본마다 바뀐 도시만
   const logHtml = (ds) => {
     const groups = [];
     (m.effective_issuances || []).forEach((i) => {
@@ -155,7 +155,7 @@
     });
     if (!groups.length) return "";
     const labOf = {}; (m.issuances || []).forEach((i) => (labOf[i.key] = i));
-    const kindOf = (i) => (i && i.kind === "mid" ? "중기" : "단기");
+    const kindOf = (i) => (i && i.kind === "checkpoint" ? "검토" : (i && i.kind === "mid" ? "중기" : "단기"));
     const shortKey = (k) => k.slice(4, 6) + "-" + k.slice(6, 8) + " " + k.slice(8, 10) + "시";
     return "<h3>변경 로그</h3><div class='tablewrap'><table class='log'><tbody>" + groups.map((g) => {
       const parts = [];
@@ -165,7 +165,7 @@
       if (g.nw.length) parts.push(g.nw.length === m.city_order.length ? "초기 기준선 8도시" : "신규 " + g.nw.join("·"));
       if (g.missing.length) parts.push("미갱신 " + g.missing.join("·"));
       const pi = g.prevCommon ? labOf[g.prevCommon] : null;
-      const title = (g.prevCommon ? (pi ? pi.label : shortKey(g.prevCommon)) + " " + kindOf(pi) + " → " : "") + g.label + " " + kindOf(g) + " 발표";
+      const title = (g.prevCommon ? (pi ? pi.label : shortKey(g.prevCommon)) + " " + kindOf(pi) + " → " : "") + g.label + " " + kindOf(g);
       const head = "<tr class='grp'><th colspan='3'>" + title + "<span>" + parts.join(" · ") + "</span></th></tr>";
       const rows = g.changed.map((ch) => {
         const f = frameAttr(ch.dmax, ch.dmin);
@@ -179,7 +179,7 @@
     }).join("") + "</tbody></table></div>";
   };
 
-  // 이력표: 행=발표시각, 열=도시, Δ 줄 + 합계 행
+  // 이력표: 행=검토시각, 열=도시, Δ 줄 + 합계 행
   const histHtml = (ds) => {
     const rows = (m.effective_issuances || []).filter((i) => m.city_order.some((c) => (m.cities[c][ds] || []).some((x) => x.issue === i.key)));
     if (!rows.length) return "<p class='note'>아직 이 날짜의 예보가 없습니다.</p>";
@@ -197,7 +197,7 @@
         }
         return '<td class="' + cls + '" style="' + st + '"><b>' + Math.round(rec.tmax) + "/" + Math.round(rec.tmin) + "</b> " + shortSky(rec.sky) + (rec.pop != null ? '<span class="pop"> ' + rec.pop + "%</span>" : "") + '<span class="d">' + d + "</span></td>";
       });
-      return "<tr><th>" + i.label + " <span class='badge'>" + (i.kind === "mid" ? "중" : "단") + "</span></th>" + cells.join("") + "</tr>";
+      return "<tr><th>" + i.label + " <span class='badge'>" + (i.kind === "checkpoint" ? "검" : (i.kind === "mid" ? "중" : "단")) + "</span></th>" + cells.join("") + "</tr>";
     }).join("");
     const sum = "<tr class='sum'><th>처음→최신</th>" + m.city_order.map((c) => {
       const recs = m.cities[c][ds] || [];
@@ -206,7 +206,7 @@
       const a = recs[0], b = recs[recs.length - 1];
       return "<td>Δ " + sgn(b.tmax - a.tmax) + "/" + sgn(b.tmin - a.tmin) + "<span class='d'>개황 변경 " + nwx + "회</span></td>";
     }).join("") + "</tr>";
-    return "<h3>이력표</h3><div class='tablewrap'><table><thead><tr><th>발표</th>" + m.city_order.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" + body + sum + "</tbody></table></div>";
+    return "<h3>이력표</h3><div class='tablewrap'><table><thead><tr><th>검토</th>" + m.city_order.map((c) => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" + body + sum + "</tbody></table></div>";
   };
 
   const hist = document.getElementById("hist"), tabs = document.getElementById("dateTabs");
@@ -217,7 +217,7 @@
   tabs.querySelectorAll("button").forEach((b) => (b.onclick = () => showDate(b.dataset.ds)));
   showDate("20260925");
 
-  // 최신 발표 요약
+  // 최신 검토 요약
   const thead = document.querySelector("#tbl thead"), tbody = document.querySelector("#tbl tbody");
   thead.innerHTML = "<tr>" + ["도시"].concat(m.targets.map(dateTitle)).map((h) => "<th>" + h + "</th>").join("") + "</tr>";
   tbody.innerHTML = m.city_order.map((c) => {

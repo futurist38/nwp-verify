@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-추석 연휴 예보 추적 (2026-09-16 사용자 요청) — 8대도시 × 대상일(9/23~27), 발표시각별 기온·개황 변화.
+추석 연휴 예보 추적 (2026-09-16 사용자 요청) — 8대도시 × 대상일(9/23~27), 05·11·17시 검토본별 기온·개황 변화.
 
 자료
   · 단기예보(동네예보, typ02 getVilageFcst): 발표 05/11/17시(+15분께 가용). 대상일이 발표 후 3일 안에 들면
     TMX(15시)·TMN(06시)·SKY/PTY(하늘·강수형태)·POP 로 일 요약. 발표분은 불변 → 캐시.
   · 중기예보(typ02 MidFcstInfoService): 발표 06/18시. getMidTa(도시별 최저/최고 ±범위) + getMidLandFcst(육상 권역 개황 wf·강수확률).
     실측(2026-09-16): 06시 발표 = D+4~D+10, 18시 발표 = D+5~D+10. D+7 까지는 오전/오후 개황, D+8~10 은 하루 하나.
-  · 우선순위: 대상일이 단기 범위면 단기, 아니면 중기. 없는 날은 비워 둔다(나오면 채움).
+  · 05·11·17시 검토본: 그 시각까지 나온 중기예보를 기본으로, 단기 범위에 든 날짜만 최신 단기예보로 대체한다.
+    변화량은 직전 검토본(05→11→17→다음날 05)과 비교한다.
 캐시: verification/chuseok/{발표YYYYMMDDHH}_{short|mid}.json  (커밋 대상)
 산출: output/chuseok/chuseok.json (사이트 탭용) · output/chuseok/chuseok_latest.png (카톡·메일용)
 사용: python chuseok_track.py [--backfill 2026091606] [--no-plot]
@@ -28,6 +29,7 @@ TARGET_DATES = [dt.date(2026, 9, d) for d in range(23, 28)]        # 9/23(수)~9
 LAST_ISSUE = dt.datetime(2026, 9, 23, 11, tzinfo=KST)              # 마지막 발표(9/23 11시 단기)
 SHORT_HOURS = (5, 11, 17)
 MID_HOURS = (6, 18)
+CHECKPOINT_HOURS = (5, 11, 17)
 # (동네예보 격자 nx,ny, 중기 기온 예보구역, 중기 육상 권역)
 CITIES = {
     "서울": ((60, 127), "11B10101", "11B00000"),
@@ -194,15 +196,39 @@ def collect(now: dt.datetime, start: dt.datetime, key: str) -> list[dict]:
     return got
 
 
-def merge(records: list[dict]) -> dict:
-    """사이트·그림용 구조: {issuances: [...], cities: {city: {date: [{issue, ...}, ...]}}}"""
-    iss = [{"key": r["issue_key"], "label": f"{r['issue'][5:10]} {r['issue'][11:13]}시", "kind": r["kind"]} for r in records]
+def checkpoints(now: dt.datetime, start: dt.datetime) -> list[dt.datetime]:
+    """사용자가 실제로 검토하는 05·11·17시 스냅샷. 단기예보 가용 여유 15분 뒤 확정한다."""
+    out = []
+    d = start.date()
+    while d <= min(now.date(), LAST_ISSUE.date()):
+        for h in CHECKPOINT_HOURS:
+            t = dt.datetime(d.year, d.month, d.day, h, tzinfo=KST)
+            if start <= t <= LAST_ISSUE and t + dt.timedelta(minutes=15) <= now:
+                out.append(t)
+        d += dt.timedelta(days=1)
+    return out
+
+
+def merge(records: list[dict], now: dt.datetime, start: dt.datetime) -> dict:
+    """원 발표 캐시를 05·11·17시 검토본으로 합성한다. 날짜별로 단기가 있으면 단기, 아니면 최신 중기를 쓴다."""
+    records = sorted(records, key=lambda r: r["issue_key"])
+    cps = checkpoints(now, start)
+    iss = [{"key": f"{t:%Y%m%d%H}", "label": f"{t:%m-%d} {t:%H}시", "kind": "checkpoint"} for t in cps]
     cities = {c: {d.strftime("%Y%m%d"): [] for d in TARGET_DATES} for c in CITIES}
-    for r in records:
-        for city, days in r["cities"].items():
-            for ds, rec in days.items():
-                if ds in cities[city]:
-                    cities[city][ds].append({"issue": r["issue_key"], **rec})
+    for t in cps:
+        key = f"{t:%Y%m%d%H}"
+        available = [r for r in records if r["issue_key"] <= key]
+        for city in CITIES:
+            for ds in cities[city]:
+                chosen = None
+                for kind in ("short", "mid"):
+                    chosen = next((r for r in reversed(available)
+                                   if r["kind"] == kind and ds in r["cities"].get(city, {})), None)
+                    if chosen:
+                        break
+                if chosen:
+                    cities[city][ds].append({"issue": key, "source_issue": chosen["issue_key"],
+                                             **chosen["cities"][city][ds]})
     used = {x["issue"] for c in cities.values() for lst in c.values() for x in lst}
     eff = [i for i in iss if i["key"] in used]                     # 대상일 자료가 실제로 있는 발표만 (제목·카톡 키용)
     return {"generated_kst": dt.datetime.now(KST).strftime("%Y-%m-%d %H:%M"), "targets": [d.strftime("%Y%m%d") for d in TARGET_DATES],
@@ -212,10 +238,10 @@ def merge(records: list[dict]) -> dict:
 
 # ── 그림 ──────────────────────────────────────────────────────────────
 def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> None:
-    """발표별 변경 로그 그림(대상일 하나, 기본 추석 당일). 발표마다 머리띠(발표시각·중기/단기·요약) 아래에
+    """검토본별 변경 로그 그림(대상일 하나, 기본 추석 당일). 검토시각 머리띠 아래에
     기온이나 개황이 바뀐 도시만 한 줄씩: 도시 | 최고 27→29 (+2) / 최저 17→16 (=) | 개황 맑음→구름많음.
     기온 칸 테두리 위/아래 절반 = Δ최고/Δ최저(빨강 상승·파랑 하락, 진할수록 큼), 개황 칸 노랑 = 개황 변화.
-    한 장에 들어가지 않으면 최근 발표부터 채우고 앞부분은 생략 표시(전체는 페이지)."""
+    한 장에 들어가지 않으면 최근 검토부터 채우고 앞부분은 생략 표시(전체는 페이지)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -290,8 +316,8 @@ def plot(m: dict, path: str, ds: str = "20260925", max_units: float = 40.0) -> N
             ax.text(X_S0 + 0.012, y + H_ROW / 2, sk, va="center", fontsize=11.5, color="#222" if ch["wx"] else "#666", weight="bold" if ch["wx"] else "normal", zorder=4, wrap=True)
             y += H_ROW
         y += H_GAP
-    fig.suptitle(f"{dlabel} 예보 변경 로그 — 이전 발표 → 이번 발표에서 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=13.5, weight="bold", y=0.995)
-    fig.text(0.5, 0.006, "기온 칸 테두리 위쪽 절반 = 최고기온, 아래쪽 절반 = 최저기온 변화(빨강 상승·파랑 하락, 진할수록 큼: 1·2·3℃↑) · 노랑 = 개황 변화 · 비교 = 그 도시·날짜의 직전 유효 발표",
+    fig.suptitle(f"{dlabel} 예보 변경 로그 — 이전 검토 → 이번 검토에서 바뀐 도시만 · 최신 {m.get('latest_label') or '-'}", fontsize=13.5, weight="bold", y=0.995)
+    fig.text(0.5, 0.006, "기온 칸 테두리 위쪽 절반 = 최고기온, 아래쪽 절반 = 최저기온 변화(빨강 상승·파랑 하락, 진할수록 큼: 1·2·3℃↑) · 노랑 = 개황 변화 · 비교 = 그 도시·날짜의 직전 검토",
              ha="center", fontsize=8.5, color="#555")
     fig.tight_layout(rect=[0, 0.02, 1, 0.975])
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -333,8 +359,8 @@ def plot_card(m: dict, path: str) -> None:
     for (r, c), cl in tbl.get_celld().items():
         if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
     latest = m.get("latest_label") or "-"
-    fig.suptitle(f"추석 연휴 예보 · 8대도시 · 최신 발표 {latest}", fontsize=14, weight="bold", y=0.98)
-    fig.text(0.5, 0.02, "최고/최저 ℃ · 개황 · 강수확률 · Δ = 직전 발표 대비(최고/최저) · 흰칸 = 단기예보, 연파랑 = 중기예보", ha="center", fontsize=9.5, color="#555")
+    fig.suptitle(f"추석 연휴 예보 · 8대도시 · 최신 검토 {latest}", fontsize=14, weight="bold", y=0.98)
+    fig.text(0.5, 0.02, "최고/최저 ℃ · 개황 · 강수확률 · Δ = 직전 검토 대비(최고/최저) · 흰칸 = 단기예보, 연파랑 = 중기예보", ha="center", fontsize=9.5, color="#555")
     fig.savefig(path, dpi=150, bbox_inches="tight"); plt.close(fig)
 
 
@@ -401,12 +427,12 @@ def change_log(m: dict, ds: str) -> list[dict]:
 
 
 def _issue_title(g: dict) -> str:
-    """머리띠 제목: '09-16 18시 중기 → 09-17 06시 중기 발표' (이전 발표가 없으면 '09-16 18시 중기 발표')."""
-    kind = "중기" if g["kind"] == "mid" else "단기"
+    """머리띠 제목: '09-17 05시 → 09-17 11시 검토'."""
+    kind = "검토" if g["kind"] == "checkpoint" else ("중기 발표" if g["kind"] == "mid" else "단기 발표")
     if g["prev_common"]:
-        pk = "중기" if g["prev_kind"] == "mid" else "단기"
-        return f"{g['prev_label']} {pk} → {g['label']} {kind} 발표"
-    return f"{g['label']} {kind} 발표"
+        pk = "검토" if g["prev_kind"] == "checkpoint" else ("중기 발표" if g["prev_kind"] == "mid" else "단기 발표")
+        return f"{g['prev_label']} {pk} → {g['label']} {kind}"
+    return f"{g['label']} {kind}"
 
 
 def _draw_edges(fig, tbl, edges):
@@ -430,8 +456,8 @@ def _draw_edges(fig, tbl, edges):
 
 
 def compare_cells(m: dict) -> dict:
-    """칸(도시, 대상일)마다 최신 발표 기준 비교 상태 (Astra 제안 9/17):
-       none(예보 없음) / not_updated(이번 발표엔 이 칸 자료 없음) / new(첫 기록) / handoff(중기→단기 첫 전환) / changed / unchanged.
+    """칸(도시, 대상일)마다 최신 검토본 기준 비교 상태 (Astra 제안 9/17):
+       none(예보 없음) / not_updated(이번 검토엔 이 칸 자료 없음) / new(첫 기록) / handoff(중기→단기 첫 전환) / changed / unchanged.
        Δ 는 그 칸의 직전 유효 기록 대비. 개황 변화는 표시 문자열 비교(강수확률 제외)."""
     latest = m.get("latest_key")
     out = {}
@@ -466,10 +492,10 @@ def digest(m: dict, cmp: dict) -> str:
     new = [v for v in cmp.values() if v["state"] == "new"]
     if upd and len(new) == len(upd):
         n_none = sum(1 for v in cmp.values() if v["state"] == "none")
-        return f"{label} 발표 · 초기 기준선 {len(new)}칸 기록" + (f" · 미발표 {n_none}칸" if n_none else "") + " · 비교는 다음 발표부터"
+        return f"{label} 검토 · 초기 기준선 {len(new)}칸 기록" + (f" · 예보 없음 {n_none}칸" if n_none else "") + " · 비교는 다음 검토부터"
     chg = [(k, v) for k, v in cmp.items() if v["state"] == "changed" or (v["state"] == "handoff" and (v["dmax"] or v["dmin"] or v["wx"]))]
     ho = sum(1 for v in cmp.values() if v["state"] == "handoff" and not (v["dmax"] or v["dmin"] or v["wx"]))
-    parts = [f"{label} 발표 · 갱신 {len(upd)}칸 중 변경 {len(chg)}칸"]
+    parts = [f"{label} 검토 · 갱신 {len(upd)}칸 중 변경 {len(chg)}칸"]
     if chg:
         k, v = max(chg, key=lambda kv: max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0)))
         d = k[1]; which = "최고" if abs(v["dmax"]) >= abs(v["dmin"]) else "최저"
@@ -488,7 +514,7 @@ def digest(m: dict, cmp: dict) -> str:
 
 
 def plot_revision(m: dict, cmp: dict, path: str) -> None:
-    """카톡 카드: 변경 행렬 8도시 × 5일 — 칸 = 이번 발표의 Δ최고/Δ최저(직전 유효 기록 대비).
+    """카톡 카드: 변경 행렬 8도시 × 5일 — 칸 = 이번 검토본의 Δ최고/Δ최저(직전 검토본 대비).
        신규 / · (무변경) / 미갱신 / 전환 표기. 강조: |Δ|≥2 또는 개황 변화. 아래에 최신 절대값 표는 두지 않는다(페이지 담당)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -532,8 +558,8 @@ def plot_revision(m: dict, cmp: dict, path: str) -> None:
     for (r, c), cl in tbl.get_celld().items():
         if r == 0 or c == -1: cl.set_text_props(weight="bold"); cl.set_facecolor("#e8e8e8")
     _draw_edges(fig, tbl, edges)
-    fig.text(0.5, 0.958, f"추석 연휴 예보 변화 · {m.get('latest_label') or '-'} 발표", ha="center", fontsize=16, weight="bold")
-    fig.text(0.5, 0.918, "칸 위 = 직전 발표 대비 Δ최고/Δ최저 ℃ (· 무변경, ※ 개황 변화, 전환 = 중기→단기) · 칸 아래 = 최신 최고/최저·개황", ha="center", fontsize=9.5, color="#444")
+    fig.text(0.5, 0.958, f"추석 연휴 예보 변화 · {m.get('latest_label') or '-'} 검토본", ha="center", fontsize=16, weight="bold")
+    fig.text(0.5, 0.918, "칸 위 = 직전 검토 대비 Δ최고/Δ최저 ℃ (· 무변경, ※ 개황 변화, 전환 = 중기→단기) · 칸 아래 = 최신 최고/최저·개황", ha="center", fontsize=9.5, color="#444")
     # 아래: 요약·상위 변경
     chg = sorted([(k, v) for k, v in cmp.items() if v["state"] in ("changed", "handoff") and (v["dmax"] or v["dmin"] or v["wx"])],
                  key=lambda kv: -max(abs(kv[1]["dmax"] or 0), abs(kv[1]["dmin"] or 0), 1.5 if kv[1]["wx"] else 0))
@@ -560,7 +586,7 @@ def _short_sky(txt):
 
 
 def plot_history(m: dict, out_dir: str) -> list[str]:
-    """대상일마다 이력표 그림: 행 = 발표시각(자료 있는 것), 열 = 8도시, 칸 = 최고/최저 개황. 직전 행 대비 변한 칸은 색.
+    """대상일마다 이력표 그림: 행 = 검토시각, 열 = 8도시, 칸 = 최고/최저 개황. 직전 행 대비 변한 칸은 색.
     chuseok_hist_{YYYYMMDD}.png 5장 + 전체를 세로로 이어 붙인 chuseok_history.png."""
     import matplotlib
     matplotlib.use("Agg")
@@ -612,10 +638,10 @@ def plot_history(m: dict, out_dir: str) -> list[str]:
     # 날짜별 개별 그림 + 합본
     for ds, rows, cell, colr, edges in per_date:
         d = dt.datetime.strptime(ds, "%Y%m%d")
-        title = f"{d.month}/{d.day}({wd[d.weekday()]}){' 추석' if ds == '20260925' else ''} 예보 이력 — 행: 발표시각, 열: 도시 (최고/최저 ℃ · 개황)"
+        title = f"{d.month}/{d.day}({wd[d.weekday()]}){' 추석' if ds == '20260925' else ''} 예보 이력 — 행: 검토시각, 열: 도시 (최고/최저 ℃ · 개황)"
         fig, ax = plt.subplots(figsize=(11.5, 0.55 * (max(len(rows), 1) + 1) + 1.1)); ax.axis("off")
         if rows:
-            rl = [i["label"] + (" 중" if i["kind"] == "mid" else " 단") for i in rows] + ["처음→최신"]
+            rl = [i["label"] + (" 검" if i["kind"] == "checkpoint" else (" 중" if i["kind"] == "mid" else " 단")) for i in rows] + ["처음→최신"]
             tbl = ax.table(cellText=cell, rowLabels=rl, colLabels=cities, cellColours=colr, loc="center", cellLoc="center")
             tbl.auto_set_font_size(False); tbl.set_fontsize(10.5); tbl.scale(1.0, 2.7)
             for (r, c), cl in tbl.get_celld().items():
@@ -646,10 +672,10 @@ def main():
     start = dt.datetime.strptime(a.backfill, "%Y%m%d%H").replace(tzinfo=KST)
     now = dt.datetime.now(KST)
     records = collect(now, start, auth_key())
-    m = merge(records)
+    m = merge(records, now, start)
     os.makedirs(OUT, exist_ok=True)
     json.dump(m, open(os.path.join(OUT, "chuseok.json"), "w", encoding="utf-8"), ensure_ascii=False)
-    print(f"[추석] 발표 {len(m['issuances'])}건 병합 → {OUT}/chuseok.json")
+    print(f"[추석] 검토본 {len(m['issuances'])}건 병합 → {OUT}/chuseok.json")
     if not a.no_plot:
         import shutil
         plot(m, os.path.join(OUT, "chuseok_latest.png"))
