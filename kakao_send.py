@@ -2,7 +2,7 @@
 """
 카카오톡 "나에게 보내기" — 추석 예보 추적 카드 발송 (2026-09-16).
 
-동작: refresh 토큰으로 access 토큰을 받고, 최신 05·11·17시 검토 카드(사이트에 발행된 PNG 주소)를 피드 메시지로 보낸다.
+동작: refresh 토큰으로 access 토큰을 받고, 최신 유효 검토 카드(중기 단계 06·18시 / 단기 단계 05·11·17시)를 피드 메시지로 보낸다.
       같은 검토본을 두 번 보내지 않도록 verification/chuseok/_kakao_sent.txt 에 마지막 발송 키를 남긴다(커밋 대상).
 환경변수(또는 .env): KAKAO_REST_KEY, KAKAO_REFRESH_TOKEN, (선택) KAKAO_CLIENT_SECRET
 사용: python kakao_send.py            # 새 발표가 있을 때만 발송

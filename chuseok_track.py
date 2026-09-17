@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-추석 연휴 예보 추적 (2026-09-16 사용자 요청) — 8대도시 × 대상일(9/23~27), 05·11·17시 검토본별 기온·개황 변화.
+추석 연휴 예보 추적 (2026-09-16 사용자 요청) — 8대도시 × 대상일(9/23~27), 예보 갱신별 기온·개황 변화.
 
 자료
   · 단기예보(동네예보, typ02 getVilageFcst): 발표 05/11/17시(+15분께 가용). 대상일이 발표 후 3일 안에 들면
     TMX(15시)·TMN(06시)·SKY/PTY(하늘·강수형태)·POP 로 일 요약. 발표분은 불변 → 캐시.
   · 중기예보(typ02 MidFcstInfoService): 발표 06/18시. getMidTa(도시별 최저/최고 ±범위) + getMidLandFcst(육상 권역 개황 wf·강수확률).
     실측(2026-09-16): 06시 발표 = D+4~D+10, 18시 발표 = D+5~D+10. D+7 까지는 오전/오후 개황, D+8~10 은 하루 하나.
-  · 05·11·17시 검토본: 그 시각까지 나온 중기예보를 기본으로, 단기 범위에 든 날짜만 최신 단기예보로 대체한다.
-    변화량은 직전 검토본(05→11→17→다음날 05)과 비교한다.
+  · 대상일 단기예보가 나오기 전에는 중기 06/18시 발표를, 나온 뒤에는 단기 05/11/17시 발표를 검토본으로 쓴다.
+    단기 범위 밖 날짜는 최신 중기예보를 유지하고, 변화량은 직전 검토본과 비교한다.
 캐시: verification/chuseok/{발표YYYYMMDDHH}_{short|mid}.json  (커밋 대상)
 산출: output/chuseok/chuseok.json (사이트 탭용) · output/chuseok/chuseok_latest.png (카톡·메일용)
 사용: python chuseok_track.py [--backfill 2026091606] [--no-plot]
@@ -29,7 +29,6 @@ TARGET_DATES = [dt.date(2026, 9, d) for d in range(23, 28)]        # 9/23(수)~9
 LAST_ISSUE = dt.datetime(2026, 9, 23, 11, tzinfo=KST)              # 마지막 발표(9/23 11시 단기)
 SHORT_HOURS = (5, 11, 17)
 MID_HOURS = (6, 18)
-CHECKPOINT_HOURS = (5, 11, 17)
 # (동네예보 격자 nx,ny, 중기 기온 예보구역, 중기 육상 권역)
 CITIES = {
     "서울": ((60, 127), "11B10101", "11B00000"),
@@ -196,27 +195,18 @@ def collect(now: dt.datetime, start: dt.datetime, key: str) -> list[dict]:
     return got
 
 
-def checkpoints(now: dt.datetime, start: dt.datetime) -> list[dt.datetime]:
-    """사용자가 실제로 검토하는 05·11·17시 스냅샷. 단기예보 가용 여유 15분 뒤 확정한다."""
-    out = []
-    d = start.date()
-    while d <= min(now.date(), LAST_ISSUE.date()):
-        for h in CHECKPOINT_HOURS:
-            t = dt.datetime(d.year, d.month, d.day, h, tzinfo=KST)
-            if start <= t <= LAST_ISSUE and t + dt.timedelta(minutes=15) <= now:
-                out.append(t)
-        d += dt.timedelta(days=1)
-    return out
-
-
-def merge(records: list[dict], now: dt.datetime, start: dt.datetime) -> dict:
-    """원 발표 캐시를 05·11·17시 검토본으로 합성한다. 날짜별로 단기가 있으면 단기, 아니면 최신 중기를 쓴다."""
+def merge(records: list[dict]) -> dict:
+    """단기 대상일이 생기기 전에는 중기 발표, 이후에는 단기 발표만 검토본으로 합성한다."""
     records = sorted(records, key=lambda r: r["issue_key"])
-    cps = checkpoints(now, start)
-    iss = [{"key": f"{t:%Y%m%d%H}", "label": f"{t:%m-%d} {t:%H}시", "kind": "checkpoint"} for t in cps]
+    first_short = next((r["issue_key"] for r in records
+                        if r["kind"] == "short" and any(r["cities"].get(c) for c in CITIES)), None)
+    cps = [r for r in records if (r["kind"] == "mid" and (first_short is None or r["issue_key"] < first_short))
+           or (r["kind"] == "short" and first_short is not None and r["issue_key"] >= first_short)]
+    iss = [{"key": r["issue_key"], "label": f"{r['issue_key'][4:6]}-{r['issue_key'][6:8]} {r['issue_key'][8:10]}시",
+            "kind": r["kind"]} for r in cps]
     cities = {c: {d.strftime("%Y%m%d"): [] for d in TARGET_DATES} for c in CITIES}
-    for t in cps:
-        key = f"{t:%Y%m%d%H}"
+    for cp in cps:
+        key = cp["issue_key"]
         available = [r for r in records if r["issue_key"] <= key]
         for city in CITIES:
             for ds in cities[city]:
@@ -672,7 +662,7 @@ def main():
     start = dt.datetime.strptime(a.backfill, "%Y%m%d%H").replace(tzinfo=KST)
     now = dt.datetime.now(KST)
     records = collect(now, start, auth_key())
-    m = merge(records, now, start)
+    m = merge(records)
     os.makedirs(OUT, exist_ok=True)
     json.dump(m, open(os.path.join(OUT, "chuseok.json"), "w", encoding="utf-8"), ensure_ascii=False)
     print(f"[추석] 검토본 {len(m['issuances'])}건 병합 → {OUT}/chuseok.json")

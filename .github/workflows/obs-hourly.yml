@@ -130,7 +130,7 @@ jobs:
         # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
         run: timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
 
-      # 추석 예보 추적 (2026-09-16~23 임시): 원 발표는 캐시하되 화면·카톡은 05/11/17시 최신 예보 검토본끼리 비교한다.
+      # 추석 예보 추적: 단기 대상일 전에는 중기 06/18시, 이후에는 단기 05/11/17시 검토본끼리 비교한다.
       - name: 추석 예보 추적
         run: |
           if [ "$(TZ=Asia/Seoul date +%Y%m%d)" -ge 20260924 ]; then echo "추적 기간 종료"; exit 0; fi
@@ -161,7 +161,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           tools/publish_site.sh "obs $(date '+%Y-%m-%d %H:%M KST')" --hourly
 
-      # 추석 예보 카드 카톡 발송 — 발행된 PNG 주소를 쓰므로 발행 뒤. 새 05/11/17시 검토본일 때만 보낸다.
+      # 추석 예보 카드 카톡 발송 — 발행된 PNG 주소를 쓰므로 발행 뒤. 새 유효 검토본일 때만 보낸다.
       - name: 추석 예보 카톡 발송
         continue-on-error: true
         env:
