@@ -1,0 +1,315 @@
+{
+"kind": "short",
+"issue": "2026-09-23 05:00",
+"issue_key": "2026092305",
+"cities": {
+"서울": {
+"20260924": {
+"tmax": 28.0,
+"tmin": 19.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 27.0,
+"tmin": 19.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": [
+"비"
+]
+},
+"20260926": {
+"tmax": 28.0,
+"tmin": 18.0,
+"sky": "구름많음",
+"pop": 20,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"인천": {
+"20260924": {
+"tmax": 27.0,
+"tmin": 19.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 27.0,
+"tmin": 20.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": [
+"비"
+]
+},
+"20260926": {
+"tmax": 27.0,
+"tmin": 19.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"수원": {
+"20260924": {
+"tmax": 28.0,
+"tmin": 19.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 26.0,
+"tmin": 20.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": [
+"비"
+]
+},
+"20260926": {
+"tmax": 28.0,
+"tmin": 18.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"원주": {
+"20260924": {
+"tmax": 26.0,
+"tmin": 16.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 26.0,
+"tmin": 15.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": [
+"비"
+]
+},
+"20260926": {
+"tmax": 26.0,
+"tmin": 16.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"대전": {
+"20260924": {
+"tmax": 27.0,
+"tmin": 18.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 26.0,
+"tmin": 19.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": [
+"비"
+]
+},
+"20260926": {
+"tmax": 27.0,
+"tmin": 18.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"대구": {
+"20260924": {
+"tmax": 30.0,
+"tmin": 18.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 26.0,
+"tmin": 19.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260926": {
+"tmax": 26.0,
+"tmin": 18.0,
+"sky": "흐림·비",
+"pop": 60,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"광주": {
+"20260924": {
+"tmax": 29.0,
+"tmin": 18.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 27.0,
+"tmin": 20.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260926": {
+"tmax": 26.0,
+"tmin": 19.0,
+"sky": "흐림·비",
+"pop": 60,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+},
+"부산": {
+"20260924": {
+"tmax": 29.0,
+"tmin": 19.0,
+"sky": "구름많음",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260925": {
+"tmax": 26.0,
+"tmin": 21.0,
+"sky": "흐림",
+"pop": 30,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 24,
+"pty_day": []
+},
+"20260926": {
+"tmax": 25.0,
+"tmin": 20.0,
+"sky": "흐림·비",
+"pop": 60,
+"src": "short",
+"tmax_src": "TMX",
+"tmin_src": "TMN",
+"n_hours": 8,
+"pty_day": [
+"비"
+]
+}
+}
+},
+"n_days": 24,
+"fetched_utc": "2026-09-22 20:33"
+}
