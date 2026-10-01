@@ -147,6 +147,26 @@ class ForecastComparisonTests(unittest.TestCase):
         self.assertEqual(result["TMP"],{"2026100200":10.0,"2026100223":20.0})
         self.assertEqual([call.kwargs["params"]["pageNo"] for call in requests.get.call_args_list],[1,2])
 
+    def test_site_build_accepts_mixed_nowcast_timestamp_formats(self):
+        import build_site
+        now=dt.datetime.now(dt.timezone.utc).replace(minute=0,second=0,microsecond=0)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); out=root/"output"; verif=root/"verification"; site=root/"site"
+            latest=out/"nowcast"/"latest"; latest.mkdir(parents=True)
+            (latest/"issue.txt").write_text(now.isoformat())
+            scores=verif/"nowcast"; scores.mkdir(parents=True)
+            rows=["issue_utc,lead_min,method,mae"]
+            for stamp in (now.strftime("%Y-%m-%d %H:%M:%S"),
+                          (now-dt.timedelta(hours=1)).isoformat(),
+                          (now-dt.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")):
+                rows.extend([f"{stamp},60,M0,10",f"{stamp},60,M4,5"])
+            rows.extend(["<<<<<<< Updated upstream", "=======", ">>>>>>> Stashed changes", "invalid,60,M4,999",f"{now-dt.timedelta(days=8)},60,M4,999"])
+            (scores/"mixed.csv").write_text("\n".join(rows)+"\n")
+            with patch.object(build_site,"OUT_DIR",str(out)), patch.object(build_site,"VERIF_DIR",str(verif)):
+                result=build_site.copy_nowcast(str(site))
+            self.assertEqual(result["skill"],{"60":50.0})
+            self.assertEqual(result["n_issues"],3)
+
 
 if __name__ == "__main__":
     unittest.main()
