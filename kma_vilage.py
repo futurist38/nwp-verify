@@ -90,21 +90,32 @@ def fetch(nx: int, ny: int, bdt: str, key: str,
     last = None
     for attempt in range(retries):
         try:
-            r = requests.get(API, params={"pageNo": 1, "numOfRows": 1300,
-                                          "dataType": "JSON", "base_date": bdt[:8],
-                                          "base_time": bdt[8:] + "00",
-                                          "nx": nx, "ny": ny, "authKey": key},
-                             timeout=60)
-            j = r.json()
-            if j["response"]["header"]["resultCode"] != "00":
-                raise RuntimeError(f"단기예보 오류: {j['response']['header']}")
             out: dict[str, dict[str, float]] = {c: {} for c in cats}
-            for it in j["response"]["body"]["items"]["item"]:
-                c = it["category"]
-                if c in out:
-                    out[c][it["fcstDate"] + it["fcstTime"][:2]] = float(it["fcstValue"])
+            page, received = 1, 0
+            while True:
+                r = requests.get(API, params={"pageNo": page, "numOfRows": 1300,
+                                              "dataType": "JSON", "base_date": bdt[:8],
+                                              "base_time": bdt[8:] + "00",
+                                              "nx": nx, "ny": ny, "authKey": key}, timeout=60)
+                r.raise_for_status()
+                j = r.json()
+                if j["response"]["header"]["resultCode"] != "00":
+                    raise RuntimeError(f"단기예보 오류: {j['response']['header']}")
+                body = j["response"]["body"]
+                items = body["items"]["item"]
+                for it in items:
+                    c = it["category"]
+                    if c in out:
+                        out[c][it["fcstDate"] + it["fcstTime"][:2]] = float(it["fcstValue"])
+                received += len(items)
+                if received >= int(body.get("totalCount", received)):
+                    break
+                if not items or page >= 20:
+                    raise RuntimeError("단기예보 페이지 수신 미완료")
+                page += 1
             return out
         except Exception as e:
             last = e
             time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"단기예보 수신 실패({bdt} {nx},{ny}): {last}")
+

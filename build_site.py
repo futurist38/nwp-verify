@@ -744,6 +744,9 @@ def main():
         FD_DATES = export_fcstdiff(args.site_dir)
         HAS_MIDFCST = export_midfcst(args.site_dir)
     KMAFCST_DATES = export_kmafcst(args.site_dir)
+    # 발표별 비교는 daily/hourly 모두 갱신. 기존 발행본과 누락 없이 병합한다.
+    from forecast_compare import export as export_forecast_compare
+    export_forecast_compare(args.site_dir)
     OBS_DATES = export_obs(args.site_dir)
     # 추석 예보 추적 (2026-09-16~23, 임시): output/chuseok 의 그림·JSON 을 그대로 실어 카톡 카드가 참조한다
     src_ch = os.path.join(OUT_DIR, "chuseok")

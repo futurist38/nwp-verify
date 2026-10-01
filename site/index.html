@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
 <link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="forecast-compare.css?v=1">
 </head>
 <body>
 <header>
@@ -23,12 +24,36 @@
     <button data-tab="nowcast" id="nowcastTabBtn" hidden>초단기 운량예측</button>
     <button data-tab="meteo">Meteogram</button>
     <button data-tab="kmaf">예보-관측</button>
+    <button data-tab="compare">예보 비교</button>
     <button data-tab="verif">NWP-관측 검증</button>
     <button data-tab="about">소개</button>
   </nav>
 </header>
 
 <main>
+  <section id="tab-compare" class="tab card">
+    <div class="fc-heading">
+      <div><h2>예보가 어떻게 바뀌었나</h2><p class="fc-subtitle">같은 예보 대상일을 두 기준 시점으로 비교합니다. 기온과 개황의 변화를 함께 보세요.</p></div>
+      <div class="fc-shortcuts"><button id="fc-yesterday" type="button">어제 ↔ 오늘</button><button id="fc-friday" type="button">지난 금요일 ↔ 오늘</button><button id="fc-swap" type="button">A·B 바꾸기</button></div>
+    </div>
+    <div class="fc-controls">
+      <div><label for="fc-a-date">A · 이전에 본 예보</label><div class="fc-ref"><select id="fc-a-date" aria-label="A 기준 날짜"></select><select id="fc-a-time" aria-label="A 기준 시각"></select></div></div>
+      <div><label for="fc-b-date">B · 비교할 예보</label><div class="fc-ref"><select id="fc-b-date" aria-label="B 기준 날짜"></select><select id="fc-b-time" aria-label="B 기준 시각"></select></div></div>
+      <div><label for="fc-city">도시</label><select id="fc-city"></select></div>
+    </div>
+    <p id="fc-status" role="status" aria-live="polite">비교 자료를 준비하고 있습니다…</p>
+    <div class="fc-range"><label for="fc-start">예보 대상 기간</label><select id="fc-start" aria-label="예보 대상 시작일" disabled></select><span>~</span><select id="fc-end" aria-label="예보 대상 종료일" disabled></select><span id="fc-summary"></span></div>
+    <div class="fc-legend"><span class="fc-max"><i class="fc-line" style="border-color:#be3543"></i>최고기온</span><span class="fc-min"><i class="fc-line" style="border-color:#216caa"></i>최저기온</span><span><i class="fc-line dashed"></i>A 이전</span><span><i class="fc-line"></i>B 비교</span></div>
+    <div class="fc-legend" aria-label="개황 변화 배경색"><span><i class="fc-swatch" style="background:#fff"></i>예보 유지</span><span><i class="fc-swatch" style="background:#fff6d5"></i>맑음으로</span><span><i class="fc-swatch" style="background:#ebedef"></i>구름많음으로</span><span><i class="fc-swatch" style="background:#cbd0d6"></i>흐림으로</span><span><i class="fc-swatch" style="background:#dceffc"></i>비·눈 등 강수로</span><span><i class="fc-swatch fc-missing"></i>비교 불가</span></div>
+    <div id="fc-timeline" aria-busy="false"></div>
+    <div id="fc-detail"></div>
+    <details class="fc-help"><summary>자료와 비교 기준</summary>
+      <p>날짜와 시각은 모두 한국시간(KST)입니다. 기준 시점 이전에 발표된 것 중 저장된 최신 단기·중기예보를 연결합니다. 실제 웹 화면을 열었던 기록이 아니라, <b>발표 시각 기준의 아카이브 비교</b>입니다. 수신 지연이나 누락이 있을 수 있으며 상세에서 각 값의 실제 발표 시각을 확인할 수 있습니다.</p>
+      <p>최고·최저는 단기의 공식 TMX·TMN을 우선합니다. 과거에 공식 극값을 저장하지 않은 경우에만 00~23시 24시간 기온이 모두 있을 때 극값을 계산해 표시합니다. 대상일에 단기 값이 없으면 중기 공식 일 기온을 사용합니다. 상세의 출처가 단기↔중기로 바뀌는 경우에는 예보 체계도 달라집니다.</p>
+      <p>단기 개황은 오전(00~11시)·오후(12~23시)의 하늘상태 최빈값(동률이면 더 흐린 쪽)과 강수형태를 요약한 값입니다. 12시간이 모두 있을 때만 비교합니다. 중기는 공식 개황을 그대로 사용하며, 하루 단위와 오전·오후 단위는 자동으로 서로 비교하지 않습니다. 지역 단위 중기 개황과 도시 격자 단기 개황의 공간 범위도 다릅니다.</p>
+      <p>배경색은 기온 변화가 아닌 <b>개황 변경 후 B의 상태</b>를 뜻합니다. 흰색은 개황 유지, 빗금은 자료 부족 또는 시간 단위 차이입니다. 기온은 바뀌어도 개황이 같으면 흰색입니다. 강수확률만 달라진 경우에는 개황 변경으로 세지 않습니다. 과거 중기 개황은 저장 자료가 있는 발표부터 표시합니다.</p>
+    </details>
+  </section>
   <section id="tab-today" class="tab on card">
     <div class="today-head">
       <h2 style="margin-top:0">오늘 한눈에</h2>
@@ -313,5 +338,6 @@
 </main>
 <div id="chartTip" class="tip" hidden></div>
 <script src="app.js?v=34"></script>
+<script src="forecast-compare.js?v=1"></script>
 </body>
 </html>

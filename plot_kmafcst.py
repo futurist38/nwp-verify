@@ -50,7 +50,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # 기온 외 함께 저장하는 카테고리 (2026-09-06, 하늘 띠 표출용). 같은 응답에 다 들어 있어
 # API 호출이 늘지 않는다. 캐시 키는 "도시#카테고리" — 기존 도시 키(TMP)와 공존.
-EXTRA_CATS = ("SKY", "PTY", "POP", "WSD", "VEC")   # WSD 풍속(m/s)·VEC 풍향(deg) 2026-09-08 추가 — 같은 응답
+EXTRA_CATS = ("SKY", "PTY", "POP", "WSD", "VEC", "TMN", "TMX")  # 비교 화면의 공식 일 최저·최고도 보존
 
 
 def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
@@ -70,9 +70,13 @@ def load_fcst_cached(day: dt.date, bdts: list[str], key: str) -> dict:
                 res = fetch(nx, ny, bdt, key, cats=("TMP",) + EXTRA_CATS)
                 got[city] = res["TMP"]
                 for cat in EXTRA_CATS:
-                    if res.get(cat):
-                        got[f"{city}#{cat}"] = res[cat]
+                    got[f"{city}#{cat}"] = res.get(cat, {})  # TMN/TMX가 없는 발표도 수신 완료로 기록
                 changed = True
+                # 다음 도시 API가 지연되어 작업이 timeout되어도 이미 받은 발표는 남긴다.
+                tmp = path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(cache, f, ensure_ascii=False)
+                os.replace(tmp, path)
             except Exception as e:
                 print(f"[단기예보] {bdt} {city} 수신 실패: {e}")
         if not got:
