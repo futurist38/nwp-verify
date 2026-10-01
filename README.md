@@ -224,3 +224,24 @@ manifest 에 `local_cut {maps, upper}` 를 적고, 뷰어 `IMG(ymd, panel)` 은 
 `config.py`에서 영역·도시·리드타임·지도 스텝을 조정한다.
 GFS 예측 연장(120h → 384h)은 `GFS_STEPS` 수정 (120h 이후는 3h 간격 유지되나
 240h 이후는 12h 간격 파일만 존재하므로 스텝 목록에 반영 필요).
+
+## 예보 비교 탭 (2026-10)
+
+`?tab=compare`에서 저장된 두 기준 시점 A·B를 골라 **같은 대상일**의 기상청 예보를 비교한다.
+최고는 빨강, 최저는 파랑이며 A는 점선, B는 실선이다. 오전·오후 개황 변경 구간은 B의 상태로 칠한다:
+유지 흰색, 맑음 연한 크림색, 구름많음 옅은 회색, 흐림 중간 회색, 강수 연한 하늘색. 결측·시간 단위 불일치는 빗금.
+
+- `forecast_compare.py`: 단기 원캐시 및 중기 기온·개황을 발표별로 정규화. `forecast_compare/index.json`과
+  `forecast_compare/issues/{발표}-{short|mid}.json`을 출력한다. 선택된 발표 파일만 브라우저에서 읽는다.
+- `kma_midland.py`: 중기 06/18시 개황과, 기존 기온 캐시에 없는 발표의 일 기온을 수신한다.
+  지역별 원응답은 `verification/midland/`에 즉시 저장한다. 수신되지 않은 과거 개황은 추정하지 않는다.
+- 시간별 작업은 `forecast_compare.py --archive`로 작은 발표별 기록을 `verification/forecast_compare/`에 보관한다.
+  일일·시간별 발행 모두 이미 발행된 자료와 합치므로 오래된 checkout이나 부분 수신이 기존 값을 지우지 않는다.
+  같은 발표의 비결측 공식 값은 불변으로 다루고, TMP24에서 공식 TMN/TMX로 보강하는 것만 허용한다.
+- 단기 공식 TMN/TMX 우선. 없으면 00~23시 **24시간 전체**가 있을 때만 TMP 극값을 사용하고 출처를 표시한다.
+  개황은 12시간 전체의 SKY 최빈값(동률이면 더 흐린 쪽)·PTY 종류 요약이다. 중기 일 단위 개황을 반일로 복제하지 않는다.
+- 비교 기준 시각은 발표 시각이며 실제 사용자의 열람 기록/과거 수신 시각을 재현하는 기능은 아니다.
+  중기 지역 개황과 단기 도시 격자 개황의 공간 범위 차이는 상세 도움말에 표시한다.
+
+검증: `python -m unittest discover -s tests -p 'test_forecast_compare.py'` 및
+`node --test tests/forecast_compare.test.cjs`. 시간별 작업에서도 두 검증을 먼저 실행한다.
