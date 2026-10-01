@@ -204,11 +204,14 @@ def copy_nowcast(site_dir: str) -> dict | None:
                             for p in glob.glob(os.path.join(nd, "archive", "*.png"))
                             + glob.glob(os.path.join(nd, "archive", "*.webp"))})}
 
-    frames = [pd.read_csv(f, parse_dates=["issue_utc"])
+    frames = [pd.read_csv(f)
               for f in glob.glob(os.path.join(VERIF_DIR, "nowcast", "*.csv"))]
     if frames:
         df = pd.concat(frames, ignore_index=True)
-        cut = dt.datetime.utcnow() - dt.timedelta(days=7)
+        # 월별 CSV의 ISO/공백·초 생략 형식이 섞여도 UTC 시각으로 비교한다.
+        # read_csv(parse_dates)는 변환 실패 시 문자열 열을 그대로 돌려줄 수 있다.
+        df["issue_utc"] = pd.to_datetime(df["issue_utc"], format="mixed", errors="coerce", utc=True)
+        cut = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)
         df = df[df["issue_utc"] >= cut]
         if len(df):
             piv = df.pivot_table(index="lead_min", columns="method",
