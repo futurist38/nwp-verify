@@ -224,7 +224,8 @@ manifest 에 `local_cut {maps, upper}` 를 적고, 뷰어 `IMG(ymd, panel)` 은 
 `config.py`에서 영역·도시·리드타임·지도 스텝을 조정한다.
 GFS 예측 연장(120h → 384h)은 `GFS_STEPS` 수정 (120h 이후는 3h 간격 유지되나
 240h 이후는 12h 간격 파일만 존재하므로 스텝 목록에 반영 필요).
-# 예보 비교 탭 (2026-10)
+
+## 예보 비교 탭 (2026-10)
 
 `?tab=compare`에서 저장된 두 기준 시점 A·B를 골라 **같은 대상일**의 기상청 예보를 비교한다.
 최고는 빨강, 최저는 파랑이며 A는 점선, B는 실선이다. 오전·오후 개황 변경 구간은 B의 상태로 칠한다:
@@ -244,4 +245,3 @@ GFS 예측 연장(120h → 384h)은 `GFS_STEPS` 수정 (120h 이후는 3h 간격
 
 검증: `python -m unittest discover -s tests -p 'test_forecast_compare.py'` 및
 `node --test tests/forecast_compare.test.cjs`. 시간별 작업에서도 두 검증을 먼저 실행한다.
-
