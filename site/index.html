@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>NWP 모델 아카이브</title>
 <link rel="stylesheet" href="style.css?v=30">
-<link rel="stylesheet" href="forecast-compare.css?v=1">
+<link rel="stylesheet" href="forecast-compare.css?v=2">
 </head>
 <body>
 <header>
@@ -43,13 +43,22 @@
     </div>
     <p id="fc-status" role="status" aria-live="polite">비교 자료를 준비하고 있습니다…</p>
     <div class="fc-range"><label for="fc-start">예보 대상 기간</label><select id="fc-start" aria-label="예보 대상 시작일" disabled></select><span>~</span><select id="fc-end" aria-label="예보 대상 종료일" disabled></select><span id="fc-summary"></span></div>
-    <div class="fc-legend"><span class="fc-max"><i class="fc-line" style="border-color:#be3543"></i>최고기온</span><span class="fc-min"><i class="fc-line" style="border-color:#216caa"></i>최저기온</span><span><i class="fc-line dashed"></i>A 이전</span><span><i class="fc-line"></i>B 비교</span></div>
+    <div class="fc-legend"><strong>일별 개요</strong><span class="fc-max"><i class="fc-line" style="border-color:#be3543"></i>최고기온</span><span class="fc-min"><i class="fc-line" style="border-color:#216caa"></i>최저기온</span><span><i class="fc-line dashed"></i>A 이전</span><span><i class="fc-line"></i>B 비교</span><label class="fc-range-toggle"><input id="fc-ranges" type="checkbox" checked> 중기 예보 범위</label></div>
+    <p class="fc-subtitle">중기 세로 막대와 옅은 띠는 기상청이 발표한 하한·상한 범위입니다. A는 점선, B는 실선으로 구분합니다.</p>
     <div class="fc-legend" aria-label="개황 변화 배경색"><span><i class="fc-swatch" style="background:#fff"></i>예보 유지</span><span><i class="fc-swatch" style="background:#fff6d5"></i>맑음으로</span><span><i class="fc-swatch" style="background:#ebedef"></i>구름많음으로</span><span><i class="fc-swatch" style="background:#cbd0d6"></i>흐림으로</span><span><i class="fc-swatch" style="background:#dceffc"></i>비·눈 등 강수로</span><span><i class="fc-swatch fc-missing"></i>비교 불가</span></div>
     <div id="fc-timeline" aria-busy="false"></div>
     <div id="fc-detail"></div>
+    <section id="fc-hourly" class="fc-hourly" hidden aria-label="단기 시간별 상세">
+      <div class="fc-heading"><h3>단기 · 시간별 상세</h3><label for="fc-hourly-day">대상일 <select id="fc-hourly-day"></select></label></div>
+      <div class="fc-legend"><span><i class="fc-line dashed" style="border-color:#405e77"></i>A 시간별 기온</span><span><i class="fc-line" style="border-color:#405e77"></i>B 시간별 기온</span><span id="fc-hourly-info"></span></div>
+      <p class="fc-subtitle">시간별 원자료를 표시합니다. 배경은 개황 변경, 하늘 아이콘 아래 숫자는 강수확률입니다. 시각 버튼을 누르면 기온 차이와 개황·강수확률을 확인할 수 있습니다. 한쪽 자료만 있으면 해당 예보만 표시합니다.</p>
+      <div id="fc-hourly-plot"></div>
+      <div id="fc-hourly-detail" class="fc-hourly-detail" aria-live="polite"></div>
+    </section>
     <details class="fc-help"><summary>자료와 비교 기준</summary>
       <p>날짜와 시각은 모두 한국시간(KST)입니다. 기준 시점 이전에 발표된 것 중 저장된 최신 단기·중기예보를 연결합니다. 실제 웹 화면을 열었던 기록이 아니라, <b>발표 시각 기준의 아카이브 비교</b>입니다. 수신 지연이나 누락이 있을 수 있으며 상세에서 각 값의 실제 발표 시각을 확인할 수 있습니다.</p>
       <p>최고·최저는 단기의 공식 TMX·TMN을 우선합니다. 과거에 공식 극값을 저장하지 않은 경우에만 00~23시 24시간 기온이 모두 있을 때 극값을 계산해 표시합니다. 대상일에 단기 값이 없으면 중기 공식 일 기온을 사용합니다. 상세의 출처가 단기↔중기로 바뀌는 경우에는 예보 체계도 달라집니다.</p>
+      <p>중기 예보 범위는 최고·최저 각각의 발표 중심값에 공식 하한·상한 폭을 적용한 값입니다. 별도로 계산한 신뢰구간이나 A/B 예보 간 차이가 아닙니다. 범위가 없는 발표는 중심값만 표시합니다. 시간별 상세는 단기 TMP·SKY·PTY·POP 원자료를 사용하고, 누락된 시각 사이의 기온선을 연결하거나 중기를 시간별로 보간하지 않습니다.</p>
       <p>단기 개황은 오전(00~11시)·오후(12~23시)의 하늘상태 최빈값(동률이면 더 흐린 쪽)과 강수형태를 요약한 값입니다. 12시간이 모두 있을 때만 비교합니다. 중기는 공식 개황을 그대로 사용하며, 하루 단위와 오전·오후 단위는 자동으로 서로 비교하지 않습니다. 지역 단위 중기 개황과 도시 격자 단기 개황의 공간 범위도 다릅니다.</p>
       <p>배경색은 기온 변화가 아닌 <b>개황 변경 후 B의 상태</b>를 뜻합니다. 흰색은 개황 유지, 빗금은 자료 부족 또는 시간 단위 차이입니다. 기온은 바뀌어도 개황이 같으면 흰색입니다. 강수확률만 달라진 경우에는 개황 변경으로 세지 않습니다. 과거 중기 개황은 저장 자료가 있는 발표부터 표시합니다.</p>
     </details>
@@ -338,6 +347,6 @@
 </main>
 <div id="chartTip" class="tip" hidden></div>
 <script src="app.js?v=34"></script>
-<script src="forecast-compare.js?v=1"></script>
+<script src="forecast-compare.js?v=2"></script>
 </body>
 </html>

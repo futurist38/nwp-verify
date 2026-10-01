@@ -34,7 +34,14 @@
       const pick = field => get("short",field) || get("mid",field);
       const wx = {am:pick("wx_am"),pm:pick("wx_pm"),day:null};
       if(!wx.am && !wx.pm) wx.day=get("mid","wx_day");
-      output[day]={tmin:pick("tmin"),tmax:pick("tmax"),wx};
+      const hourly={};
+      for(const d of ordered.filter(x=>x.kind==="short")) {
+        for(const [key, h] of Object.entries(d.cities[city]?.[day]?.hourly||{})) {
+          if(!hourly[key]) hourly[key]={...h,issue:d.issue,kind:"short",basis:"TMP1",
+            wx:h.wx?{...h.wx,issue:d.issue,kind:"short"}:null};
+        }
+      }
+      output[day]={tmin:pick("tmin"),tmax:pick("tmax"),wx,hourly};
     }
     return output;
   }
@@ -47,12 +54,22 @@
     return [segment("am",a.am,b.am),segment("pm",a.pm,b.pm)];
   }
   const delta = (a,b) => finite(a?.value)&&finite(b?.value) ? Math.round((b.value-a.value)*10)/10 : null;
-  const api={COLORS,selectEntries,assemble,compareWeather,delta,lastFriday,range};
+  const bounds = r => r?.basis==="MID" && finite(r.value) && finite(r.lower) && finite(r.upper) && r.lower<=r.value && r.value<=r.upper ? {lower:r.lower,upper:r.upper}:null;
+  function hourlySlots(a,b,days) {
+    return days.flatMap(d=>Array.from({length:24},(_,h)=>{const key=d+String(h).padStart(2,"0");
+      return {key,a:a[d]?.hourly?.[key]||null,b:b[d]?.hourly?.[key]||null};}));
+  }
+  function hourlyPath(slots,side,x,y) {
+    let path="",active=false;
+    slots.forEach((s,i)=>{const v=s[side]?.temp;if(finite(v)){path+=`${active?"L":"M"}${x(i)},${y(v)} `;active=true;}else active=false;});
+    return path;
+  }
+  const api={COLORS,selectEntries,assemble,compareWeather,delta,lastFriday,range,bounds,hourlySlots,hourlyPath};
   if(typeof module!=="undefined" && module.exports) module.exports=api;
   if(!root.document) return;
 
   const $=id=>document.getElementById("fc-"+id);
-  let index, refs=[], records={a:{},b:{}}, available=[], selected="", serial=0, initialized=false;
+  let index, refs=[], records={a:{},b:{}}, available=[], selected="", selectedHour="", serial=0, initialized=false;
   const cache=new Map();
   async function json(url) {
     const r=await fetch(url,{cache:"no-cache"});
@@ -86,20 +103,21 @@
   }
   function source(rec) {
     if(!rec) return "자료 없음";
-    const basis={TMN:"공식 최저",TMX:"공식 최고",TMP24:"24시간 기온 극값",MID:"공식 일 기온"}[rec.basis]||rec.basis;
+    const basis={TMN:"공식 최저",TMX:"공식 최고",TMP24:"24시간 기온 극값",TMP1:"시간별 예보",MID:"공식 일 기온"}[rec.basis]||rec.basis;
     return `${rec.kind==="short"?"단기":"중기"} ${stamp(rec.issue)} · ${basis}`;
   }
   const temp = r => finite(r?.value)?`${r.value.toFixed(1).replace(/\.0$/, "")}℃`:"—";
   const deltaText = (a,b) => {const v=delta(a,b);return v===null?"비교 불가":v===0?"유지":`${v>0?"+":""}${v.toFixed(1).replace(/\.0$/, "")}℃`;};
   function wxText(w) {return w?.label||"자료 없음";}
   function labelState(s) {return s.state==="same"?"유지":s.state==="changed"?"변경":s.state==="resolution"?"일/오전·오후 단위 다름":"비교 자료 없음";}
+  function rangeText(r) {const b=bounds(r);return r?.basis!=="MID"?"":b?` · 예보 범위 ${b.lower}~${b.upper}℃`:" · 범위 자료 없음";}
   function showDetails(day) {
     selected=day;
     document.querySelectorAll("#fc-timeline [data-day]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.day===day)));
     const a=records.a[day]||{}, b=records.b[day]||{};
     let out=`<h3>${esc(dayLabel(day))} 상세 · ${esc($("city").value)}</h3><div class="fc-details-grid">`;
     for(const [key,name,cls] of [["tmax","최고기온","max"],["tmin","최저기온","min"]]) {
-      out+=`<div class="fc-detail"><strong class="fc-${cls}">${name}</strong><div class="fc-values">${temp(a[key])} → ${temp(b[key])} <b>${deltaText(a[key],b[key])}</b></div><p>A ${esc(source(a[key]))}</p><p>B ${esc(source(b[key]))}</p></div>`;
+      out+=`<div class="fc-detail"><strong class="fc-${cls}">${name}</strong><div class="fc-values">${temp(a[key])} → ${temp(b[key])} <b>${deltaText(a[key],b[key])}</b></div><p>A ${esc(source(a[key])+rangeText(a[key]))}</p><p>B ${esc(source(b[key])+rangeText(b[key]))}</p></div>`;
     }
     out+="</div>";
     for(const s of compareWeather(a,b)) {
@@ -110,13 +128,72 @@
       out+=`<div class="fc-weather-detail" style="background:${s.color||"#f6f7f9"}"><strong>${s.slot==="am"?"오전":s.slot==="pm"?"오후":"하루"} · ${labelState(s)}</strong><span>${esc(before)} → ${esc(after)}</span><small>A ${esc(sources(a,s.a))}<br>B ${esc(sources(b,s.b))}</small></div>`;
     }
     $("detail").innerHTML=out;
+    renderHourly(day);
   }
+
+  function renderHourly(wanted) {
+    const days=range($("start").value,$("end").value);
+    const covered=days.filter(d=>Object.keys(records.a[d]?.hourly||{}).length || Object.keys(records.b[d]?.hourly||{}).length);
+    $("hourly").hidden=false;
+    const choices=["all",...new Set([...covered,...(days.includes(wanted)?[wanted]:[])])].sort((a,b)=>a==="all"?-1:b==="all"?1:a.localeCompare(b));
+    options($("hourly-day"),choices,d=>d==="all"?"시간자료 있는 전체 기간":dayLabel(d)+(covered.includes(d)?"":" · 시간자료 없음"),choices.includes(wanted)?wanted:covered[0]||"all");
+    $("hourly-day").onchange=()=>renderHourly($("hourly-day").value);
+    const picked=$("hourly-day").value;
+    const visible=picked==="all"?(covered.length?range(covered[0],covered.at(-1)):[]):[picked];
+    const slots=hourlySlots(records.a,records.b,visible);
+    const count=side=>slots.filter(s=>finite(s[side]?.temp)).length;
+    $("hourly-info").textContent=`A ${count("a")}시간 · B ${count("b")}시간 · 같은 시각 기온 비교 ${slots.filter(s=>finite(s.a?.temp)&&finite(s.b?.temp)).length}시간`;
+    if(!slots.some(s=>s.a||s.b)) {
+      $("hourly-plot").innerHTML='<p class="fc-empty">선택 구간에 저장된 시간별 예보가 없습니다. 중기 자료는 위의 일별 그래프에서 확인하세요.</p>';
+      $("hourly-detail").innerHTML="";return;
+    }
+    const W=Math.max(700,$("hourly-plot").clientWidth||1100,slots.length*24+72),L=56,R=16,T=28,B=214,H=254,cw=(W-L-R)/slots.length;
+    const vals=slots.flatMap(s=>[s.a?.temp,s.b?.temp]).filter(finite);
+    const lo=vals.length?Math.floor((Math.min(...vals)-2)/5)*5:0,hi=vals.length?Math.ceil((Math.max(...vals)+2)/5)*5:30;
+    const x=i=>L+(i+.5)*cw,y=v=>B-(v-lo)/(hi-lo)*(B-T);
+    const states=slots.map(s=>compareWeather({wx:{am:s.a?.wx}},{wx:{am:s.b?.wx}})[0]);
+    let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="시간별 기온 A 점선, B 실선. 배경은 시간별 개황 변경."><defs><pattern id="fc-hour-missing" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#fff"/><path d="M0 8L8 0" stroke="#e7ebef" stroke-width="1"/></pattern></defs>`;
+    slots.forEach((s,i)=>{
+      svg+=`<rect x="${L+i*cw}" y="${T}" width="${cw}" height="${B-T}" fill="${states[i].color||"url(#fc-hour-missing)"}"/>`;
+      const h=Number(s.key.slice(8));
+      if(h%3===0) svg+=`<line x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${B}" stroke="#d5dce4" stroke-dasharray="2 4"/><text x="${x(i)}" y="${B+20}" text-anchor="middle">${h}시</text>`;
+      if(h===0) svg+=`<text x="${x(i)}" y="16" text-anchor="start" font-weight="bold">${dayLabel(s.key)}</text>`;
+    });
+    for(let v=lo;v<=hi;v+=5) svg+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#cbd3dc" stroke-dasharray="2 4"/><text x="${L-10}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+    svg+=`<text x="${L-10}" y="16" text-anchor="end">℃</text>`;
+    for(const side of ["a","b"]) {
+      svg+=`<path data-hour-series="${side}" d="${hourlyPath(slots,side,x,y)}" fill="none" stroke="#405e77" stroke-width="${side==="a"?1.6:2.5}" ${side==="a"?'stroke-dasharray="5 4" opacity=".6"':""}/>`;
+      slots.forEach((s,i)=>{if(!finite(s[side]?.temp))return;svg+=`<circle cx="${x(i)}" cy="${y(s[side].temp)}" r="2.5" stroke="#405e77" fill="${side==="a"?"white":"#405e77"}"><title>${dayLabel(s.key)} ${s.key.slice(8)}시 ${side.toUpperCase()} ${s[side].temp}℃</title></circle>`;});
+    }
+    svg+="</svg>";
+    const grid=`grid-template-columns:56px repeat(${slots.length},1fr) 16px`;
+    let rows="";
+    const icons={clear:"☀",partly:"⛅",overcast:"☁",rain:"☂"};
+    for(const side of ["a","b"]) {
+      rows+=`<div class="fc-hour-row" style="${grid}"><strong>${side.toUpperCase()} 개황</strong>`;
+      slots.forEach((s,i)=>{const h=s[side],w=h?.wx,fill=side==="b"?states[i].color:w?"#fff":null;
+        rows+=`<span class="${fill?"":"fc-missing"}" style="${fill?`background:${fill}`:""}" title="${esc(stamp(s.key)+" · "+wxText(w)+(finite(h?.pop)?` · 강수확률 ${h.pop}%`:""))}">${w?icons[w.code]||"?":"—"}<small>${finite(h?.pop)?h.pop+"%":"—"}</small></span>`;
+      });rows+="<span></span></div>";
+    }
+    rows+=`<div class="fc-hour-buttons" style="${grid}"><span></span>`+slots.map(s=>`<button type="button" data-hour="${s.key}" aria-pressed="false" aria-label="${dayLabel(s.key)} ${s.key.slice(8)}시 상세">${s.key.slice(8)}</button>`).join("")+"<span></span></div>";
+    $("hourly-plot").innerHTML=`<div style="width:${W}px">${svg}${rows}</div>`;
+    const showHour=key=>{
+      selectedHour=key;const s=slots.find(h=>h.key===key),state=states[slots.indexOf(s)];
+      $("hourly-plot").querySelectorAll("[data-hour]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.hour===key)));
+      const ta={value:s.a?.temp},tb={value:s.b?.temp};
+      $("hourly-detail").innerHTML=`<strong>${esc(stamp(key))}</strong><span>기온 ${temp(ta)} → ${temp(tb)} <b>${deltaText(ta,tb)}</b></span><span>개황 ${esc(wxText(s.a?.wx))} → ${esc(wxText(s.b?.wx))} · ${labelState(state)}</span><span>강수확률 ${finite(s.a?.pop)?s.a.pop+"%":"—"} → ${finite(s.b?.pop)?s.b.pop+"%":"—"}</span><small>A ${esc(source(s.a))}<br>B ${esc(source(s.b))}</small>`;
+    };
+    $("hourly-plot").querySelectorAll("[data-hour]").forEach(b=>{b.onclick=()=>showHour(b.dataset.hour);b.onfocus=b.onclick;});
+    showHour(slots.some(s=>s.key===selectedHour)?selectedHour:(slots.find(s=>s.a||s.b)||slots[0]).key);
+  }
+
   function render() {
     if(!available.length) return;
     const days=range($("start").value,$("end").value);
     if(!days.length) {$("timeline").innerHTML="<p class='fc-empty'>종료일을 시작일 이후로 선택해 주세요.</p>";$("detail").innerHTML="";return;}
     const W=Math.max(700,days.length*110+72),L=56,R=16,T=32,B=266,H=306,cw=(W-L-R)/days.length;
-    const values=days.flatMap(d=>[records.a[d]?.tmax?.value,records.a[d]?.tmin?.value,records.b[d]?.tmax?.value,records.b[d]?.tmin?.value]).filter(finite);
+    const showRanges=$("ranges").checked!==false;
+    const values=days.flatMap(d=>["a","b"].flatMap(side=>["tmax","tmin"].flatMap(metric=>{const r=records[side][d]?.[metric],bd=showRanges?bounds(r):null;return [r?.value,bd?.lower,bd?.upper];}))).filter(finite);
     const lo=values.length?Math.floor((Math.min(...values)-3)/5)*5:0;
     const hi=values.length?Math.ceil((Math.max(...values)+3)/5)*5:30;
     const y=v=>B-(v-lo)/(hi-lo)*(B-T), x=i=>L+(i+.5)*cw;
@@ -128,6 +205,21 @@
     });
     for(let v=lo;v<=hi;v+=5) svg+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#c7cfd8" stroke-dasharray="2 4"/><text x="${L-10}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
     svg+=`<text x="${L-10}" y="16" text-anchor="end">℃</text>`;
+    // 중기 발표 범위: 결측 또는 단기로 넘어가는 지점에서는 띠를 끊는다.
+    if(showRanges) for(const side of ["a","b"]) for(const metric of ["tmax","tmin"]) {
+      const color=metric==="tmax"?"#be3543":"#216caa";
+      let segment=[];
+      const flush=()=>{
+        if(!segment.length)return;
+        if(segment.length===1) {const {i,bd}=segment[0];svg+=`<rect data-range-band="${side}-${metric}" x="${x(i)-cw*.2}" y="${y(bd.upper)}" width="${cw*.4}" height="${y(bd.lower)-y(bd.upper)}" fill="${color}" opacity="${side==="a"?0.04:0.09}"/>`;}
+        else {const points=[...segment.map(({i,bd})=>`${x(i)},${y(bd.upper)}`),...segment.slice().reverse().map(({i,bd})=>`${x(i)},${y(bd.lower)}`)].join(" ");svg+=`<polygon data-range-band="${side}-${metric}" points="${points}" fill="${color}" opacity="${side==="a"?0.04:0.09}"/>`;}
+        segment=[];
+      };
+      days.forEach((d,i)=>{const bd=bounds(records[side][d]?.[metric]);if(bd)segment.push({i,bd});else flush();});flush();
+      days.forEach((d,i)=>{const rec=records[side][d]?.[metric],bd=bounds(rec);if(!bd)return;const xx=x(i)+(side==="a"?-4:4);
+        svg+=`<g data-range="${side}-${metric}" stroke="${color}" stroke-width="${side==="a"?1:1.5}" ${side==="a"?'stroke-dasharray="3 2" opacity=".6"':""}><title>${dayLabel(d)} ${side.toUpperCase()} ${metric==="tmax"?"최고":"최저"} 예보 범위 ${bd.lower}~${bd.upper}℃</title><path d="M${xx},${y(bd.upper)}V${y(bd.lower)}M${xx-4},${y(bd.upper)}H${xx+4}M${xx-4},${y(bd.lower)}H${xx+4}" fill="none"/></g>`;
+      });
+    }
     for(const side of ["a","b"]) for(const metric of ["tmax","tmin"]) {
       const color=metric==="tmax"?"#be3543":"#216caa";
       let path="",active=false;
@@ -168,6 +260,7 @@
     $("status").textContent="발표별 자료를 불러오는 중…";
     $("timeline").setAttribute("aria-busy","true");
     $("timeline").innerHTML="";$("detail").innerHTML="";$("summary").textContent="";
+    $("hourly").hidden=true;$("hourly-plot").innerHTML="";$("hourly-detail").innerHTML="";
     try {
       const a=refValue("a"),b=refValue("b"),city=$("city").value;
       const entriesA=selectEntries(index.issues,a,city),entriesB=selectEntries(index.issues,b,city);
@@ -212,6 +305,7 @@
       $("end").onchange=()=>{if($("end").value<$("start").value)$("start").value=$("end").value;render();};
       $("yesterday").onclick=()=>preset("yesterday");$("friday").onclick=()=>preset("friday");
       $("swap").onclick=()=>{const a=refValue("a"),b=refValue("b");setRef("a",b);setRef("b",a);update();};
+      $("ranges").onchange=render;
       update(true);
     } catch(e) {
       initialized=false; index=null;
