@@ -41,4 +41,20 @@
 .fc-help{margin-top:18px;border-top:1px solid #e1e6eb;padding-top:12px;font-size:12px;color:#637383;line-height:1.8}
 .fc-help summary{cursor:pointer;font-weight:bold}.fc-help p{margin-top:7px}
 .fc-empty{padding:20px;font-size:13px}
+.fc-range-toggle{display:inline-flex;gap:5px;align-items:center;cursor:pointer;margin-left:auto}
+.fc-hourly{margin-top:20px;padding-top:16px;border-top:1px solid #dce4eb}
+.fc-hourly .fc-heading{margin:0 0 8px}.fc-hourly h3{margin:0}.fc-hourly label{font-size:12px}
+#fc-hourly-info{color:#617282;margin-left:auto}
+#fc-hourly-plot{overflow-x:auto;width:100%;border:1px solid #dfe6ed;border-radius:8px;margin-top:10px;padding:10px 0;background:#fff}
+#fc-hourly-plot svg{display:block;font-size:11px;font-family:inherit;fill:#5b6b79}
+.fc-hour-row,.fc-hour-buttons{display:grid;align-items:stretch}
+.fc-hour-row>strong{font-size:10px;align-self:center;text-align:center;color:#5a6a79}
+.fc-hour-row>span{border-left:1px solid #e1e6eb;border-bottom:1px solid #e1e6eb;text-align:center;font-size:14px;padding:4px 0}
+.fc-hour-row small{display:block;font-size:9px;color:#516474}
+.fc-hour-buttons{margin-top:6px}
+#tab-compare .fc-hour-buttons button{font-size:10px;border:1px solid transparent;padding:5px 0;border-radius:4px}
+#tab-compare .fc-hour-buttons button[aria-pressed="true"]{border-color:#4382a8;background:#edf6fb;color:#205576}
+.fc-hourly-detail{display:flex;flex-wrap:wrap;gap:9px 18px;padding:13px 15px;border:1px solid #dce5ed;border-radius:8px;font-size:12px;margin-top:10px;background:#f7fafc}
+.fc-hourly-detail small{flex-basis:100%;line-height:1.8;color:#596b7b}
+.fc-hourly-detail:empty{display:none}
 @media(max-width:650px){.fc-controls{grid-template-columns:1fr;padding:12px;gap:12px}.fc-details-grid{grid-template-columns:1fr}.fc-heading{align-items:flex-start}.fc-range{gap:6px}#fc-summary{margin-left:0;flex-basis:100%}.fc-legend{gap:6px 12px}.fc-ref select{font-size:13px!important}}

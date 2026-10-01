@@ -7,11 +7,24 @@ import time
 import requests
 import sslfix  # noqa: F401
 from config import VERIF_DIR
-from forecast_compare import CITY_REGIONS, mid_weather, number, read, write
+from forecast_compare import CITY_REGIONS, mid_weather, number, read, write, merge
 from kma_midfcst import REGS
 from kma_vilage import auth_key
 
 URL = "https://apihub-pub.kma.go.kr/api/typ02/openApi/MidFcstInfoService/"
+
+
+def temperature_days(item, issued):
+    days = {}
+    for n in range(1, 15):
+        lo, hi = number(item.get(f"taMin{n}")), number(item.get(f"taMax{n}"))
+        if lo is not None or hi is not None:
+            rec = {"min": lo, "max": hi}
+            for metric, field in (("min", "taMin"), ("max", "taMax")):
+                for suffix, key in (("Low", "_l"), ("High", "_h")):
+                    rec[metric + key] = number(item.get(f"{field}{n}{suffix}"), 0, 50)
+            days[(issued + dt.timedelta(days=n)).strftime("%Y%m%d")] = rec
+    return days
 
 
 def fetch(region, issue, key, product="getMidLandFcst"):
@@ -48,19 +61,17 @@ def collect(days=2, budget=160):
             raw = read(path)
             known_temps = read(Path(VERIF_DIR) / "midfcst" / (issue + ".json"))
             for city, region in REGS.items():
-                if city in known_temps or city in raw.get("_temperatures", {}):
+                if city in known_temps or city in raw.get("_temperature_ranges_checked", []):
                     continue
                 if time.monotonic() - start > budget:
                     return
                 item = fetch(region, issue, key, "getMidTa")
                 if item:
-                    days = {}
-                    for n in range(1, 15):
-                        lo, hi = number(item.get(f"taMin{n}")), number(item.get(f"taMax{n}"))
-                        if lo is not None or hi is not None:
-                            days[(issued + dt.timedelta(days=n)).strftime("%Y%m%d")] = {"min": lo, "max": hi}
+                    days = temperature_days(item, issued)
                     if days:
-                        raw.setdefault("_temperatures", {})[city] = days
+                        old = raw.setdefault("_temperatures", {}).get(city)
+                        raw["_temperatures"][city] = merge(old, days)
+                        raw.setdefault("_temperature_ranges_checked", []).append(city)
                         write(path, raw)
             for region in regions:
                 if region in raw:

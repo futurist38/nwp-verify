@@ -1,4 +1,5 @@
 import copy
+import datetime as dt
 import json
 from pathlib import Path
 import tempfile
@@ -40,6 +41,25 @@ class ForecastComparisonTests(unittest.TestCase):
         self.assertIsNone(rec["wx_am"])
         self.assertEqual(rec["wx_pm"]["key"], "clear|")
 
+    def test_hourly_values_survive_an_incomplete_day_without_daily_extrema(self):
+        raw={"서울":{self.day+"15":22},"서울#SKY":{self.day+"15":4},
+             "서울#PTY":{self.day+"15":1},"서울#POP":{self.day+"15":80}}
+        rec=self.record(raw)
+        self.assertIsNone(rec["tmax"])
+        self.assertIsNone(rec["wx_pm"])
+        self.assertEqual(set(rec["hourly"]),{self.day+"15"})
+        self.assertEqual(rec["hourly"][self.day+"15"]["temp"],22)
+        self.assertEqual(rec["hourly"][self.day+"15"]["wx"]["key"],"overcast|비")
+        self.assertEqual(rec["hourly"][self.day+"15"]["pop"],80)
+
+    def test_hourly_missing_sky_and_zero_temperature_are_distinct(self):
+        self.raw["서울"][self.day+"00"]=0
+        self.raw["서울#SKY"].pop(self.day+"00")
+        hour=self.record()["hourly"][self.day+"00"]
+        self.assertEqual(hour["temp"],0)
+        self.assertIsNone(hour["wx"])
+        self.assertEqual(hour["pop"],0)
+
     def test_sky_mode_tie_and_rain_match_medium_semantics(self):
         for h in range(6):
             self.raw["서울#SKY"][f"{self.day}{h:02d}"]=4
@@ -64,6 +84,32 @@ class ForecastComparisonTests(unittest.TestCase):
         rec=d["cities"]["서울"]["20261005"]
         self.assertEqual(rec["tmax"]["value"],24)
         self.assertIsNotNone(rec["wx_pm"])
+
+    def test_mid_bounds_use_asymmetric_widths_and_never_assume_missing_zero(self):
+        temps={"서울":{"20261005":{"min":-3,"max":20,"min_l":2,"min_h":1,"max_l":0,"max_h":3},
+                        "20261006":{"min":12,"max":23,"min_l":-999,"min_h":2}}}
+        d=fc.normalize_mid("2026100106",temps,{})["cities"]["서울"]
+        self.assertEqual(d["20261005"]["tmin"],{"value":-3,"basis":"MID","lower":-5,"upper":-2})
+        self.assertEqual(d["20261005"]["tmax"]["lower"],20)
+        self.assertEqual(d["20261005"]["tmax"]["upper"],23)
+        self.assertIsNone(d["20261006"]["tmin"]["lower"])
+        self.assertIsNone(d["20261006"]["tmax"]["upper"])
+
+    def test_additive_archive_upgrade_keeps_center_and_fills_ranges_and_hours(self):
+        old={"tmax":{"value":20,"basis":"MID"},"hourly":None}
+        new={"tmax":{"value":20,"basis":"MID","lower":18,"upper":23},"hourly":{"2026100200":{"temp":10}}}
+        self.assertEqual(fc.merge(old,new),new)
+        self.assertEqual(fc.merge(new,old),new)
+        self.assertEqual(fc.merge(old,{"tmax":{"value":21,"basis":"MID","lower":19,"upper":24}})["tmax"],old["tmax"])
+
+    def test_medium_api_parser_preserves_optional_range_widths(self):
+        from kma_midland import temperature_days
+        days = temperature_days({"taMin5":10,"taMax5":23,"taMin5Low":2,"taMin5High":1,
+                                 "taMax5Low":0,"taMax5High":3,"taMin6":11,"taMax6":24},
+                                dt.datetime(2026,10,1,18))
+        self.assertEqual(days["20261006"],{"min":10,"max":23,"min_l":2,"min_h":1,"max_l":0,"max_h":3})
+        self.assertIsNone(days["20261007"]["min_l"])
+        self.assertEqual(set(days),{"20261006","20261007"})
 
     def test_merge_cannot_regress_official_or_filled_weather(self):
         hourly={"tmax":{"value":20,"basis":"TMP24"},"wx_am":None}

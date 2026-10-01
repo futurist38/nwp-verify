@@ -66,6 +66,18 @@ def short_weather(raw, city, day, start):
     return weather(base, kinds, label, "시간예보 12시간 요약", max(pops) if all(v is not None for v in pops) else None)
 
 
+def hourly_weather(raw, city, key):
+    sky = raw.get(city + "#SKY", {}).get(key)
+    pty = raw.get(city + "#PTY", {}).get(key)
+    if sky not in SKY or pty not in (0, 1, 2, 3, 4):
+        return None
+    base, label = SKY[sky]
+    kinds = [PTY[pty]] if pty else []
+    if kinds:
+        label += " · " + kinds[0]
+    return weather(base, kinds, label, "시간별 예보", raw.get(city + "#POP", {}).get(key))
+
+
 def mid_weather(value, pop):
     if not isinstance(value, str) or not value.strip():
         return None
@@ -93,13 +105,20 @@ def normalize_short(issue, raw):
             vals = [number(hours.get(f"{day}{h:02d}")) for h in range(24)]
             rec = {"wx_am": short_weather(raw, city, day, 0),
                    "wx_pm": short_weather(raw, city, day, 12), "wx_day": None}
+            rec["hourly"] = {}
+            for h in range(24):
+                key = f"{day}{h:02d}"
+                value, wx = number(hours.get(key)), hourly_weather(raw, city, key)
+                pop = number(raw.get(city + "#POP", {}).get(key), 0, 100)
+                if value is not None or wx is not None or pop is not None:
+                    rec["hourly"][key] = {"temp": value, "wx": wx, "pop": pop}
             for metric, cat, hour, fn in (("min", "TMN", 6, min), ("max", "TMX", 15, max)):
                 v = number(raw.get(city + "#" + cat, {}).get(f"{day}{hour:02d}"))
                 rec["t" + metric] = ({"value": v, "basis": cat} if v is not None else
                     {"value": fn(vals), "basis": "TMP24"} if all(v is not None for v in vals) else None)
             if rec["tmin"] and rec["tmax"] and rec["tmin"]["value"] > rec["tmax"]["value"]:
                 rec["tmin"] = rec["tmax"] = None
-            if any(v is not None for v in rec.values()):
+            if rec["hourly"] or any(v is not None for k, v in rec.items() if k != "hourly"):
                 days[day] = rec
         if days:
             cities[city] = days
@@ -125,6 +144,10 @@ def normalize_mid(issue, temps, land):
                 t = temps.get(city, {}).get(day, {})
                 v = number(t.get(metric))
                 rec["t" + metric] = {"value": v, "basis": "MID"} if v is not None else None
+                if v is not None:
+                    low, high = number(t.get(metric + "_l"), 0, 50), number(t.get(metric + "_h"), 0, 50)
+                    rec["t" + metric].update(lower=v-low if low is not None else None,
+                                            upper=v+high if high is not None else None)
             for suffix, field in (("Am", "wx_am"), ("Pm", "wx_pm"), ("", "wx_day")):
                 rec[field] = mid_weather(raw.get(f"wf{n}{suffix}"), raw.get(f"rnSt{n}{suffix}"))
             if any(v is not None for v in rec.values()):
@@ -147,7 +170,9 @@ def merge(old, new):
         if "value" in old and "basis" in old:
             if old["basis"] == "TMP24" and new.get("basis") in ("TMN", "TMX"):
                 return new
-            return old
+            # 기존 중심값은 유지하고, 같은 값에 새로 수신된 범위 정보만 보강한다.
+            if old["value"] != new.get("value") or old["basis"] != new.get("basis"):
+                return old
         return {k: merge(old.get(k), new.get(k)) for k in old.keys() | new.keys()}
     return old
 
