@@ -30,6 +30,11 @@ on:
       - 'kma_midland.py'
       - 'tests/test_forecast_compare.py'
       - 'tests/forecast_compare.test.cjs'
+      - 'site/index.html'
+      - 'site/satellite.*'
+      - 'satellite_catalog.py'
+      - 'tests/test_satellite_catalog.py'
+      - 'tests/satellite.test.cjs'
   schedule:
     - cron: "25 12 * * *"   # 21:25 KST — 하루치 관측이 다 쌓인 뒤라 한 번에 가장 많이 채운다
   workflow_dispatch:
@@ -137,6 +142,8 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_forecast_compare.py'
           node --test tests/forecast_compare.test.cjs
+          python -m unittest discover -s tests -p 'test_satellite_catalog.py'
+          node --test tests/satellite.test.cjs
 
       - name: 관측 수신·지도 생성 (어제+오늘)
         run: timeout 600 python plot_obsmap.py --no-plot

@@ -731,6 +731,10 @@ def main():
         shutil.copy2(os.path.join(SITE_SRC, fn), args.site_dir)
     open(os.path.join(args.site_dir, ".nojekyll"), "w").close()
 
+    # GK2A: 시각·원본 주소만 갱신한다. 영상은 사용자 브라우저가 기상청에서 직접 표시.
+    from satellite_catalog import export as export_satellite_catalog
+    export_satellite_catalog(args.site_dir)
+
     global KMAFCST_DATES, METEO_DATES, OBS_DATES, FD_DATES, HAS_MIDFCST
     if args.hourly:
         # obs-hourly 러너의 checkout 은 daily 가 마지막으로 커밋한 검증 자료라 배포본보다

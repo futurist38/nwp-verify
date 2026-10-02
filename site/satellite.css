@@ -1,0 +1,41 @@
+/* Satellite controls are scoped to the observation tab. */
+.head-row { margin-bottom: 12px; }
+.obs-sections { display:flex; gap:6px; border-bottom:1px solid #e0e5ed; margin:-2px 0 18px; padding-bottom:10px; }
+.obs-sections button, #obsSatellite button { font:inherit; font-size:13px; padding:8px 12px; border:1px solid #cdd5df; border-radius:7px; background:#fff; color:#263348; cursor:pointer; }
+.obs-sections button[aria-selected="true"], #obsSatellite .sat-channels button[aria-pressed="true"] { color:#1d5fc1; background:#edf4ff; border-color:#2a6fd6; font-weight:bold; }
+#obsSatellite button:disabled { cursor:default; opacity:.45; }
+#obsSatellite .sat-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:13px; }
+#obsSatellite h2 { margin:0; }
+#obsSatellite h2 span { font-size:13px; font-weight:normal; color:#657084; margin-left:8px; }
+#obsSatellite .sat-channels { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+#obsSatellite .sat-options { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+#obsSatellite .sat-options label { display:flex; align-items:center; gap:7px; font-size:12px; color:#586476; }
+#obsSatellite select { font-family:inherit; font-size:13px; padding:6px 8px; }
+#obsSatellite .sat-stamp { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; padding:8px; font-size:13px; font-variant-numeric:tabular-nums; }
+#obsSatellite #satelliteAge { font-size:12px; color:#627084; }
+#obsSatellite #satelliteAge.stale { color:#9a5400; }
+#obsSatellite .sat-viewport { position:relative; max-width:900px; min-height:200px; margin:0 auto; border-radius:8px; background:#f1f4f8; overflow:hidden; }
+#obsSatellite .sat-viewport img { display:block; width:100%; height:auto; margin:auto; }
+#obsSatellite .sat-empty { display:flex; justify-content:center; align-items:center; min-height:320px; padding:30px; text-align:center; color:#586476; font-size:14px; line-height:1.6; }
+#obsSatellite .sat-status { min-height:28px; margin:8px auto 3px; max-width:900px; color:#526176; font-size:13px; }
+#obsSatellite .sat-status.error { color:#a13b2b; }
+#obsSatellite .sat-timeline { max-width:900px; margin:0 auto; }
+#obsSatellite .sat-slider-label { display:flex; justify-content:space-between; gap:10px; color:#586476; font-size:12px; }
+#obsSatellite input[type="range"] { display:block; width:100%; height:30px; margin:0; accent-color:#2a6fd6; }
+#obsSatellite .sat-ticks { display:flex; justify-content:space-between; gap:8px; color:#586476; font-size:12px; font-variant-numeric:tabular-nums; }
+#obsSatellite .sat-transport { display:flex; gap:8px; flex-wrap:wrap; margin-top:13px; }
+#obsSatellite #satellitePlay { background:#2a6fd6; border-color:#2a6fd6; color:#fff; min-width:90px; }
+#obsSatellite #satelliteLatest { margin-left:auto; }
+#obsSatellite .sat-note { max-width:900px; margin:12px auto 0; color:#697485; font-size:12px; line-height:1.6; }
+#obsSatellite .sat-note a { color:#3868a5; }
+@media(max-width:520px) {
+ #obsSatellite .sat-options { gap:8px 12px; }
+ #obsSatellite .sat-channels button { padding:8px 9px; font-size:12px; }
+ #obsSatellite .sat-stamp { justify-content:flex-start; padding:5px 0 8px; }
+ #obsSatellite .sat-empty { min-height:230px; }
+ #obsSatellite .sat-ticks { font-size:11px; }
+}
+@media(pointer:coarse) {
+ .obs-sections button, #obsSatellite button, #obsSatellite select { min-height:44px; }
+ #obsSatellite select { font-size:16px; }
+}
