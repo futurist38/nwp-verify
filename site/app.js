@@ -1,4 +1,4 @@
-/* NWP 모델 아카이브 뷰어 — 정적, 프레임워크 없음.
+/* 기상정보 분석 플랫폼 — 정적, 프레임워크 없음.
    manifest.json 이 유일한 진입점. 이미지는 현재 스텝 ±1만 프리로드(셀룰러 절약).
    2026-09-06 확장: 일사·강수 패널, 런 겹치기 띠·앙상블 폭·하늘 띠(Meteogram), 예보-관측 하늘 띠·오차 면,
    관측 전운량·평년편차, 중기예보 섹션, 일사 검증, 자동 재생·갱신 배지·야간 음영. */
@@ -74,7 +74,8 @@ document.addEventListener("keydown", (ev) => {
   const tag = (ev.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "select" || tag === "textarea") return;
   const sec = document.querySelector(".tab.on");
-  const pair = sec && ARROW_BTN[sec.id];
+  const pair = sec && sec.id === "tab-obs" && $("obsSatellite") && !$("obsSatellite").hidden
+    ? ["satellitePrev", "satelliteNext"] : sec && ARROW_BTN[sec.id];
   if (!pair) return;
   const btn = $(pair[ev.key === "ArrowLeft" ? 0 : 1]);
   if (btn) { btn.click(); ev.preventDefault(); }
@@ -93,7 +94,7 @@ function makePlayer(btnId, next, atEnd, rewind, ms = 700) {
     timer = setInterval(() => { if (atEnd()) rewind(); else next(); }, ms);
   };
   // 탭을 떠나면 멈춘다
-  document.querySelectorAll("#tabs button").forEach((t) => t.addEventListener("click", () => { if (timer) stop(); }));
+  document.querySelectorAll("#tabs button, #obsSections button").forEach((t) => t.addEventListener("click", () => { if (timer) stop(); }));
 }
 
 // ── 하늘 상태 색 문법 (Meteogram 띠 · 예보-관측 띠 · 관측 전운량 공통) ──
