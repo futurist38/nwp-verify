@@ -1,16 +1,17 @@
 """Readable cloud-layer colours; this is a visual composite, not total cloud cover."""
 import numpy as np
 
-# Preserve the established brown / magenta / cyan layer identities.
-LAYER_COLORS = np.array([[0.75, 0.53, 0.33],
-                         [0.71, 0.36, 0.65],
-                         [0.24, 0.61, 0.67]])
+# Vivid orange-brown / magenta / cyan, retaining weighted mixing so overlaps
+# cannot accumulate subtractive darkness. Percentage bars use this same mapping.
+LAYER_COLORS = np.array([[0.88, 0.48, 0.06],
+                         [0.84, 0.10, 0.67],
+                         [0.00, 0.57, 0.76]])
 MISSING_COLOR = np.array([0.90, 0.90, 0.90])
 LEGEND_LAYERS = [
-    ("맑음", (0, 0, 0)), ("저층", (100, 0, 0)),
+    ("맑음", (0, 0, 0)), ("하층", (100, 0, 0)),
     ("중층", (0, 100, 0)), ("상층", (0, 0, 100)),
-    ("저+중", (100, 100, 0)), ("저+상", (100, 0, 100)),
-    ("중+상", (0, 100, 100)), ("저+중+상", (100, 100, 100)),
+    ("하층+중층", (100, 100, 0)), ("하층+상층", (100, 0, 100)),
+    ("중층+상층", (0, 100, 100)), ("하층+중층+상층", (100, 100, 100)),
 ]
 
 
@@ -27,6 +28,6 @@ def cloud_composite(lcc, mcc, hcc):
     total = cover.sum(axis=-1, keepdims=True)
     weights = np.divide(cover, total, out=np.zeros_like(cover), where=total > 0)
     mixed = weights @ LAYER_COLORS
-    strength = 0.8 * cover.max(axis=-1, keepdims=True)
+    strength = 0.96 * cover.max(axis=-1, keepdims=True)
     rgb = 1 - strength * (1 - mixed)
     return np.where(valid[..., None], rgb, MISSING_COLOR)

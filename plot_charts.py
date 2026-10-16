@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 ECMWF/GFS GRIB 판독 및 표출
-- 지도: 2m 기온, 전운량, (GFS/KIM) 저·중·상층 운량 밝은 혼합
+- 지도: 2m 기온, 전운량, (GFS/KIM) 하·중·상층 운량 밝은 혼합
 - 지점: 도시별 시계열 CSV + 대표지점 ECMWF vs GFS 미티오그램
 
-3층운량: 저층=갈색, 중층=자홍, 상층=청록. 운량 가중 평균색으로 혼합.
+3층운량: 하층=주황갈색, 중층=자홍, 상층=청록. 운량 가중 평균색으로 혼합.
   무운=흰색. 겹침으로 검게 포화되지 않으며 농도는 가장 많은 층의 운량.
   전운량 추정이 아닌 층 구성의 시각적 요약이다.
 
@@ -440,7 +440,7 @@ def plot_maps(model_name, data, out_dir, panels=None):
                               extent=[LON_MIN, LON_MAX, LAT_MIN, LAT_MAX], **kw)
                     # Each layer has its own percentage bar; there is no scalar
                     # colourbar for a three-variable composite / total cloud cover.
-                    for i, name in enumerate(("저층", "중층", "상층")):
+                    for i, name in enumerate(("하층", "중층", "상층")):
                         bar = fig.add_axes([0.09 + i * 0.30, 0.145, 0.23, 0.018])
                         values = [np.zeros(101) for _ in range(3)]
                         values[i] = np.arange(101)

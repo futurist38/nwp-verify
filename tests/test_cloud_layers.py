@@ -9,9 +9,11 @@ class CloudLayersTest(unittest.TestCase):
         rgb = cloud_composite(low, mid, high)
         brightness = rgb @ np.array([0.2126, 0.7152, 0.0722])
         self.assertTrue(np.all((rgb >= 0) & (rgb <= 1)))
-        self.assertGreater(brightness.min(), 0.55)
+        # Saturated magenta is darker than the earlier pastel palette; even its
+        # darkest valid pixel remains far above the old black clipping floor.
+        self.assertGreater(brightness.min(), 0.30)
         np.testing.assert_array_equal(rgb[0, 0, 0], [1, 1, 1])
-        self.assertGreater(brightness[-1, -1, -1], 0.58)
+        self.assertGreater(brightness[-1, -1, -1], 0.44)
 
     def test_missing_is_not_clear_and_broadcasts(self):
         rgb = cloud_composite(np.array([0, np.nan, np.inf, 100]), 0, 0)
