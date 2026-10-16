@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 ECMWF/GFS GRIB 판독 및 표출
-- 지도: 2m 기온, 전운량, (GFS) 저·중·상층 운량 HSL 합성
+- 지도: 2m 기온, 전운량, (GFS/KIM) 저·중·상층 운량 밝은 혼합
 - 지점: 도시별 시계열 CSV + 대표지점 ECMWF vs GFS 미티오그램
 
-HSL 합성은 ECMWF Newsletter No.101 방식의 근사 구현:
-  저층=갈색, 중층=자홍, 상층=청록. 각 층 색을 운량 비율만큼 감법 혼합.
-  무운=흰색, 전층 완전 운량=어두운 회청색.
+3층운량: 저층=갈색, 중층=자홍, 상층=청록. 운량 가중 평균색으로 혼합.
+  무운=흰색. 겹침으로 검게 포화되지 않으며 농도는 가장 많은 층의 운량.
+  전운량 추정이 아닌 층 구성의 시각적 요약이다.
 
 사용:
     python plot_charts.py --ecmwf data/ecmwf_....grib2 --gfs data/gfs_....grib2
@@ -28,6 +28,8 @@ import sslfix  # noqa: F401  (cartopy Natural Earth 다운로드도 AVG TLS 검�
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from cloud_layers import cloud_composite, LEGEND_LAYERS
 
 from config import (CITIES, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX,
                     map_steps, KST_OFFSET_H, OUT_DIR, DATA_DIR, VERIF_DIR)
@@ -353,22 +355,11 @@ def _sel_step(da, step_h):
 
 
 def hsl_composite(lcc, mcc, hcc):
-    """저·중·상층 운량(%) → RGB. ECMWF Newsletter 101 방식 근사(감법 혼합)."""
-    c_low = np.clip(np.nan_to_num(lcc) / 100.0, 0, 1)
-    c_mid = np.clip(np.nan_to_num(mcc) / 100.0, 0, 1)
-    c_high = np.clip(np.nan_to_num(hcc) / 100.0, 0, 1)
-    base = {  # 각 층의 기준색
-        "low": np.array([0.55, 0.36, 0.18]),   # 갈색
-        "mid": np.array([0.78, 0.16, 0.50]),   # 자홍
-        "high": np.array([0.10, 0.62, 0.68]),  # 청록
-    }
-    rgb = np.ones(c_low.shape + (3,))
-    for cov, col in [(c_low, base["low"]), (c_mid, base["mid"]), (c_high, base["high"])]:
-        rgb -= cov[..., None] * (1.0 - col)[None, None, :] * 0.85
-    return np.clip(rgb, 0.12, 1.0)
+    """Compatibility name for the readable weighted-colour composite."""
+    return cloud_composite(lcc, mcc, hcc)
 
 
-def plot_maps(model_name, data, out_dir):
+def plot_maps(model_name, data, out_dir, panels=None):
     """패널별 개별 PNG 저장 (2026-08-20 개편).
     3패널 가로 합본(18인치 폭)은 셀룰러 태블릿에서 판독 불가(브리프 ③) →
     변수별 1장씩 저장하고 웹 뷰어가 탭·슬라이더로 조합한다.
@@ -381,17 +372,21 @@ def plot_maps(model_name, data, out_dir):
 
     def _save(step_h, panel, draw):
         nonlocal n_saved
+        if panels is not None and panel not in panels:
+            return
         # 그림 크기를 지도 종횡비(경도15°×위도13°)+콜로바에 맞춰 여백 최소화.
         # 주의: bbox_inches="tight"는 gridliner(경위선 라벨)와 충돌해 지도가 잘려나감
         # (2026-08-20 실측: 105px 폭 PNG). tight_layout도 금지(GEOSException) — 수동 여백만.
-        fig = plt.figure(figsize=(7.4, 5.9))
+        fig = plt.figure(figsize=(7.4, 7.0 if panel == "cloud3" else 5.9))
         # 전운량은 위성영상풍(어두운 배경) — 해안·행정경계는 청록(노랑=등치선과 구분)
         ax = _make_ax(fig, (1, 1, 1), line_color="yellow" if panel == "tcc" else "black")
         draw(fig, ax)
         vkst = _valid_kst(run, step_h)
         ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
                      f"유효 {vkst:%m-%d %H}KST", fontsize=11)
-        fig.subplots_adjust(top=0.92, bottom=0.08, left=0.07, right=0.97)
+        fig.subplots_adjust(top=0.93 if panel == "cloud3" else 0.92,
+                            bottom=0.25 if panel == "cloud3" else 0.08,
+                            left=0.07, right=0.97)
         fname = os.path.join(
             out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}_{panel}.png")
         fig.savefig(fname, dpi=100)
@@ -443,9 +438,31 @@ def plot_maps(model_name, data, out_dir):
                     kw = {"transform": ccrs.PlateCarree()} if HAS_CARTOPY else {}
                     ax.imshow(_rgb, origin=_or,
                               extent=[LON_MIN, LON_MAX, LAT_MIN, LAT_MAX], **kw)
-                    ax.text(0.01, 0.01, "저:갈색 중:자홍 상:청록", transform=ax.transAxes,
-                            fontsize=8, va="bottom",
-                            bbox=dict(fc="white", alpha=0.7, ec="none"))
+                    # Each layer has its own percentage bar; there is no scalar
+                    # colourbar for a three-variable composite / total cloud cover.
+                    for i, name in enumerate(("저층", "중층", "상층")):
+                        bar = fig.add_axes([0.09 + i * 0.30, 0.145, 0.23, 0.018])
+                        values = [np.zeros(101) for _ in range(3)]
+                        values[i] = np.arange(101)
+                        bar.imshow(cloud_composite(*values)[None, ...],
+                                   extent=[0, 100, 0, 1], aspect="auto")
+                        bar.set_yticks([])
+                        bar.set_xticks([0, 50, 100], ["0", "50", "100%"])
+                        bar.tick_params(axis="x", labelsize=8, length=2, pad=2)
+                        bar.set_title(name + " 운량", fontsize=9, pad=4)
+                        for spine in bar.spines.values():
+                            spine.set_color("#aaa")
+                            spine.set_linewidth(0.5)
+                    handles = [Patch(facecolor=cloud_composite(*values),
+                                     edgecolor="#777", linewidth=0.4, label=label)
+                               for label, values in LEGEND_LAYERS]
+                    # Matplotlib fills columns first: reorder so each row reads left to right.
+                    order = [0, 4, 1, 5, 2, 6, 3, 7]
+                    fig.legend(handles=[handles[i] for i in order], loc="lower center",
+                               bbox_to_anchor=(0.52, 0.018), ncol=4, fontsize=9,
+                               frameon=False, handlelength=1.5, columnspacing=1.6)
+                    fig.text(0.52, 0.090, "겹침색 예시: 각 층 100% · 색 농도는 가장 많은 층 기준 · 회색: 결측",
+                             ha="center", fontsize=8, color="#444")
                 _save(step_h, "cloud3", draw_c3)
 
         # 2026-09-06 추가 — 강수(3h mm) 지도. 일사 지도는 사용자 결정으로 제외(3h 평균이라 볼 시간대가 적음;
@@ -598,6 +615,8 @@ def main():
     p.add_argument("--ecmwf", default=None, help="ECMWF GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--gfs", default=None, help="GFS GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--kim", default=None, help="KIM 경로 — NC npz 또는 GRIB (생략 시 data/ 최신 npz→grib2)")
+    p.add_argument("--cloud3-only", action="store_true",
+                   help="3층운량 지도만 다시 생성 (도시 CSV·미티오그램은 갱신하지 않음)")
     args = p.parse_args()
 
     def latest_kim():
@@ -630,18 +649,27 @@ def main():
     if ec_path:
         print(f"[판독] ECMWF: {ec_path}")
         ec = load_ecmwf(ec_path)
-        plot_maps("ECMWF", ec, os.path.join(out_dir, "maps_ecmwf"))
-        frames.append(city_series("ECMWF", ec))
+        plot_maps("ECMWF", ec, os.path.join(out_dir, "maps_ecmwf"),
+                  panels={"cloud3"} if args.cloud3_only else None)
+        if not args.cloud3_only:
+            frames.append(city_series("ECMWF", ec))
     if gfs_path:
         print(f"[판독] GFS: {gfs_path}")
         gf = load_gfs(gfs_path)
-        plot_maps("GFS", gf, os.path.join(out_dir, "maps_gfs"))
-        frames.append(city_series("GFS", gf))
+        plot_maps("GFS", gf, os.path.join(out_dir, "maps_gfs"),
+                  panels={"cloud3"} if args.cloud3_only else None)
+        if not args.cloud3_only:
+            frames.append(city_series("GFS", gf))
     if kim_path:
         print(f"[판독] KIM: {kim_path}")
         km = load_kim(kim_path)
-        plot_maps("KIM", km, os.path.join(out_dir, "maps_kim"))
-        frames.append(city_series("KIM", km))
+        plot_maps("KIM", km, os.path.join(out_dir, "maps_kim"),
+                  panels={"cloud3"} if args.cloud3_only else None)
+        if not args.cloud3_only:
+            frames.append(city_series("KIM", km))
+
+    if args.cloud3_only:
+        return
 
     df = pd.concat(frames, ignore_index=True)
     csv_path = os.path.join(out_dir, "city_forecast.csv")
