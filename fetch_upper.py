@@ -21,9 +21,9 @@ import time
 import requests
 
 import sslfix  # noqa: F401
-from config import DATA_DIR
+from config import DATA_DIR, ACTIVE_UPPER_LEVELS
 
-LEVELS = [925, 850, 700, 500, 300, 200]
+LEVELS = list(ACTIVE_UPPER_LEVELS)
 STEPS = list(range(0, 121, 6))               # 상층(925~200) 6h, +120h — 사용자: 현행 유지
 SFC_END = {"ECMWF": 240, "GFS": 384}          # 지상장은 모델 한계까지: 120h 이후 12h(00/12UTC 유효) 2026-09-08
 
@@ -40,9 +40,9 @@ def fetch_ecmwf(source: str, workers: int = 21, run: str | None = None) -> list[
     import datetime as dt
     from ecmwf.opendata import Client
     c = Client(source=source, model="ifs", resol="0p25")
-    req_low = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [925, 850, 700],
+    req_low = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [L for L in LEVELS if L >= 700],
                "param": ["gh", "t", "u", "v", "r"], "step": STEPS}
-    req_high = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [500, 300, 200],
+    req_high = {"type": "fc", "stream": "oper", "levtype": "pl", "levelist": [L for L in LEVELS if L <= 500],
                 "param": ["gh", "u", "v"], "step": STEPS}
     if run:
         latest = dt.datetime.strptime(run, "%Y%m%d%H")

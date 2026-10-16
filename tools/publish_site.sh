@@ -48,6 +48,24 @@ for i in 1 2 3 4 5 6; do
     done
     rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
       || { echo "::warning::[publish] R2 목록 조회 실패 — 이번 manifest 는 러너 산출만 반영"; : > .r2_listing; }
+    # User-requested retirement: exact dated map keys only, selected from the
+    # current listing. Preserve other levels, JSON data and all renderer code.
+    python - <<'PY'
+from build_site import is_disabled_upper_key
+with open('.r2_listing', encoding='utf-8') as source, open('.r2_disabled', 'w', encoding='utf-8') as output:
+    for line in source:
+        key = line.strip()
+        if is_disabled_upper_key(key):
+            output.write(key + '\n')
+PY
+    if [ -s .r2_disabled ]; then
+      echo "[publish] R2 retired upper maps: $(wc -l < .r2_disabled) files; size before deletion:"
+      rclone size "r2:${R2_BUCKET}/archive" --files-from-raw .r2_disabled --json \
+        || echo "::warning::[publish] retired map size unavailable"
+      rclone delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_disabled -q \
+        && echo "[publish] R2 retired upper maps deleted" \
+        || echo "::warning::[publish] R2 retired upper cleanup failed — hidden locally, retry on next publish"
+    fi
     export R2_LISTING="$(pwd)/.r2_listing" IMG_BASE="${R2_PUBLIC_URL:-}"
     echo "[publish] R2 목록 $(wc -l < .r2_listing)개, 접두어 ${IMG_BASE:-없음}"
   fi
@@ -74,6 +92,8 @@ for i in 1 2 3 4 5 6; do
         fi
       done
       {
+        # Never restore a retired map even if remote deletion failed.
+        python -c 'from config import DISABLED_UPPER_LEVELS; [print(f"- *_f???_p{level}.{ext}") for level in sorted(DISABLED_UPPER_LEVELS) for ext in ("webp", "png")]'
         for n in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
           [[ "$n" =~ ^[0-9]{8}$ ]] && [ "$n" -ge "$CUT_LM" ] || continue
           if [ "$n" -lt "$CUT_LU" ]; then echo "- /$n/*_f???_p[0-9][0-9][0-9].webp"; fi

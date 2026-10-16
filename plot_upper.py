@@ -258,6 +258,8 @@ def _render_levels(model: str, fields: dict, lats, lons, run, out_dir: str) -> i
         print(f"[UPPER] {model} 도시값 저장 실패: {e}")
     n = 0
     for L, vs in PL_VARS.items():
+        if L not in LEVELS:
+            continue
         gh = fields.get(("gh", "isobaricInhPa", L), {})
         for step in sorted(gh):
             fl = {}
@@ -289,7 +291,7 @@ def _render_sfc(model: str, fields: dict, msl_key, lats, lons, run, out_dir: str
 
 
 def render_ecmwf(paths: list[str], sfc_path: str, out_dir: str) -> int:
-    want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
+    want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() if L in LEVELS for v in vs}
     merged, lats, lons, run = {}, None, None, None
     for p in paths:
         f, la, lo, r = read_fields(p, want)
@@ -302,7 +304,7 @@ def render_ecmwf(paths: list[str], sfc_path: str, out_dir: str) -> int:
 
 
 def render_gfs(path: str, out_dir: str) -> int:
-    want = ({(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
+    want = ({(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() if L in LEVELS for v in vs}
             | {("prmsl", "meanSea", 0), ("2t", "heightAboveGround", 2)})
     f, lats, lons, run = read_fields(path, want)
     if not f:
@@ -328,6 +330,8 @@ def read_fields_npz(path: str) -> tuple[dict, np.ndarray, np.ndarray, dt.datetim
             key, sts = _NC_SFC[name], sfc_steps
         elif "_" in name and name.split("_")[0] in _NC_PL and name.split("_")[1].isdigit():
             v, L = name.split("_")
+            if int(L) not in LEVELS:
+                continue
             key, sts = (_NC_PL[v], "isobaricInhPa", int(L)), steps
         else:
             continue
@@ -351,7 +355,7 @@ def render_kim(path: str | None, out_dir: str, pres_path: str | None = None) -> 
                 ns = _render_sfc("KIM", g, ("prmsl", "meanSea", 0), la, lo, r, out_dir)
                 n += ns; sfc_done = ns > 0        # 실제로 한 장이라도 그렸을 때만 — 빈 사전이면 GRIB 대체를 막지 않는다
         else:
-            want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() for v in vs}
+            want = {(v, "isobaricInhPa", L) for L, vs in PL_VARS.items() if L in LEVELS for v in vs}
             g, la, lo, r = read_fields(pres_path, want)
         if g:
             n += _render_levels("KIM", g, la, lo, r, out_dir)

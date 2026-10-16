@@ -461,7 +461,7 @@ def plot_maps(model_name, data, out_dir, panels=None):
                     fig.legend(handles=[handles[i] for i in order], loc="lower center",
                                bbox_to_anchor=(0.52, 0.018), ncol=4, fontsize=9,
                                frameon=False, handlelength=1.5, columnspacing=1.6)
-                    fig.text(0.52, 0.090, "겹침색 예시: 각 층 100% · 색 농도는 가장 많은 층 기준 · 회색: 결측",
+                    fig.text(0.52, 0.090, "범례: 각 층 100% · 3층 겹침은 초록 강조 · 농도는 최대 운량 · 회색: 결측",
                              ha="center", fontsize=8, color="#444")
                 _save(step_h, "cloud3", draw_c3)
 

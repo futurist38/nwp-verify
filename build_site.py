@@ -24,7 +24,7 @@ import shutil
 
 import pandas as pd
 
-from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN
+from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN, DISABLED_UPPER_LEVELS
 
 KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
@@ -50,6 +50,35 @@ SITE_SRC = os.path.join(BASE_DIR, "site")
 
 PNG_RE = re.compile(r"^(?P<model>[a-z]+)_(?P<run>\d{10})_f(?P<step>\d{3})_(?P<panel>\w+)\.webp$")
 OBS_RE = re.compile(r"^obs_(?P<var>\w+)_(?P<hour>\d{2})\.webp$")
+UPPER_IMAGE_RE = re.compile(r"^[a-z]+_\d{10}_f\d{3}_p(?P<level>\d+)\.(?:webp|png)$")
+
+
+def is_disabled_upper_image(name: str) -> bool:
+    match = UPPER_IMAGE_RE.fullmatch(name)
+    return bool(match and int(match["level"]) in DISABLED_UPPER_LEVELS)
+
+
+def is_disabled_upper_key(key: str) -> bool:
+    """Only archive-relative, dated image keys are eligible for deletion."""
+    parts = key.split("/")
+    return (len(parts) == 2 and bool(re.fullmatch(r"\d{8}", parts[0]))
+            and is_disabled_upper_image(parts[1]))
+
+
+def prune_disabled_upper(site_dir: str):
+    """Delete only retired pressure-level map images, including hourly publishes."""
+    count = size = 0
+    for folder in glob.glob(os.path.join(site_dir, "archive", "????????")):
+        if not os.path.isdir(folder) or not os.path.basename(folder).isdigit():
+            continue
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if is_disabled_upper_image(name) and os.path.isfile(path):
+                size += os.path.getsize(path)
+                os.remove(path)
+                count += 1
+    if count:
+        print(f"[site] retired upper maps removed: {count} files, {size} bytes")
 
 
 def copy_outputs(site_dir: str):
@@ -65,6 +94,8 @@ def copy_outputs(site_dir: str):
         os.makedirs(dst, exist_ok=True)
         for sub in ("maps_ecmwf", "maps_gfs", "maps_kim", "kmafcst", "fcstdiff", "satsw", "upper"):
             for png in glob.glob(os.path.join(day_dir, sub, "*.png")) + glob.glob(os.path.join(day_dir, sub, "city_upper_*.json")):
+                if is_disabled_upper_image(os.path.basename(png)):
+                    continue
                 # 무조건 복사 — site-data 복원본은 checkout 시각이 mtime으로 찍혀
                 # "더 새것만 복사" 비교가 항상 지는 함정이 있다 (2026-08-20 실측:
                 # 같은 파일명의 개선판 이미지가 배포에서 누락됨)
@@ -660,6 +691,8 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
     for ymd in sorted(files):
         entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
         for fn in sorted(files[ymd]):
+            if is_disabled_upper_image(fn):
+                continue  # Also suppress retired levels from a stale/failed R2 listing.
             mo = OBS_RE.match(fn)
             if mo:
                 entry["obs"].setdefault(mo["var"], []).append(int(mo["hour"]))
@@ -778,6 +811,7 @@ def main():
     except Exception as e:
         print(f"[site] 브리핑 묶음 실패(계속): {e}")
     prune_kmafcst(args.site_dir)
+    prune_disabled_upper(args.site_dir)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에
     build_manifest(args.site_dir, nc)
     print(f"[site] 완료: {args.site_dir}")

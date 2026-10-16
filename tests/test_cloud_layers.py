@@ -29,6 +29,20 @@ class CloudLayersTest(unittest.TestCase):
         np.testing.assert_allclose(cloud_composite(200, -10, 0),
                                    cloud_composite(100, 0, 0))
 
+    def test_three_layers_are_green_and_distinct_from_two_layers(self):
+        triple = cloud_composite(100, 100, 100)
+        middle_high = cloud_composite(0, 100, 100)
+        lower_high = cloud_composite(100, 0, 100)
+        self.assertGreater(triple[1] - max(triple[0], triple[2]), 0.40)
+        self.assertGreater(middle_high[2] - middle_high[1], 0.30)
+        self.assertGreater(np.linalg.norm(triple - middle_high), 0.60)
+        self.assertGreater(np.linalg.norm(triple - lower_high), 0.35)
+        # A tiny third fraction must not cause a categorical colour jump.
+        np.testing.assert_allclose(cloud_composite(0.01, 100, 100),
+                                   middle_high, atol=0.001)
+        # Existing two-layer colours remain unchanged.
+        np.testing.assert_allclose(middle_high, [0.4432, 0.3616, 0.7264])
+
 
 if __name__ == "__main__":
     unittest.main()

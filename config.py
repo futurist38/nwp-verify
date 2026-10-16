@@ -8,6 +8,13 @@
 LON_MIN, LON_MAX = 120.0, 135.0
 LAT_MIN, LAT_MAX = 31.0, 44.0
 
+# 2026-10-16: 200 hPa is retired from collection/publication; retain all drawing
+# definitions so clearing this set restores support without rebuilding the renderer.
+SUPPORTED_UPPER_LEVELS = (925, 850, 700, 500, 300, 200)
+DISABLED_UPPER_LEVELS = frozenset({200})
+ACTIVE_UPPER_LEVELS = tuple(level for level in SUPPORTED_UPPER_LEVELS
+                            if level not in DISABLED_UPPER_LEVELS)
+
 # ── 지점 목록 ─────────────────────────────────────────────
 # (이름, 위도, 경도, 대표지점 여부)
 # 대표지점 5개: 브리핑 5-2 기온→총수요 판단용

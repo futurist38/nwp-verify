@@ -21,12 +21,12 @@ import eccodes
 import requests
 
 import sslfix  # noqa: F401
-from config import DATA_DIR
+from config import DATA_DIR, ACTIVE_UPPER_LEVELS
 from fetch_kim import API, NWP, _auth_key, find_latest_run
 
 STEPS = list(range(0, 73, 6))
 KEEP_VARS = {"gh", "t", "u", "v", "r"}
-KEEP_LEVELS = {925, 850, 700, 500, 300, 200}
+KEEP_LEVELS = set(ACTIVE_UPPER_LEVELS)
 LAST_NEEDED_INDEX = 167          # v 50hPa — 그 뒤(unknown 24개)는 필요 없어 끊는다
 
 

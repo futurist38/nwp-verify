@@ -42,7 +42,7 @@ import numpy as np
 import requests
 
 import sslfix  # noqa: F401
-from config import KIM_STEPS, KIM_FAR_END, DATA_DIR, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX, model_steps
+from config import KIM_STEPS, KIM_FAR_END, DATA_DIR, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX, model_steps, ACTIVE_UPPER_LEVELS
 
 API = "https://apihub-pub.kma.go.kr/api/typ01/cgi-bin/url/nph-kim_nc_xy_txt2"
 NWP = "NE57"
@@ -56,6 +56,8 @@ DSWRF_MAX_STEP = 120          # 매시 자료로 3h 평균을 만들 수 있는 
 UPPER_STEPS = list(range(0, 73, 6))
 UPPER_VARS = {925: ("hgt", "T", "u", "v"), 850: ("hgt", "T", "u", "v"), 700: ("hgt", "rh", "u", "v"),
               500: ("hgt", "u", "v"), 300: ("hgt", "u", "v"), 200: ("hgt", "u", "v")}   # plot_upper.PL_VARS 와 동일
+UPPER_VARS = {level: fields for level, fields in UPPER_VARS.items()
+              if level in ACTIVE_UPPER_LEVELS}
 UPPER_LON_MIN, UPPER_LON_MAX, UPPER_LAT_MIN, UPPER_LAT_MAX = 100.0, 150.0, 20.0, 55.0    # fetch_upper 와 동일
 UPPER_DECIMATE = 3            # 1/12° → 1/4°
 RUN_FILE = os.path.join(DATA_DIR, "kim_nc_run.txt")
