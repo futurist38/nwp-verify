@@ -79,6 +79,14 @@ py -3.13 -m venv .venv          # 3.14는 eccodes 휠 미제공 (실측 확정 �
 이 PC의 AVG Mail Shield는 SMTP를 별도 'Untrusted Root'로 가로채므로, AVG 가로채기가
 확인된 경우에 한해 로컬 AV 구간을 비검증으로 연결한다 (send_summary.py `_smtp_connect` 참조).
 
+### Meteogram 탭 제거 및 백업 (2026-10-21)
+
+Meteogram 메뉴·화면·전용 JavaScript/CSS를 제거했습니다. 기존 표출 방식과 설정은
+[`backup/meteogram-20261021`](https://github.com/futurist38/nwp-verify/tree/backup/meteogram-20261021)
+브랜치에 보존했습니다. [백업 범위·복구 절차](docs/meteogram-backup-20261021.md)를 참고하세요.
+`meteo/*.json`과 `export_meteo()`는 ‘오늘’ 요약에서도 사용하는 공통 예측자료이므로 유지합니다.
+모델 일사량 수집·도시별 CSV·검증도 유지합니다. 아래 표는 2026-09-06 당시 기능 기록입니다.
+
 ### 표출 확장 (2026-09-06)
 
 | 탭 | 추가된 것 | 자료·스크립트 |

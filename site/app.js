@@ -1,6 +1,7 @@
 /* 기상정보 분석 플랫폼 — 정적, 프레임워크 없음.
    manifest.json 이 유일한 진입점. 이미지는 현재 스텝 ±1만 프리로드(셀룰러 절약).
-   2026-09-06 확장: 일사·강수 패널, 런 겹치기 띠·앙상블 폭·하늘 띠(Meteogram), 예보-관측 하늘 띠·오차 면,
+   2026-10-21: Meteogram 탭 제거. 표출 코드·설정은 backup/meteogram-20261021 브랜치에 보존.
+   예보-관측 하늘 띠·오차 면,
    관측 전운량·평년편차, 중기예보 섹션, 일사 검증, 자동 재생·갱신 배지·야간 음영. */
 "use strict";
 
@@ -97,7 +98,7 @@ function makePlayer(btnId, next, atEnd, rewind, ms = 700) {
   document.querySelectorAll("#tabs button, #obsSections button").forEach((t) => t.addEventListener("click", () => { if (timer) stop(); }));
 }
 
-// ── 하늘 상태 색 문법 (Meteogram 띠 · 예보-관측 띠 · 관측 전운량 공통) ──
+// ── 하늘 상태 색 문법 (오늘 요약 · 예보-관측 띠 · 관측 전운량 공통) ──
 // 1 맑음(흰) · 2 구름많음(연회) · 3 흐림(진회) · 4 강수(하늘색). 기상청 구분(운량 0~5 / 6~8 / 9~10)에 맞춤.
 const SKY_COLOR = { 1: "#ffffff", 2: "#c8c8c8", 3: "#7d7d7d", 4: "#8ec9ff" };
 // 그래프 배경용(선 뒤에 깔리므로 옅게). 맑음은 칠하지 않는다(흰 배경 그대로).
@@ -604,108 +605,6 @@ async function renderMid() {
   });
 }
 
-// ── 미티오그램 ──
-const METEO_UNIT = { t2m: "℃", tcc: "%", dswrf: "W/m²", tp: "mm" };
-const METEO_ND = { t2m: 1, tcc: 0, dswrf: 0, tp: 1 };
-const STRIP_ORDER = ["ECMWF", "KIM", "GFS"];   // 위 → 아래 (사용자 지정)
-let METEO = { date: null, data: null, v: "t2m", prevMode: "band", strips: true };   // 앙상블은 보류(2026-09-06 사용자)
-
-function renderMeteoCharts() {
-  const d = METEO.data, v = METEO.v;
-  if (!d) { $("meteoCharts").innerHTML = ""; return; }
-  const t0ms = keyToMs(d.t0), i1 = d.steps - 1;
-  const hasPrev = d.prev && Object.keys(d.prev).length;
-  $("prevModeBtn").hidden = !hasPrev;
-  let lo = Infinity, hi = -Infinity;
-  const bump = (x) => { if (x != null) { lo = Math.min(lo, x); hi = Math.max(hi, x); } };
-  d.models.forEach((m) => d.cities.forEach((c) => (d.series[m][c][v] || []).forEach(bump)));
-  if (hasPrev && METEO.prevMode !== "off" && (v === "t2m" || v === "tcc")) {
-    Object.values(d.prev).forEach((runs) => Object.values(runs).forEach((cs) =>
-      d.cities.forEach((c) => (cs[c] && cs[c][v] || []).forEach(bump))));
-  }
-  if (!isFinite(lo)) { $("meteoCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
-  if (v === "tcc") { lo = 0; hi = 100; }
-  if (v === "dswrf") { lo = 0; hi = Math.max(200, Math.ceil(hi / 100) * 100); }
-  if (v === "tp") { lo = 0; hi = Math.max(2, Math.ceil(hi)); }
-  const pad = (v === "tcc" || v === "dswrf" || v === "tp") ? 0 : Math.max(1, (hi - lo) * 0.12);
-
-  $("meteoCharts").innerHTML = d.cities.map((c) => {
-    const series = [], bands = [], strips = [];
-    d.models.forEach((m) => {
-      const col = MODEL_COLOR[m] || "#666";
-      const runs = hasPrev && d.prev[m] ? Object.keys(d.prev[m]).sort() : [];
-      if (METEO.prevMode !== "off" && runs.length && (v === "t2m" || v === "tcc")) {
-        if (METEO.prevMode === "band") {
-          const lo_ = [], hi_ = [];
-          for (let i = 0; i <= i1; i++) {
-            const vals = runs.map((r) => d.prev[m][r][c] && d.prev[m][r][c][v] && d.prev[m][r][c][v][i])
-                             .concat([d.series[m][c][v] && d.series[m][c][v][i]]).filter((x) => x != null);
-            lo_.push(vals.length >= 2 ? Math.min(...vals) : null);
-            hi_.push(vals.length >= 2 ? Math.max(...vals) : null);
-          }
-          bands.push({ lo: lo_, hi: hi_, color: col, opacity: 0.16 });
-        } else {
-          runs.slice().reverse().forEach((r, k) => {
-            series.push({ color: col, data: d.prev[m][r][c] && d.prev[m][r][c][v], width: 1,
-                          opacity: [0.55, 0.42, 0.3, 0.2][k] || 0.2, dash: "3 3", noDots: true });
-          });
-        }
-      }
-      series.push({ color: col, data: d.series[m][c][v], width: 2 });
-    });
-    if (METEO.strips) {
-      STRIP_ORDER.filter((m) => d.models.includes(m)).forEach((m) => {
-        const s = d.series[m][c], w = (d.wins && d.wins[m]) || [];
-        const cells = [];
-        for (let i = 0; i <= i1; i++) {
-          const cls = skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i]);
-          cells.push(cls ? SKY_BG[cls] : null);
-        }
-        // 6h 창(ECMWF 144h 이후)은 3h 격자 두 칸에 걸친다 — 앞 칸이 비면 같은 색으로 채운다
-        for (let i = 1; i <= i1; i++) {
-          if (w[i] === 6 && cells[i - 1] == null) {
-            const cls = skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i]);
-            if (cls) cells[i - 1] = SKY_BG[cls];
-          }
-        }
-        strips.push({ label: MODEL_SHORT[m], cells: cells, color: MODEL_COLOR[m] });
-      });
-    }
-    return drawPanel({ title: c, i0: 0, i1: i1, ylo: lo - pad, yhi: hi + pad, t0ms: t0ms, stepMs: 3 * 3600e3,
-                       w: 1160, h: 250, night: !METEO.strips, now: Date.now(), series: series, bands: bands,
-                       bgStrips: strips });
-  }).join("");
-
-  const runTxt = (r) => `${r.slice(4, 6)}-${r.slice(6, 8)} ${r.slice(8)}z`;
-  $("meteoLegend").innerHTML = d.models.map((m) => {
-    const prev = hasPrev && d.prev[m] ? Object.keys(d.prev[m]).sort() : [];
-    return `<span class="legend-chip" style="border-color:${MODEL_COLOR[m]}"><b style="color:${MODEL_COLOR[m]}">■ ${m}</b> 런 ${runTxt(d.runs[m])}`
-      + (prev.length && METEO.prevMode !== "off" ? `<span style="color:#888"> · 이전 ${prev.length}런 (${runTxt(prev[0])}~)</span>` : "") + `</span>`;
-  }).join("");
-
-  bindHover("meteoCharts", (city, i) => {
-    const rows = d.models.map((m) => {
-      const x = d.series[m][city][v] && d.series[m][city][v][i];
-      let s = x == null ? "—" : x.toFixed(METEO_ND[v]) + METEO_UNIT[v];
-      if (hasPrev && d.prev[m] && METEO.prevMode !== "off" && (v === "t2m" || v === "tcc")) {
-        const vals = Object.values(d.prev[m]).map((cs) => cs[city] && cs[city][v] && cs[city][v][i]).filter((y) => y != null);
-        if (vals.length) s += ` <span style="color:#888">(이전 런 ${Math.min(...vals).toFixed(METEO_ND[v])}~${Math.max(...vals).toFixed(METEO_ND[v])})</span>`;
-      }
-      return [m, s];
-    });
-    if (METEO.strips) {
-      const sk = STRIP_ORDER.filter((m) => d.models.includes(m)).map((m) => {
-        const s = d.series[m][city], w = (d.wins && d.wins[m]) || [];
-        const cls = skyFromModel(s.tcc && s.tcc[i], s.tp && s.tp[i], w[i]);
-        const tp = s.tp && s.tp[i];
-        return `${MODEL_SHORT[m]} ${SKY_NAME[cls] || "—"}${tp != null && tp >= 0.1 ? ` ${tp.toFixed(1)}mm` : ""}`;
-      });
-      rows.push(["하늘", sk.join(" · ")]);
-    }
-    return { when: fmtWhen(t0ms + i * 3 * 3600e3), rows: rows };
-  });
-}
-
 // ── 유틸 ──
 function fmtDate(ymd) {
   return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
@@ -1102,16 +1001,6 @@ document.querySelectorAll("#vmWinBtns button").forEach((b) => {
   };
 });
 
-// ── Meteogram 탭 ──
-async function renderMeteo() {
-  const d = $("dateSelM").value;
-  if (METEO.date !== d) {
-    METEO.data = await fetchJSON(`meteo/${d}.json?${Date.now()}`);
-    METEO.date = d;
-  }
-  renderMeteoCharts();
-}
-
 // ── 검증 탭: 일별 검증표 ──
 const CITY_ORDER = ["서울", "대전", "대구", "광주", "부산",
                     "인천", "수원", "전주", "강릉", "제주"];
@@ -1280,25 +1169,6 @@ function renderFresh() {
   state.date = dates[0];
 
   fillDateSel($("dateSel"), (ev) => { state.date = ev.target.value; renderModelBtns(); });
-  const mdates = (MF.meteo_dates || []).slice().reverse();
-  $("dateSelM").innerHTML = mdates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
-  $("dateSelM").onchange = renderMeteo;
-  $("meteoVarBtns").querySelectorAll("button").forEach((b) => {
-    b.onclick = () => {
-      METEO.v = b.dataset.v;
-      $("meteoVarBtns").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      renderMeteoCharts();
-    };
-  });
-  $("prevModeBtn").onclick = () => {
-    METEO.prevMode = { band: "lines", lines: "off", off: "band" }[METEO.prevMode];
-    $("prevModeBtn").textContent = "이전 런: " + { band: "띠", lines: "선", off: "끄기" }[METEO.prevMode];
-    $("prevModeBtn").classList.toggle("on", METEO.prevMode !== "off");
-    renderMeteoCharts();
-  };
-  $("prevModeBtn").classList.add("on");
-  $("stripBtn").onclick = () => { METEO.strips = !METEO.strips; $("stripBtn").classList.toggle("on", METEO.strips); renderMeteoCharts(); };
-
   const odates = (MF.obs_dates || []).slice().reverse();
   $("dateSelO").innerHTML = odates.map((d) => `<option value="${d}">${fmtDate(d)}</option>`).join("");
   const onObsDate = async () => {
@@ -1411,7 +1281,6 @@ function renderFresh() {
   $("dateSelV").onchange = renderVerifDaily;
 
   renderModelBtns();
-  renderMeteo();
   renderVerif();
   renderToday();
   if (vdates.length) renderVerifDaily();
