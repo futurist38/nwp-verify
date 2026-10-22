@@ -1,0 +1,40 @@
+{
+  "method_version": "ca-dsr-lookup-v1",
+  "issue_times": [
+    "202610190100",
+    "202610200100",
+    "202610210100"
+  ],
+  "model_sha256": "7660c9073f834a61bfa2737cbe3a0d0a13bd7ee77491186d4963fca6b6fb3de9",
+  "source_commit": "6dcfc6604542e3c43e2cdae2e15b1e3c01a6fa0a",
+  "fit": "issue-time only, 5-percentage-point CA bins, min_count=64",
+  "reference": "NOAA approximate geometric sun + Haurwitz; elevation >=15 deg",
+  "verification": "GK2A satellite DSR; NOT independent ground truth",
+  "timings": [
+    {
+      "issue_utc": "202610190100",
+      "fit_seconds": 0.010307815000004439,
+      "m4_seconds": 10.273236921999995,
+      "conversion_seconds": 0.10826252799995473,
+      "total_seconds": 51.715725572,
+      "missing_verification": []
+    },
+    {
+      "issue_utc": "202610200100",
+      "fit_seconds": 0.009280741000026183,
+      "m4_seconds": 10.048670060000006,
+      "conversion_seconds": 0.11865465700003597,
+      "total_seconds": 61.33146711799998,
+      "missing_verification": []
+    },
+    {
+      "issue_utc": "202610210100",
+      "fit_seconds": 0.009235555000032036,
+      "m4_seconds": 10.03115526199997,
+      "conversion_seconds": 0.11717851500003462,
+      "total_seconds": 69.66361855899999,
+      "missing_verification": []
+    }
+  ],
+  "failed": []
+}
