@@ -5,9 +5,9 @@
    관측 전운량·평년편차, 중기예보 섹션, 일사 검증, 자동 재생·갱신 배지·야간 음영. */
 "use strict";
 
-const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량", dswrf: "일사", tp: "강수",
+const PANEL_LABEL = { t2m: "기온", tcc: "전운량", cloud3: "3층운량", dswrf: "일사량", tp: "강수",
                       sfc: "지상", p925: "925", p850: "850", p700: "700", p500: "500", p300: "300", p200: "200" };
-const PANEL_ORDER = ["t2m", "tcc", "cloud3", "tp"];   // 일사(dswrf) 지도는 제외 — 2026-09-06 사용자 결정
+const PANEL_ORDER = ["t2m", "tcc", "cloud3", "dswrf", "tp"];
 // 고도별 기압장(2026-09-07): 동아시아 영역, 6h 간격 — 별도 그룹으로 표시
 const UPPER_ORDER = ["sfc", "p925", "p850", "p700", "p500", "p300", "p200"];
 const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
@@ -646,7 +646,10 @@ function runOf(m, panel) {
 }
 function runEntry(m) { const e = entry().models[m]; const r = runOf(m); return { run: r, ...e.runs[r] }; }
 function panelSteps(e, panel) {   // 패널이 있는 스텝만 (고도별은 6h 간격)
-  const ps = e.psteps && e.psteps[panel || state.panel];
+  const p = panel || state.panel;
+  const ps = e.psteps && e.psteps[p];
+  // 일사는 다른 변수의 스텝으로 대체하지 않는다. 없는 그림·f000·5일 이후를 요청하지 않음.
+  if (p === "dswrf") return (ps || []).filter((s) => s > 0 && s <= 120 && s % 3 === 0);
   return ps && ps.length ? ps : e.steps;
 }
 function cmpSteps() {
@@ -663,6 +666,14 @@ function validEpoch(run10, stepH) {
                   +run10.slice(8, 10)) + stepH * 3600e3;
 }
 function fmtRun(run10) { return `${run10.slice(4, 6)}-${run10.slice(6, 8)} ${run10.slice(8)}z`; }
+function solarPeriodLabel(epochUTC) {
+  const label = (t) => {
+    const d = new Date(t + 9 * 3600e3);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시`;
+  };
+  return `${label(epochUTC - 3 * 3600e3)}–${label(epochUTC)} KST · 3시간 평균`;
+}
 function relNow(epochUTC) {
   const dh = (epochUTC - Date.now()) / 3600e3;
   if (Math.abs(dh) < 0.75) return "지금";
@@ -729,7 +740,7 @@ function renderPanelBtns() {
     uppers = UPPER_ORDER.filter((p) => cnt[p] >= 2);
   } else {
     const have = allPanels(state.model);
-    panels = PANEL_ORDER.filter((p) => have.has(p));   // 목록에 없는 패널(옛 일사 등)은 숨긴다
+    panels = PANEL_ORDER.filter((p) => have.has(p));
     uppers = UPPER_ORDER.filter((p) => have.has(p));
   }
   const all = panels.concat(uppers);
@@ -743,6 +754,7 @@ function renderPanelBtns() {
     b.onclick = () => { state.panel = b.dataset.p; renderPanelBtns(); };
   });
   $("upperNote").hidden = !UPPER_ORDER.includes(state.panel);
+  $("solarNote").hidden = state.panel !== "dswrf";
   const epochs = compare ? cmpSteps()
     : panelSteps(runEntry(state.model)).map((s) => validEpoch(runEntry(state.model).run, s));
   $("stepSlider").max = Math.max(0, epochs.length - 1);
@@ -763,29 +775,40 @@ function renderChart() {
   $("stepSlider").value = state.stepIdx;
   if (state.model === CMP) {
     const ts = cmpSteps();
-    if (!ts.length) { $("stepLabel").textContent = "공통 유효시각 없음"; return; }
+    if (!ts.length) {
+      $("stepLabel").textContent = "공통 유효시각 없음";
+      $("chartStack").innerHTML = "";
+      return;
+    }
     const t = ts[state.stepIdx];
     const d = new Date(t + 9 * 3600e3);
     const p = (n) => String(n).padStart(2, "0");
-    $("stepLabel").textContent =
-      `유효 ${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시 KST (${relNow(t)}) — 전 모델 동시 표시`;
+    $("stepLabel").textContent = state.panel === "dswrf"
+      ? `${solarPeriodLabel(t)} — 모델 비교`
+      : `유효 ${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}시 KST (${relNow(t)}) — 전 모델 동시 표시`;
     $("chartStack").innerHTML = cmpModels().map((m) => {
       const e = runEntry(m);
       const stepH = (t - validEpoch(e.run, 0)) / 3600e3;
       if (!panelSteps(e).includes(stepH) || !e.panels.includes(state.panel)) return "";
       return `<div class="cmp-item">`
            + `<div class="cmp-name">${m} <span>(런 ${fmtRun(e.run)} +${stepH}h)</span></div>`
-           + `<img src="${imgPathFor(m, stepH)}" alt="${m}" loading="lazy" onerror="imgFallback(this)"></div>`;
+           + `<img src="${imgPathFor(m, stepH)}" alt="${m} ${PANEL_LABEL[state.panel]}${state.panel === 'dswrf' ? ' ' + solarPeriodLabel(t) : ''}" loading="lazy" onerror="imgFallback(this)"></div>`;
     }).join("");
     return;
   }
   const e = runEntry(state.model);
   const steps = panelSteps(e);
+  if (!steps.length) {
+    $("stepLabel").textContent = "이 런에는 표시할 자료가 없습니다";
+    $("chartStack").innerHTML = "";
+    return;
+  }
   const step = steps[state.stepIdx];
   const t = validEpoch(e.run, step);
-  $("stepLabel").textContent =
-    `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
-  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="차트" onerror="imgFallback(this)">`;
+  $("stepLabel").textContent = state.panel === "dswrf"
+    ? `+${step}h → ${solarPeriodLabel(t)} — 런 ${fmtRun(e.run)}`
+    : `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
+  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="${state.model} ${PANEL_LABEL[state.panel]}${state.panel === 'dswrf' ? ' ' + solarPeriodLabel(t) : ''}" onerror="imgFallback(this)">`;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
     if (i >= 0 && i < steps.length) new Image().src = imgPathFor(state.model, steps[i]);
   });
@@ -1287,3 +1310,4 @@ function renderFresh() {
   $("genInfo").textContent =
     `마지막 갱신(UTC): ${MF.generated_utc} · 지도 보존 ${MF.max_days}일`;
 })();
+

@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: "40 1 * * *"    # 10:40 KST — 당일 00z 런까지 나온 뒤라 한 번 돌 때 가장 많이 채운다
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - solar_radiation.py
+      - plot_charts.py
+      - tests/test_solar_radiation.py
 
 permissions:
   contents: write
@@ -89,6 +95,11 @@ jobs:
       - name: Python 의존성
         run: pip install -r requirements.txt
 
+      - name: 일사량 지도·게시 검증
+        run: |
+          python -m unittest discover -s tests -p 'test_solar_radiation.py'
+          node --test tests/solar_maps.test.cjs
+
       # 단계마다 `timeout` 을 건다 (2026-09-06). 어느 한 수신이 API 사정으로 늘어져도
       # 나머지와 발행은 제 시간에 나가야 한다. 9/5 실측: 예보변화 단계 하나가 70분을
       # 넘겨 잡 전체가 100분 상한에 취소됐고, 그날 NWP 지도가 오후까지 안 나갔다.
@@ -106,7 +117,7 @@ jobs:
           python verify.py archive || echo "::warning::archive 실패 — 계속"
 
       # 지도가 나오는 즉시 발행 — 검증·관측 단계(길면 30분+)를 기다리지 않는다
-      - name: 1차 발행 — NWP 지도·미티오그램
+      - name: 1차 발행 — NWP 지도·도시별 예측자료
         run: tools/publish_site.sh "site nwp $(date '+%Y-%m-%d %H:%M KST')"
 
       - name: 2단계 — 검증·관측·단기예보
@@ -148,3 +159,4 @@ jobs:
 
       - name: 2차 발행 — 검증·관측·예보변화
         run: tools/publish_site.sh "site verif $(date '+%Y-%m-%d %H:%M KST')"
+

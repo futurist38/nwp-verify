@@ -30,6 +30,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from cloud_layers import cloud_composite, LEGEND_LAYERS
+from solar_radiation import SOLAR_DPI, SOLAR_WINDOW_H, solar_field, draw_solar
 
 from config import (CITIES, LON_MIN, LON_MAX, LAT_MIN, LAT_MAX,
                     map_steps, KST_OFFSET_H, OUT_DIR, DATA_DIR, VERIF_DIR)
@@ -363,7 +364,7 @@ def plot_maps(model_name, data, out_dir, panels=None):
     """패널별 개별 PNG 저장 (2026-08-20 개편).
     3패널 가로 합본(18인치 폭)은 셀룰러 태블릿에서 판독 불가(브리프 ③) →
     변수별 1장씩 저장하고 웹 뷰어가 탭·슬라이더로 조합한다.
-    파일명: {model}_{runYYYYMMDDHH}_f{step:03d}_{panel}.png  (panel: t2m|tcc|cloud3)
+    파일명: {model}_{runYYYYMMDDHH}_f{step:03d}_{panel}.png  (panel: t2m|tcc|cloud3|dswrf|tp)
     """
     run = data["run"]
     os.makedirs(out_dir, exist_ok=True)
@@ -382,14 +383,19 @@ def plot_maps(model_name, data, out_dir, panels=None):
         ax = _make_ax(fig, (1, 1, 1), line_color="yellow" if panel == "tcc" else "black")
         draw(fig, ax)
         vkst = _valid_kst(run, step_h)
-        ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
-                     f"유효 {vkst:%m-%d %H}KST", fontsize=11)
+        if panel == "dswrf":
+            start = vkst - dt.timedelta(hours=SOLAR_WINDOW_H)
+            ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h\n"
+                         f"일사량 {start:%m-%d %H}–{vkst:%m-%d %H}KST · 3시간 평균", fontsize=11)
+        else:
+            ax.set_title(f"{model_name}  런 {run:%m-%d %H}UTC  +{step_h:03d}h  "
+                         f"유효 {vkst:%m-%d %H}KST", fontsize=11)
         fig.subplots_adjust(top=0.93 if panel == "cloud3" else 0.92,
                             bottom=0.25 if panel == "cloud3" else 0.08,
                             left=0.07, right=0.97)
         fname = os.path.join(
             out_dir, f"{model_name.lower()}_{run:%Y%m%d%H}_f{step_h:03d}_{panel}.png")
-        fig.savefig(fname, dpi=100)
+        fig.savefig(fname, dpi=SOLAR_DPI if panel == "dswrf" else 100)
         plt.close(fig)
         n_saved += 1
 
@@ -465,24 +471,27 @@ def plot_maps(model_name, data, out_dir, panels=None):
                              ha="center", fontsize=8, color="#444")
                 _save(step_h, "cloud3", draw_c3)
 
-        # 2026-09-06 추가 — 강수(3h mm) 지도. 일사 지도는 사용자 결정으로 제외(3h 평균이라 볼 시간대가 적음;
-        # 일사 값은 CSV·미티오그램·검증에는 그대로 실린다). 창 길이가 3h 가 아니면 제목에 표시.
-        for key, panel in (("tp", "tp"),):
+        # 일사: 원격자 contourf, +120h까지 엄격한 3시간 평균만 같은 색축으로 비교.
+        # 강수는 기존 구간 합계와 창 길이 표기를 유지한다.
+        for key, panel in (("dswrf", "dswrf"), ("tp", "tp")):
+            if panels is not None and panel not in panels:
+                continue
             da = data.get(key)
             if da is None:
                 continue
             fld = _sel_step(da, step_h)
             if fld is None:
                 continue
-            win = int(fld.win_h) if "win_h" in fld.coords else 3
             lo2d, la2d = np.meshgrid(fld.longitude, fld.latitude)
             if panel == "dswrf":
-                def draw_sw(fig, ax, _f=fld, _lo=lo2d, _la=la2d, _w=win):
-                    pm = ax.pcolormesh(_lo, _la, _f.values, cmap="YlOrRd", vmin=0, vmax=900,
-                                       shading="auto")
-                    fig.colorbar(pm, ax=ax, shrink=0.8, label=f"하향 단파복사 {_w}h 평균 (W/m²)")
+                values = solar_field(fld, step_h)
+                if values is None:
+                    continue
+                def draw_sw(fig, ax, _v=values, _lo=lo2d, _la=la2d):
+                    draw_solar(fig, ax, _lo, _la, _v)
                 _save(step_h, panel, draw_sw)
             else:
+                win = int(fld.win_h) if "win_h" in fld.coords else 3
                 def draw_tp(fig, ax, _f=fld, _lo=lo2d, _la=la2d, _w=win):
                     from matplotlib.colors import BoundaryNorm, ListedColormap
                     lev = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80]
@@ -688,3 +697,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
