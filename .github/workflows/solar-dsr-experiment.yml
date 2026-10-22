@@ -1,0 +1,89 @@
+name: solar-dsr-experiment
+
+on:
+  push:
+    branches: [codex/solar-dsr-mapping-20261022]
+    paths:
+      - solar_ca_mapping.py
+      - solar_dsr_experiment.py
+      - tests/test_solar_ca_mapping.py
+      - .github/workflows/solar-dsr-experiment.yml
+  workflow_dispatch:
+
+# Writes only the experiment branch's small reports. No Pages/R2 deployment.
+permissions:
+  contents: write
+
+concurrency:
+  group: solar-dsr-experiment
+  cancel-in-progress: false
+
+jobs:
+  retrospective:
+    if: github.ref == 'refs/heads/codex/solar-dsr-mapping-20261022'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUNBUFFERED: '1'
+      OMP_NUM_THREADS: '2'
+      TF_NUM_INTRAOP_THREADS: '2'
+      TF_NUM_INTEROP_THREADS: '2'
+      TF_CPP_MIN_LOG_LEVEL: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /solar_ca_mapping.py
+            /solar_dsr_experiment.py
+            /solar_radiation.py
+            /dl_infer.py
+            /dl_dataset.py
+            /nowcast_bench.py
+            /fetch_gk2a.py
+            /config.py
+            /sslfix.py
+            /requirements-nowcast.txt
+            /tests/test_solar_ca_mapping.py
+            /experiments/solar-dsr/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install experiment dependencies
+        run: >-
+          pip install numpy scipy pandas matplotlib xarray h5netcdf h5py requests
+          pyproj cartopy 'pyshp<3' opencv-python-headless -r requirements-nowcast.txt
+      - name: Numerical and missing-data checks
+        run: python -m unittest discover -s tests -p test_solar_ca_mapping.py -v
+      - name: Reuse production M4 weights
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dl
+          gh release download nowcast-weights -p 'gk2a_v5*' -D dl --clobber
+      - name: Three issue-time-only retrospective cases
+        env:
+          KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+        run: >-
+          python solar_dsr_experiment.py
+          --issues 202610190100 202610200100 202610210100
+          --out experiments/solar-dsr/results
+      - name: Preserve experiment outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solar-dsr-mapping-results
+          path: experiments/solar-dsr/results/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Save small reproducible results on the experiment branch
+        if: always()
+        run: |
+          if [ ! -f experiments/solar-dsr/results/provenance.json ]; then exit 0; fi
+          git config user.name 'nwp-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add experiments/solar-dsr/results
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record initial CA-to-DSR mapping experiment results'
+            git push origin HEAD:codex/solar-dsr-mapping-20261022
+          fi
