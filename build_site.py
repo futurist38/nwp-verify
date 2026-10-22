@@ -787,6 +787,16 @@ def main():
     # 발표별 비교는 daily/hourly 모두 갱신. 기존 발행본과 누락 없이 병합한다.
     from forecast_compare import export as export_forecast_compare
     export_forecast_compare(args.site_dir)
+    # Disabled until official NetCDF sample/profile has been validated.
+    from digital_mid import export as export_digital_mid
+    try:
+        export_digital_mid(args.site_dir)
+    except Exception:
+        # Clear restored site-data payload on invalid config; do not show stale active state.
+        from digital_mid import write as write_digital_mid
+        write_digital_mid(os.path.join(args.site_dir, "digital_mid", "index.json"),
+                          {"schema": 1, "mode": "off", "issues": []})
+        print("[digital-mid] export rejected; legacy forecasts retained")
     OBS_DATES = export_obs(args.site_dir)
     # 종료된 추석 추적은 가공 데이터만 보존한다. 이전 배포의 이미지/원자료도 제거.
     src_ch = os.path.join(OUT_DIR, "chuseok")
@@ -819,3 +829,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

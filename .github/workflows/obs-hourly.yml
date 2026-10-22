@@ -28,6 +28,11 @@ on:
       - 'site/forecast-compare.*'
       - 'forecast_compare.py'
       - 'kma_midland.py'
+      - 'digital_mid.py'
+      - 'digital_mid_config.json'
+      - 'site/digital-mid.*'
+      - 'tests/test_digital_mid.py'
+      - 'tests/digital_mid.test.cjs'
       - 'tests/test_forecast_compare.py'
       - 'tests/forecast_compare.test.cjs'
       - 'site/index.html'
@@ -140,6 +145,8 @@ jobs:
 
       - name: 예보 비교 검증
         run: |
+          python -m unittest discover -s tests -p 'test_digital_mid.py'
+          node --test tests/digital_mid.test.cjs
           python -m unittest discover -s tests -p 'test_forecast_compare.py'
           node --test tests/forecast_compare.test.cjs
           python -m unittest discover -s tests -p 'test_satellite_catalog.py'
@@ -152,6 +159,12 @@ jobs:
         # KMA API가 붐비면 발표시각 수신이 10분+ (2026-08-25 실측: 이 단계가 잡 상한을
         # 먹고 관측 발행까지 스킵). 개별 상한으로 격리 — 실패해도 관측은 나간다
         run: timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 비교 실패/시간초과 — 계속"
+
+      - name: 디지털 중기예보 준비 수집 (기본 off)
+        env:
+          KMA_DIGITAL_MID_URL_TEMPLATE: ${{ secrets.KMA_DIGITAL_MID_URL_TEMPLATE }}
+          KMA_DIGITAL_MID_AUTH_KEY: ${{ secrets.KMA_DIGITAL_MID_AUTH_KEY }}
+        run: timeout 240 python digital_mid.py || echo "::warning::디지털 중기 미수신/검증 실패 — 기존 예보 유지"
 
       - name: 중기 개황·발표별 비교 아카이브
         run: |
@@ -221,6 +234,7 @@ jobs:
         run: |
           git add verification/forecast_compare
           if [ -d verification/midland ]; then git add verification/midland; fi
+          if [ -d verification/digital_mid ]; then git add verification/digital_mid; fi
           if ! git diff --cached --quiet; then
             git commit -m "예보 비교 아카이브 $(date '+%Y-%m-%d %H:%M KST')"
             ok=0
@@ -246,3 +260,4 @@ jobs:
               echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
             done
           fi
+
