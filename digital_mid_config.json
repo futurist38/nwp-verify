@@ -1,0 +1,19 @@
+{
+  "mode": "off",
+  "delay_minutes": 30,
+  "recheck_minutes": 180,
+  "display_days": 21,
+  "max_file_mb": 128,
+  "allowed_hosts": [],
+  "profile": {
+    "id": "pending-official-sample",
+    "verified": false,
+    "timezone": null,
+    "max_distance_km": 10,
+    "cities": {},
+    "daily_leads": [],
+    "hourly_leads": [],
+    "fields": {},
+    "codes": {"SKY": {}, "PTY": {}, "RPOS": {}, "RVAR": {}}
+  }
+}
