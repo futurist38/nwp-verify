@@ -63,7 +63,7 @@ def _proj():
                                  standard_parallels=(30, 60))
 
 # 표출 지점 (사용자 지정) — config.CITIES에서 좌표 참조
-CHIP_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉"]
+CHIP_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉", "원주"]
 CITY_POS = {c[0]: (c[2], c[1]) for c in CITIES}  # name → (lon, lat)
 
 VAR_CFG = {  # var: (색축 절대범위, 단위, 제목)

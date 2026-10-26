@@ -290,7 +290,8 @@
       if(index.schema!==1) throw new Error("지원하지 않는 자료 형식");
       refs=[...new Set(index.issues.map(e=>e.issue))].sort();
       if(!refs.length) {$("status").textContent="아직 비교할 발표 자료가 없습니다. 다음 자료 수집 후 표시됩니다.";return;}
-      const cities=[...new Set(index.issues.flatMap(e=>e.cities))];
+      // Keep newly configured Wonju selectable before its first reception.
+      const cities=[...new Set([...index.issues.flatMap(e=>e.cities),"원주"])];
       options($("city"),cities,c=>c,cities.includes("서울")?"서울":cities[0]);
       const dates=[...new Set(refs.map(r=>r.slice(0,8)))].reverse();
       for(const side of ["a","b"]) {

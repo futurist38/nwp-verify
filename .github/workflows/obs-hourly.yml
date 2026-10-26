@@ -26,6 +26,15 @@ on:
     branches: [main]
     paths:
       - 'site/forecast-compare.*'
+      - 'site/overview*'
+      - 'site/app.js'
+      - 'config.py'
+      - 'build_site.py'
+      - 'plot_kmafcst.py'
+      - 'kma_midfcst.py'
+      - 'tests/test_wonju.py'
+      - 'tests/overview.test.cjs'
+      - 'tests/obs_resources.test.cjs'
       - 'forecast_compare.py'
       - 'kma_midland.py'
       - 'tests/test_forecast_compare.py'
@@ -141,7 +150,8 @@ jobs:
       - name: 예보 비교 검증
         run: |
           python -m unittest discover -s tests -p 'test_forecast_compare.py'
-          node --test tests/forecast_compare.test.cjs
+          node --test tests/forecast_compare.test.cjs tests/overview.test.cjs tests/obs_resources.test.cjs
+          python -m unittest discover -s tests -p 'test_wonju.py'
           python -m unittest discover -s tests -p 'test_satellite_catalog.py'
           node --test tests/satellite.test.cjs
 

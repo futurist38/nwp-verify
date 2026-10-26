@@ -32,7 +32,8 @@ from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
 
 CITY_GRID = {"서울": (60, 127), "대전": (67, 100), "대구": (89, 90),
              "부산": (98, 76), "광주": (58, 74), "강릉": (92, 131),
-             # 브리핑용 서해안·제주 대표 (2026-09-08) — 예보-관측 탭 표출은 위 6곳만(build_site KMAF_CITIES)
+             "원주": (77, 122),  # ASOS 114 명륜동 위치와 검증 일치 (시청 대표격자 76,122 아님)
+             # 브리핑용 서해안·제주 대표 (2026-09-08) — 예보-관측 탭 표출 지점은 build_site KMAF_CITIES
              "인천": (54, 125), "제주": (53, 38)}
 CACHE_DIR = os.path.join(VERIF_DIR, "kmafcst")
 # 표출할 발표시각 (2026-08-26 사용자 확정) — 전일 11·17시 + 당일 05·11·17시.
@@ -124,7 +125,8 @@ def render(bdt: str, fc: dict, obs: pd.DataFrame, now: dt.datetime, out_dir: str
     y0, y1 = ymid - yspan / 2, ymid + yspan / 2
 
     import matplotlib.dates as mdates
-    fig, axes = plt.subplots(3, 2, figsize=(13, 11), sharex=True, sharey=True)
+    rows = (len(CITY_GRID) + 1) // 2
+    fig, axes = plt.subplots(rows, 2, figsize=(13, rows * 3.7), sharex=True, sharey=True)
     for ax, city in zip(axes.flat, CITY_GRID):
         o, s = series[city]
         ax.plot(o.index, o.values, "-o", color="black", ms=3.5, lw=1.8,
@@ -144,9 +146,11 @@ def render(bdt: str, fc: dict, obs: pd.DataFrame, now: dt.datetime, out_dir: str
         ax.xaxis.set_major_formatter(
             mdates.ConciseDateFormatter(loc, formats=["%y", "%m월", "%d일", "%H시", "%H시", "%S"],
                                         offset_formats=["", "", "", "", "", ""]))
+    for ax in list(axes.flat)[len(CITY_GRID):]:
+        ax.set_visible(False)
     fig.suptitle(f"기상청 단기예보(동네예보 TMP·1시간) vs ASOS 지상관측 — 기온(℃)\n"
                  f"파란 점선 = {bdt[4:6]}-{bdt[6:8]} {bdt[8:]}시 발표 시점 · 창 = 발표 -6h ~ +24h · "
-                 f"y축 6도시 공통 (생성 {now:%H:%M})", fontsize=13)
+                 f"y축 {len(CITY_GRID)}도시 공통 (생성 {now:%H:%M})", fontsize=13)
     fig.autofmt_xdate()
     fig.tight_layout(rect=[0, 0, 1, 0.94])
     os.makedirs(out_dir, exist_ok=True)

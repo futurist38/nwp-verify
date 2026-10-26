@@ -28,9 +28,12 @@ from config import VERIF_DIR
 URL = "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php"
 CACHE_DIR = os.path.join(VERIF_DIR, "midfcst")
 # 중기예보 기온 예보구역 코드 (2026-09-06 실측: 10도시 전부 200·자료 있음)
+# 원주: KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10)
 REGS = {"서울": "11B10101", "인천": "11B20201", "수원": "11B20601", "대전": "11C20401",
         "대구": "11H10701", "부산": "11H20201", "광주": "11F20501", "전주": "11F10201",
-        "강릉": "11D20501", "제주": "11G00201"}
+        "강릉": "11D20501", "원주": "11D10401", "제주": "11G00201"}
+# 원주 수신 지연이 기존 10도시의 신규 발표 저장을 막지 않게 기존 완전성 기준 유지.
+REQUIRED_CITIES = frozenset(REGS) - {"원주"}
 
 
 def fetch_city(reg: str, tmfc1: str, tmfc2: str, key: str) -> list[list[str]]:
@@ -84,18 +87,29 @@ def main():
     p.add_argument("--days", type=int, default=3, help="이 일수 전 발표부터 채움")
     args = p.parse_args()
     os.makedirs(CACHE_DIR, exist_ok=True)
-    have = {f[:-5] for f in os.listdir(CACHE_DIR) if f.endswith(".json")}
     data = collect(args.days)
     n_new = 0
     for tmfc, cities in sorted(data.items()):
-        if tmfc in have:
+        path = os.path.join(CACHE_DIR, f"{tmfc}.json")
+        existing = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fp:
+                existing = json.load(fp)
+            # 같은 발표의 기존 값은 불변. 새 도시도 실제 API가 반환한 값만 추가한다.
+            # 조회 범위는 --days 그대로이며 과거 파일에 임의로 백필하지 않는다.
+            additions = {city: values for city, values in cities.items()
+                         if city not in existing and values}
+            if not additions:
+                continue
+            cities = {**existing, **additions}
+        elif not REQUIRED_CITIES.issubset(cities):
+            # 기존 도시 누락은 종전대로 대기. 원주만 누락되면 기존 도시는 저장하고 추후 보충.
+            print(f"[중기예보] {tmfc}: 기존 필수 도시 누락 — 아직 미완, 다음 실행에")
             continue
-        # 발표 직후엔 일부 구역만 먼저 올라올 수 있다 — 10도시가 다 있을 때만 확정 저장
-        if len(cities) < len(REGS):
-            print(f"[중기예보] {tmfc}: {len(cities)}/{len(REGS)}도시 — 아직 미완, 다음 실행에")
-            continue
-        with open(os.path.join(CACHE_DIR, f"{tmfc}.json"), "w", encoding="utf-8") as fp:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fp:
             json.dump(cities, fp, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, path)
         n_new += 1
     print(f"[중기예보] 발표 {len(data)}건 조회, 신규 저장 {n_new}건 → {CACHE_DIR}")
 

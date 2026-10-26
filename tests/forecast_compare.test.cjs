@@ -123,4 +123,10 @@ test('screen controls render four real series, change periods, swap, and recover
   assert.equal(elements['fc-hourly'].hidden,true);
   fail=false;elements['fc-retry'].onclick();await settle();
   assert.equal((elements['fc-timeline'].innerHTML.match(/data-series=/g)||[]).length,4);
+  assert.match(elements['fc-city'].innerHTML,/원주/);
+  elements['fc-city'].value='원주';elements['fc-city'].onchange();await settle();
+  assert.equal(elements['fc-timeline'].innerHTML,'');
+  assert.match(elements['fc-status'].textContent,/자료|없/);
+  elements['fc-city'].value='서울';elements['fc-city'].onchange();await settle();
+  assert.equal((elements['fc-timeline'].innerHTML.match(/data-series=/g)||[]).length,4);
 });

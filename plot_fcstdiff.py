@@ -42,7 +42,7 @@ PREV_HOUR, NOW_HOUR = 17, 5   # 어제 17시 발표 → 오늘 05시 발표 (사
 MIN_HOURS = 20          # 대상일 커버리지가 이보다 적으면 그 날은 비교하지 않음
 TARGET_DAYS = [1]       # 내일만 — 아래 주석 참조
 VARS = {"tmx": ("일 최고기온", np.max), "tmn": ("일 최저기온", np.min)}
-LABEL_CITIES = ["서울", "대전", "대구", "광주", "부산", "강릉"]  # 겹침 방지
+LABEL_CITIES = ["서울", "대전", "대구", "광주", "부산", "강릉", "원주"]  # 겹침 방지
 
 from matplotlib import font_manager as _fm
 _inst = {f.name for f in _fm.fontManager.ttflist}

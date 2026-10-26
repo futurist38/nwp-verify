@@ -258,7 +258,7 @@ def copy_nowcast(site_dir: str) -> dict | None:
     return info
 
 
-KMAF_CITIES = ["서울", "대전", "대구", "부산", "광주", "강릉"]
+KMAF_CITIES = ["서울", "대전", "대구", "부산", "광주", "원주", "강릉"]
 KMAF_PREV_H, KMAF_DAY_H = (11, 17), (5, 11, 17)
 
 
@@ -454,7 +454,7 @@ def export_midfcst(site_dir: str) -> bool:
             cities.add(c)
             out["fcst"][tmfc][c] = {ymd: [v.get("min"), v.get("max"), v.get("min_l"), v.get("min_h"),
                                           v.get("max_l"), v.get("max_h")] for ymd, v in days.items()}
-    out["cities"] = [c for c in ("서울", "인천", "수원", "대전", "대구", "광주", "전주", "부산", "강릉", "제주")
+    out["cities"] = [c for c in ("서울", "인천", "수원", "대전", "대구", "광주", "전주", "부산", "원주", "강릉", "제주")
                      if c in cities]
     # 실측 일 극값 (시간값 기반 — 정시 사이 극값은 놓친다; 표출에 명시)
     months = sorted({f"{(dt.date.today() - dt.timedelta(days=k)):%Y-%m}" for k in (0, 21, 35)})
@@ -562,9 +562,9 @@ def export_obs(site_dir: str) -> list[str]:
                      "colors": ["#%02x%02x%02x" % tuple(int(c * 255) for c in m(i / 31)[:3])
                                 for i in range(32)]}
     with open(os.path.join(out_dir, "stations.json"), "w", encoding="utf-8") as f:
-        # 대표 6도시는 지도에 값을 함께 적는다(L=1) — 나머지는 마우스로 확인
+        # 주요 도시는 지도에 값을 함께 적는다(L=1) — 나머지는 마우스로 확인
         label_stn = {CITY_OBS_STN[c] for c in
-                     ("서울", "대전", "대구", "부산", "광주", "강릉")
+                     ("서울", "대전", "대구", "부산", "광주", "원주", "강릉")
                      if CITY_OBS_STN.get(c)}
         json.dump({"stations": [{"s": int(r.STN), "n": r.name_,
                                  "x": round(r.vx, 1), "y": round(r.vy, 1),
