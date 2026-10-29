@@ -5,7 +5,7 @@ data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 OUT=Path(sys.argv[2]);OUT.mkdir(parents=True,exist_ok=True)
 records=data['forecast'];previous=data['previous_weighted'];norm=data['normals']
 dates=[dt.date.fromisoformat(r['date']) for r in records]
-week=data['icon_summary'];notes=data.get('weather_notes',['']*9)
+week=data['icon_summary']
 cloud=[state('cloudy')];raincloud=[state('cloudy','rain','가끔'),state()]
 original_group=group
 BACKGROUND=False
@@ -19,7 +19,7 @@ def group(im,states,cx,cy,maxwidth=500,size=100,tag=''):
  bbox=layer.getbbox()
  if bbox:
   b=io.BytesIO();layer.crop(bbox).save(b,format='PNG')
-  # Only page 1 groups are captured, since editor.json is written before page 2.
+  # Capture the weather groups for the current page separately from fixed content.
   editor.setdefault('groups',[]).append({'id':tag,'x':bbox[0],'y':bbox[1],'w':bbox[2]-bbox[0],'h':bbox[3]-bbox[1],'src':'data:image/png;base64,'+base64.b64encode(b.getvalue()).decode()})
  if not BACKGROUND:im.paste(layer,(0,0),layer)
 def spaced_text(im,xy,s,size=24,color='black',anchor='mm',spacing=1.3):
@@ -112,6 +112,8 @@ editor['width']=1920;editor['height']=1080
 editor['palette']={p.stem:uri(p) for p in (ASSETS/'icons').glob('*.png')}
 (OUT/'editor.json').write_text(json.dumps(editor,ensure_ascii=False),encoding='utf-8')
 # Page 2
+BACKGROUND=True
+editor={'groups':[],'boundaries':[],'panels':[]}
 im=base();d=ImageDraw.Draw(im);d.rounded_rectangle((27,107,1884,1028),radius=33,outline=GRAY,width=5)
 x0=184;x1=1840;cw=(x1-x0)/9;xs=np.array([x0+(i+.5)*cw for i in range(9)])
 d.rectangle((94,227,184,995),fill='#fac495')
@@ -124,10 +126,6 @@ for i,day in enumerate(dates):
  if n==s:group(im,n,cx,321,maxwidth=cw-18,size=100,tag=f'day{i}-merged')
  else:
   group(im,n,cx,279,maxwidth=cw-18,size=67,tag=f'day{i}-central');group(im,s,cx,369,maxwidth=cw-18,size=67,tag=f'day{i}-south')
- if notes[i]:
-  # Two short lines preserve readability in narrow daily columns.
-  words=notes[i].split(' ');cut=max(1,len(words)//2)
-  text(im,(cx,412),' '.join(words[:cut]),18,'#555555');text(im,(cx,434),' '.join(words[cut:]),18,'#555555')
 text(im,(139,280),'중부',33,bold=True);text(im,(139,375),'남부',33,bold=True);text(im,(139,717),'기온',33,bold=True)
 low=np.array([r['min'] for r in records]);high=np.array([r['max'] for r in records])
 values=[r[k] for r in records for k in ['min','max']]+[n[k][b] for n in norm for k in ['min','max'] for b in ['lower','upper']]
@@ -169,4 +167,13 @@ for x,y,color,label,band in [(1240,482,'#fbe3d3','최고기온 평년범위',Tru
 text(im,(1150,482),'단위: ℃',22,'#666666')
 text(im,(1000,975),'평년범위: 일평년 평균 ± 0.43σ  |  이상저온 < P10 · 이상고온 > P90 (1991~2020)',20,'#555555')
 footer(im,'전국가중기온: 회사 8개 지점 가중치 적용')
+im.save(OUT/'background2.webp',lossless=True)
+editor.update(background='background2.webp',width=1920,height=1080,revision=1,
+              edit_bounds={'x':188,'y':234,'w':1648,'h':210},
+              palette={p.stem:uri(p) for p in (ASSETS/'icons').glob('*.png')})
+(OUT/'editor2.json').write_text(json.dumps(editor,ensure_ascii=False),encoding='utf-8')
+for g in editor['groups']:
+ layer=Image.open(io.BytesIO(base64.b64decode(g['src'].split(',',1)[1]))).convert('RGBA')
+ im.paste(layer,(g['x'],g['y']),layer)
 im.save(OUT/'02.webp',lossless=True)
+
