@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');con
 const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{try{const r=await fetch('energy/index.json'"));
 function setup(fetcher){
  const calls={exports:0,draws:[],downloads:[]},nodes={},saved=new Map();
- function makeCanvas(id){const ctx=new Proxy({drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,hidden:true,width:1920,height:1080,getContext:()=>ctx,addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
+ function makeCanvas(id){const ctx=new Proxy({drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,style:{},hidden:true,width:1920,height:1080,getContext:()=>ctx,addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
  function node(id){return nodes[id]??=(id.startsWith('editorCanvas')?makeCanvas(id):{id,value:'',disabled:false,hidden:false,textContent:'',addEventListener(){},click(){if(this.download)calls.downloads.push(this.download);return this.onclick?.({preventDefault(){}});},replaceChildren(){this.value='';},append(option){if(!this.value)this.value=option.value;}});}
  class Image{constructor(){this.width=678;this.height=663;}set src(x){this._src=x;queueMicrotask(()=>this.onload());}get src(){return this._src;}}
  const sandbox={document:{getElementById:node,querySelector:()=>({content:'https://example.workers.dev'}),createElement:tag=>tag==='canvas'?makeCanvas('export'):node('created-'+tag)},Image,console,Intl,Date,Map,Promise,Number,JSON,Error,Boolean,AbortSignal,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout:()=>0,localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){},print(){}},fetch:fetcher};
@@ -23,7 +23,7 @@ test('date switch while refreshing discards the old response',async()=>{
  let release;const gate=new Promise(r=>release=r);const t=setup(async url=>{await gate;return panel(url.split('/').at(-1));});const before=t.run('JSON.stringify(editors[1].scene)');const pending=t.nodes.refreshImages.click();t.run('loadToken++');release();await pending;assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
 });
 test('page 2 drag and resize stay inside weather area and leave page 1 unchanged',()=>{
- const t=setup();const before=t.run('JSON.stringify(editors[1].scene)');t.nodes.edit2.click();t.run('editors[2].pointerDown({clientX:250,clientY:270,pointerId:1});editors[2].pointerMove({clientX:1900,clientY:900});editors[2].resize(1.5)');const g=JSON.parse(t.run('JSON.stringify(editors[2].scene.groups[0])'));assert.ok(g.y+g.h<=444&&g.x+g.w<=1836);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.nodes.addBoundary2,undefined);
+ const t=setup();const before=t.run('JSON.stringify(editors[1].scene)');t.nodes.edit2.click();t.run('editors[2].pointerDown({clientX:250,clientY:270,pointerId:1,preventDefault(){}});editors[2].pointerMove({clientX:1900,clientY:900});editors[2].resize(1.5)');const g=JSON.parse(t.run('JSON.stringify(editors[2].scene.groups[0])'));assert.ok(g.y+g.h<=444&&g.x+g.w<=1836);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.nodes.addBoundary2,undefined);
 });
 test('page 2 replacement, add, delete, undo and reset affect weather groups only',async()=>{
  const t=setup();const initial=t.run('JSON.stringify(editors[2].scene)');t.run("editors[2].selected={type:'group',index:0};editors[2].node('iconChoice').value='rain'");await t.nodes.replaceIcon2.click();assert.equal(t.run('editors[2].scene.groups[0].src'),'rain-icon');assert.equal(t.run('editors[2].scene.forecastMarker'),14.5);t.nodes.undo2.click();assert.equal(t.run('JSON.stringify(editors[2].scene)'),initial);await t.nodes.addIcon2.click();assert.equal(t.run('editors[2].scene.groups.length'),2);t.nodes.remove2.click();assert.equal(t.run('editors[2].scene.groups.length'),1);t.nodes.reset2.click();assert.equal(t.run('JSON.stringify(editors[2].scene)'),initial);
@@ -36,4 +36,24 @@ test('page 2 loads saved icons without accepting saved boundary or graph objects
 });
 test('date switch during page 2 metadata loading cannot restore stale layout',async()=>{
  let release;const gate=new Promise(r=>release=r);const scene={background:'bg',groups:[],boundaries:[],palette:{}};const t=setup(async()=>{await gate;return {ok:true,json:async()=>scene};});const pending=t.run("editors[2].load('20261029','v',loadToken)");t.run("loadToken++;editors[2].clear()");release();await pending;assert.equal(t.run('editors[2].scene'),null);assert.equal(t.nodes.edit2.disabled,true);
+});
+
+test('corner drag resizes both pages with fixed aspect ratio and one undo step',()=>{
+ for(const page of [1,2]){
+  const t=setup(),other=page===1?2:1;
+  const unchanged=t.run('JSON.stringify(editors['+other+'].scene)');
+  t.nodes[page===1?'edit':'edit2'].click();
+  const start=JSON.parse(t.run('JSON.stringify(editors['+page+'].scene.groups[0])'));
+  t.run('editors['+page+'].pointerDown({clientX:'+(start.x+50)+',clientY:'+(start.y+50)+',pointerId:1,preventDefault(){}})');
+  const history=t.run('editors['+page+'].history.length');
+  t.run('editors['+page+'].pointerDown({clientX:'+(start.x+start.w)+',clientY:'+(start.y+start.h)+',pointerId:1,preventDefault(){}})');
+  assert.equal(t.run('editors['+page+'].drag.type'),'resize');
+  for(const size of [130,160])t.run('editors['+page+'].pointerMove({clientX:'+(start.x+size)+',clientY:'+(start.y+size)+'})');
+  const end=JSON.parse(t.run('JSON.stringify(editors['+page+'].scene.groups[0])'));
+  assert.equal(end.x,start.x);assert.equal(end.y,start.y);assert.equal(end.w,160);assert.equal(end.h,160);
+  assert.equal(t.run('editors['+page+'].history.length'),history+1);
+  assert.equal(t.run('JSON.stringify(editors['+other+'].scene)'),unchanged);
+  t.nodes[page===1?'undo':'undo2'].click();
+  assert.deepEqual(JSON.parse(t.run('JSON.stringify(editors['+page+'].scene.groups[0])')),start);
+ }
 });
