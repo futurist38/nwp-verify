@@ -24,13 +24,15 @@
     "temperature_matches": 96
   },
   "rounding": "ROUND_HALF_UP to one decimal before daily differences",
-  "pending": "Implement and verify daily generation pipeline with approved observation policy.",
-  "automatic_generation": false,
+  "automatic_generation": true,
   "current_day_minimum": {
     "source": "observed minimum through 07:00 KST",
     "cutoff_kst": "07:00",
     "show_provisional_label": false,
     "approved": true
   },
-  "publication_label_format": "발표시점: YYYY. MM. DD.(요일) HH시 기준"
+  "publication_label_format": "발표시점: YYYY. MM. DD.(요일) HH시 기준",
+  "renderer": "energy_runtime/build_energy.py",
+  "workflow": "energy-daily.yml",
+  "storage": "30 days; images and editable scene"
 }
