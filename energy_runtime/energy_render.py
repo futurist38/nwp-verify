@@ -51,10 +51,14 @@ def render_page1(background=False):
  im=base();d=ImageDraw.Draw(im)
  for name,box in [('satellite',(67,202,430,397)),('radar',(67,659,430,365))]:
   path=OUT/(name+'.png')
-  if path.exists():paste(im,path,box)
+  if path.exists():
+   # Preserve the complete source image and aspect ratio; never enlarge.
+   src=Image.open(path).convert('RGBA')
+   src.thumbnail((365,365),Image.Resampling.LANCZOS)
+   im.paste(src,(round(282-src.width/2),round(box[1]+(365-src.height)/2)),src)
   else:text(im,(282,box[1]+box[3]/2),'자료 수신 지연',28,'#666666')
  for y,label,w in [(151,'위성영상',150),(622,'강수현황(레이더)',240)]:
-  d.rectangle((67,y,67+w,y+35),fill='#fff300',outline='black');spaced_text(im,(67+w/2,y+18),label,24,spacing=1.8)
+  d.rectangle((282-w/2,y,282+w/2,y+35),fill='#fff300',outline='black');spaced_text(im,(282,y+18),label,24,spacing=1.8)
  def boundary(im,points):
   editor['boundaries'].append({'points':points,'color':'#3c6090','width':5})
   if background:return
