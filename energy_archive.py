@@ -29,7 +29,9 @@ def publish_energy(site_dir, source_dir=None, today=None):
                     current=target / folder.name / 'report.json'
                     previous=json.loads(current.read_text(encoding='utf-8')) if current.exists() else {}
                     seed=json.loads((folder/'report.json').read_text(encoding='utf-8'))
-                    if previous.get('publication_kst','') <= seed.get('publication_kst',''):
+                    # Seeds bootstrap missing reports or advance an older issue.
+                    # A same-issue seed must not undo published layout/editor repairs.
+                    if not current.exists() or previous.get('publication_kst','') < seed.get('publication_kst',''):
                         shutil.copytree(folder, target / folder.name, dirs_exist_ok=True)
     reports = []
     for folder in target.iterdir():
