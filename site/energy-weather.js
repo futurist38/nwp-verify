@@ -26,8 +26,8 @@ canvas.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=point(e);i
 function endDrag(){drag=null;}
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
 el('edit').onclick=()=>{editing=!editing;el('editorControls').hidden=!editing;canvas.hidden=!editing;el('page1').hidden=editing;el('edit').textContent=editing?'편집 닫기':'1페이지 편집';draw();};
-el('undo').onclick=()=>{if(history.length){scene=history.pop();selected=null;controls();draw();}};
-el('reset').onclick=()=>{remember();scene=clone(original);selected=null;controls();draw();};
+el('undo').onclick=()=>{if(history.length){scene=history.pop();selected=null;controls();syncPanelControls();draw();}};
+el('reset').onclick=()=>{remember();scene=clone(original);selected=null;controls();syncPanelControls();draw();};
 el('remove').onclick=()=>{if(!selected)return;remember();scene[selected.type==='group'?'groups':'boundaries'].splice(selected.index,1);selected=null;controls();draw();};
 el('size').onchange=e=>{if(selected?.type!=='group')return;remember();const g=scene.groups[selected.index],scale=Number(e.target.value)/100;const w=Math.min(800,g.w*scale),h=w*g.h/g.w;g.x-=(w-g.w)/2;g.y-=(h-g.h)/2;g.w=w;g.h=h;controls();draw();};
 el('addIcon').onclick=async()=>{if(!scene)return;remember();const src=scene.palette[el('iconChoice').value];const im=await sprite(src);const s=130/Math.max(im.width,im.height);scene.groups.push({id:'added-'+Date.now(),x:800,y:450,w:im.width*s,h:im.height*s,src});selected={type:'group',index:scene.groups.length-1};controls();draw();};
@@ -57,6 +57,7 @@ async function show(){
   const bg=await image(`energy/${day}/${data.background}?v=${version}`);if(token!==loadToken)return;
   original=data;original.revision=data.revision||1;scene=clone(original);background=bg;
   try{const saved=JSON.parse(localStorage.getItem(storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries))scene=saved;}catch(e){}
+  if(!scene.panels)scene.panels=clone(original.panels||[]);
   await Promise.all([...scene.groups,...(scene.panels||[])].filter(g=>g.src).map(g=>sprite(g.src)));if(token!==loadToken)return;
   el('iconChoice').replaceChildren();for(const name of Object.keys(scene.palette)){const option=document.createElement('option');option.value=name;option.textContent=labels[name]||name;el('iconChoice').append(option);}
   el('edit').disabled=false;el('editStatus').textContent='아이콘을 끌어 이동하고, 경계선의 보라색 조절점을 움직이세요. 편집 내용은 자동 생성 원본에 영향을 주지 않습니다.';controls();syncPanelControls();draw();
