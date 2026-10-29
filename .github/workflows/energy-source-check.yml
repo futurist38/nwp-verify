@@ -19,4 +19,4 @@ jobs:
       - name: Check city short forecast against supplied spreadsheet date
         env:
           KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
-        run: python tools/check_energy_source.py
+        run: python tools/check_energy_observations.py
