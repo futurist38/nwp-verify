@@ -1,0 +1,47 @@
+name: energy-radar-public-check
+on:
+  push:
+    paths: ['.github/workflows/energy-radar-public-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public imagery without credentials
+        shell: python
+        run: |
+          import urllib.request, urllib.parse, re, json, concurrent.futures
+          def get(url):
+              req=urllib.request.Request(url,headers={'Origin':'https://futurist38.github.io'})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  body=r.read(2000000)
+                  return body,r.headers
+          def inspect(url):
+              try:
+                  body,h=get(url);s=body.decode('utf-8','replace')
+                  print('DOCUMENT',url,'CORS',h.get('Access-Control-Allow-Origin'),'BYTES',len(body),flush=True)
+                  scripts=re.findall(r'<script[^>]*src=["\x27]([^"\x27]+)',s)
+                  print('SCRIPTS',json.dumps(scripts),flush=True)
+                  for line in s.splitlines():
+                      if re.search(r'nph-|cgi-bin|imageUrl|imgUrl|cgiUrl|cgiURL|cgi_id|cgiId|imgsrc|IMG_URL',line,re.I):print('SOURCE',line[:1600],flush=True)
+                  urls=[urllib.parse.urljoin(url,p) for p in scripts if not re.search(r'jquery|bootstrap|moment|datepicker|calendar|swiper|d3|html2canvas|polyfill',p,re.I)]
+                  urls=[u for u in urls if urllib.parse.urlparse(u).hostname=='radar.kma.go.kr'][:12]
+                  for u in urls:
+                      try:
+                          b,_=get(u);text=b.decode('utf-8','replace')
+                          lines=[line[:1800] for line in text.splitlines() if re.search(r'nph-|cgi-bin|imageUrl|imgUrl|cgiUrl|cgiURL|IMG_URL',line,re.I)]
+                          if lines:print('SCRIPT',u,'MATCHES',json.dumps(lines[:25]),flush=True)
+                      except Exception as e:print('SCRIPT_ERROR',u,type(e).__name__,flush=True)
+              except Exception as e:print('ERROR',url,str(e),flush=True)
+          inspect('https://radar.kma.go.kr/radar/main.do')
+          url='https://www.weather.go.kr/w/wnuri-img/rest/radar/cmp/images.do?mapType=img&tm=&itv=5&leaflet=0&kmap=0&area=KWK&data=pop'
+          try:
+              b,h=get(url);rows=json.loads(b);print('RADAR_META_CORS',h.get('Access-Control-Allow-Origin'));print('RADAR_META_SAMPLE',json.dumps(rows[-2:]),flush=True)
+              if rows:
+                  u=urllib.parse.urljoin('https://www.weather.go.kr',rows[-1]['url']);b,h=get(u)
+                  print('RADAR_IMAGE',u,'CORS',h.get('Access-Control-Allow-Origin'),'BYTES',len(b),'TYPE',h.get('Content-Type'),flush=True)
+          except Exception as e:print('RADAR_META_ERROR',str(e),flush=True)
+          
