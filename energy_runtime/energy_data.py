@@ -137,7 +137,7 @@ def fetch_image(kind,cutoff,destination):
     origin='https://www.weather.go.kr'
     params={'mapType':'img','tm':cutoff.strftime('%Y.%m.%d.%H:%M'),'itv':'0.5','leaflet':'0','kmap':'0'}
     if kind=='satellite':
-        path='/w/wnuri-img/rest/sat/images/gk2a.do';params.update(area='ko020lc',data='rgb-cs')
+        path='/w/wnuri-img/rest/sat/images/gk2a.do';params.update(area='ko020lc',data='rgb-s-daynight')
     else:
         path='/w/wnuri-img/rest/radar/cmp/images.do';params.update(area='KWK',data='pop',itv='5')
     try:
