@@ -1,7 +1,7 @@
 [hidden] { display: none !important; }   /* display 명시 요소에서도 hidden 적용 */
 * { box-sizing: border-box; margin: 0; }
 body { font-family: "Malgun Gothic", "NanumGothic", "Apple SD Gothic Neo", sans-serif; background: #f3f5f8;
-       color: #222; max-width: 1240px; margin: 0 auto; padding: 0 10px 40px; }
+       color: #222; width: 100%; max-width: none; margin: 0; padding: 0 clamp(14px, 2.5vw, 56px) 40px; }
 header { padding: 14px 0 0; position: sticky; top: 0; z-index: 10;
          background: linear-gradient(#f3f5f8 85%, rgba(243,245,248,0)); }
 .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }

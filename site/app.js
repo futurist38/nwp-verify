@@ -12,6 +12,21 @@ const PANEL_ORDER = ["t2m", "tcc", "cloud3", "dswrf", "tp"];
 const UPPER_ORDER = ["sfc", "p925", "p850", "p700", "p500", "p300", "p200"];
 const MODEL_COLOR = { ECMWF: "#c01c28", GFS: "#26914a", KIM: "#1a5fb4" };
 const MODEL_SHORT = { ECMWF: "EC", GFS: "GFS", KIM: "KIM" };
+// One ordered city/station definition is shared with Today and issue comparison.
+// A failed optional Today script must not take down the other platform tabs.
+const DISPLAY_CITIES = window.WeatherOverview?.CITIES || [["서울",108],["인천",112],["수원",119],["원주",114],["강릉",105],["대전",133],["청주",131],["전주",146],["광주",156],["대구",143],["부산",159],["제주",184]].map(([name,stn])=>({name,stn,reference:name==="강릉"}));
+window.WeatherCities = DISPLAY_CITIES;
+const CITY_ORDER = DISPLAY_CITIES.map(c => c.name);
+const cityLabel = city => city === "강릉" ? "강릉 · 참조" : city;
+const finiteValue = value => typeof value === "number" && Number.isFinite(value);
+function observationAt(values, station, hour) {
+  const value = values?.[station]?.[hour];
+  return finiteValue(value) ? value : null;
+}
+function matchedTemperature(fcst, obs, index) {
+  const f = fcst?.[index], o = obs?.[index];
+  return finiteValue(f) && finiteValue(o) ? Math.round((f - o) * 10) / 10 : null;
+}
 let MF = null;
 let state = { date: null, model: null, panel: null, stepIdx: 0, runs: {} };
 // 그림 위치 — manifest.img_base(Cloudflare R2, 2026-09-08 이관)가 있어도 최근 창(manifest.local_cut: 지도·지상상층 각각)은
@@ -288,7 +303,7 @@ function drawPanel(o) {
   if (strips.length) st += `<line x1="${ML}" y1="${PB}" x2="${W - MR}" y2="${PB}" stroke="#999"/>`;
   return `<svg viewBox="0 0 ${W} ${H}" data-t="${o.title}" data-ml="${ML}" data-mr="${MR}"
     data-i0="${o.i0}" data-i1="${o.i1}" data-w="${W}">${g}${lines}${wh}${pts}${st}
-    <text x="${ML + 2}" y="${MT - 4}" font-size="12" font-weight="bold">${o.title}</text>
+    <text x="${ML + 2}" y="${MT - 4}" font-size="12" font-weight="bold">${o.titleLabel || cityLabel(o.title)}</text>
     <line class="cross" x1="0" y1="${MT}" x2="0" y2="${PB}" stroke="#e01b24" stroke-width="1" opacity="0"/>
   </svg>`;
 }
@@ -309,7 +324,7 @@ function bindHover(container, lookup) {
       cross.setAttribute("opacity", 1);
       const info = lookup(title, i);
       const sep = info.rows.length > 3 ? "<br>" : " · ";
-      tip.innerHTML = `<b>${title}</b> ${info.when}<br>` + info.rows.map((kv) => `${kv[0]} ${kv[1]}`).join(sep);
+      tip.innerHTML = `<b>${cityLabel(title)}</b> ${info.when}<br>` + info.rows.map((kv) => `${kv[0]} ${kv[1]}`).join(sep);
       tip.hidden = false;
       tip.style.left = Math.min(Math.max(8, cx + 14), innerWidth - 260) + "px";
       tip.style.top = Math.max(8, cy - 70) + "px";
@@ -367,17 +382,17 @@ function renderKmaf() {
   const i0 = Math.max(0, iIss - 6);
   const i1 = Math.min(d.hours - 1, Math.max(iIss + 6, Math.round((endMs - t0ms) / 3600e3)));
   let lo = Infinity, hi = -Infinity;
-  d.cities.forEach((c) => {
+  CITY_ORDER.forEach((c) => {
     for (let i = i0; i <= i1; i++) {
       [d.obs[c] && d.obs[c][i], d.fcst[b][c] && d.fcst[b][c][i]].forEach((v) => {
         if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
       });
     }
   });
-  if (!isFinite(lo)) { $("kmafCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
+  if (!isFinite(lo)) { lo = 0; hi = 30; }
   const pad = Math.max(1, (hi - lo) * 0.12);
   const sky = d.sky && d.sky[b], pty = d.pty && d.pty[b], pop = d.pop && d.pop[b];
-  $("kmafCharts").innerHTML = d.cities.map((c) => {
+  $("kmafCharts").innerHTML = CITY_ORDER.map((c) => {
     // 그래프 배경을 위·아래 두 단으로: 위 = 예보 하늘(SKY·PTY), 아래 = 실측 하늘(전운량) (2026-09-06 사용자 지정)
     const strips = [];
     if (sky && sky[c]) {
@@ -389,7 +404,7 @@ function renderKmaf() {
                     cells: d.obs_ca[c].map((v) => { const k = skyFromCa(v); return k ? SKY_BG[k] : null; }) });
     }
     return drawPanel({
-      title: c, i0: i0, i1: i1, ylo: lo - pad, yhi: hi + pad,
+      title: c, titleLabel: cityLabel(c) + ((d.fcst[b][c] || []).slice(i0,i1+1).some(finiteValue) ? "" : " · 예보 자료 없음"), i0: i0, i1: i1, ylo: lo - pad, yhi: hi + pad,
       t0ms: t0ms, stepMs: 3600e3, vline: iIss, night: !strips.length, now: Date.now(),
       fills: [{ a: d.fcst[b][c] || [], b: d.obs[c] || [], pos: "rgba(200,30,30,1)", neg: "rgba(30,90,200,1)", opacity: 0.16 }],
       series: [{ color: "#1a5fb4", dash: "5 3", data: d.fcst[b][c] },
@@ -401,7 +416,8 @@ function renderKmaf() {
     const o = d.obs[city] && d.obs[city][i], f = d.fcst[b][city] && d.fcst[b][city][i];
     const rows = [["실측", o == null ? "—" : o.toFixed(1) + "℃"],
                   ["예보", f == null ? "—" : f.toFixed(1) + "℃"]];
-    if (o != null && f != null) rows.push(["차이", (f - o > 0 ? "+" : "") + (f - o).toFixed(1) + "℃"]);
+    const difference = matchedTemperature(d.fcst[b][city], d.obs[city], i);
+    if (difference !== null) rows.push(["같은 시각 예보 − 실측", (difference > 0 ? "+" : "") + difference.toFixed(1) + "℃"]);
     if (sky && sky[city] && sky[city][i] != null) {
       const s = sky[city][i], p = pty && pty[city] ? pty[city][i] : null, pp = pop && pop[city] ? pop[city][i] : null;
       rows.push(["예보 하늘", SKY_NAME[skyFromKma(s, p)] + (p ? `(${PTY_NAME[p] || p})` : "") + (pp != null ? ` · 강수확률 ${pp}%` : "")]);
@@ -543,7 +559,7 @@ function bindDotHover(svgId, fmt) {
 
 // ── 중기예보 ────────────────────────────────────────
 let MID = { data: null };
-const MID_CITIES = ["서울", "원주", "대전", "대구", "부산", "광주", "강릉"];
+const MID_CITIES = CITY_ORDER;
 
 async function renderMid() {
   if (!MF.midfcst) { $("midBlock").hidden = true; return; }
@@ -554,28 +570,29 @@ async function renderMid() {
     $("midIssueSel").innerHTML = iss.map((t) =>
       `<option value="${t}">${t.slice(4, 6)}-${t.slice(6, 8)} ${t.slice(8)}시 발표</option>`).join("");
     $("midIssueSel").onchange = renderMid;
+    if ($("midHistory")) $("midHistory").onchange = renderMid;
   }
   $("midBlock").hidden = false;
   const d = MID.data, T = $("midIssueSel").value;
   const fc = d.fcst[T];
   if (!fc) { $("midCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
-  const cities = MID_CITIES.filter((c) => d.cities.includes(c));
+  const cities = MID_CITIES;
   // 일 격자: 발표일 −7일 ~ +10일
   const tIss = keyToMs(T.slice(0, 8) + "00");
   const t0ms = tIss - 7 * 864e5, n = 18, stepMs = 864e5;
   const dayKey = (i) => { const dd = new Date(t0ms + i * stepMs + 9 * 3600e3); return `${dd.getUTCFullYear()}${String(dd.getUTCMonth() + 1).padStart(2, "0")}${String(dd.getUTCDate()).padStart(2, "0")}`; };
   const keys = Array.from({ length: n }, (_, i) => dayKey(i));
   // 이전 발표 1~3일 전 (같은 시각 우선)
-  const prevIss = [1, 2, 3].map((k) => {
+  const prevIss = $("midHistory")?.checked ? [1, 2, 3].map((k) => {
     const dd = new Date(tIss - k * 864e5 + 9 * 3600e3);
     const ymd = `${dd.getUTCFullYear()}${String(dd.getUTCMonth() + 1).padStart(2, "0")}${String(dd.getUTCDate()).padStart(2, "0")}`;
     return d.issues.includes(ymd + T.slice(8)) ? ymd + T.slice(8) : d.issues.filter((x) => x.startsWith(ymd)).sort().pop();
-  }).filter(Boolean);
+  }).filter(Boolean) : [];
   const arrOf = (src, c, k) => keys.map((ymd) => (src && src[c] && src[c][ymd] && src[c][ymd][k] != null) ? src[c][ymd][k] : null);
   let lo = Infinity, hi = -Infinity;
   const bump = (arr) => arr.forEach((v) => { if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
   cities.forEach((c) => { bump(arrOf(fc, c, 0)); bump(arrOf(fc, c, 1)); bump(arrOf(d.obs, c, 0)); bump(arrOf(d.obs, c, 1)); });
-  if (!isFinite(lo)) { $("midCharts").innerHTML = "<p class='note'>자료 없음</p>"; return; }
+  if (!isFinite(lo)) { lo = 0; hi = 30; }
   const pad = Math.max(1.5, (hi - lo) * 0.1);
   const fade = [0.5, 0.35, 0.22];
   $("midCharts").innerHTML = cities.map((c) => {
@@ -594,7 +611,7 @@ async function renderMid() {
       { idx: idx, lo: mx.map((v, i) => v == null ? null : v - (arrOf(fc, c, 4)[i] || 0)), hi: mx.map((v, i) => v == null ? null : v + (arrOf(fc, c, 5)[i] || 0)), color: "#c01c28", width: 1.4 },
       { idx: idx, lo: mn.map((v, i) => v == null ? null : v - (arrOf(fc, c, 2)[i] || 0)), hi: mn.map((v, i) => v == null ? null : v + (arrOf(fc, c, 3)[i] || 0)), color: "#1a5fb4", width: 1.4 },
     ];
-    return drawPanel({ title: c, i0: 0, i1: n - 1, ylo: lo - pad, yhi: hi + pad, t0ms: t0ms, stepMs: stepMs,
+    return drawPanel({ title: c, titleLabel: cityLabel(c) + (mx.concat(mn).some(finiteValue) ? "" : " · 예보 자료 없음"), i0: 0, i1: n - 1, ylo: lo - pad, yhi: hi + pad, t0ms: t0ms, stepMs: stepMs,
                        vline: 7, now: Date.now(), series: series, whiskers: whisk, h: 220 });
   }).join("");
   bindHover("midCharts", (city, i) => {
@@ -882,7 +899,7 @@ function obsHours() {
   const vv = obsState.data && obsState.data.vars[obsState.v];
   if (!vv) return [];
   const set = new Set();
-  Object.values(vv).forEach((arr) => arr.forEach((x, h) => { if (x != null) set.add(h); }));
+  Object.values(vv).forEach((arr) => arr.forEach((x, h) => { if (finiteValue(x)) set.add(h); }));
   return [...set].sort((a, b) => a - b);
 }
 
@@ -946,7 +963,7 @@ function renderObs() {
     h = hours[obsState.idx];
     sc = obsState.meta.scales[obsState.v];
     const vv = obsState.data.vars[obsState.v];
-    valueOf = (s) => { const arr = vv[s]; return arr ? arr[h] : null; };
+    valueOf = (s) => observationAt(vv, s, h);
     $("obsLabel").textContent =
       `${fmtDate(obsState.date)} ${String(h).padStart(2, "0")}시 KST 실황 — ${sc.label} (${relNow(obsEpoch(obsState.date, h))})`;
   }
@@ -961,7 +978,7 @@ function renderObs() {
          + ` stroke="${st.L ? "#000" : "#333"}" stroke-width="${st.L ? 1.4 : 0.7}"`
          + ` data-n="${st.n}" data-v="${v}"/>`;
     if (st.L) {
-      const txt = `${st.n} ${anom && v > 0 ? "+" : ""}${v.toFixed(1)}`;
+      const txt = `${cityLabel(st.n)} ${anom && v > 0 ? "+" : ""}${v.toFixed(1)}`;
       lbl += `<text x="${st.x + 11}" y="${st.y + 5}" font-size="15" font-weight="bold"`
            + ` paint-order="stroke" stroke="#fff" stroke-width="3.5" fill="#111">${txt}</text>`;
     }
@@ -990,11 +1007,16 @@ function renderObs() {
       <svg viewBox="-6 0 ${CW + 12} 44"><defs>${defs}</defs>${cells}${ticks}</svg>
       <div class="cbar-lab">${sc.label} (${sc.unit}) — 칸 하나 ${bins.step}${sc.unit === "℃" ? "℃" : ""}</div>
     </div>
+    <div class="tablewrap"><table aria-label="주요 12도시 같은 시각 관측"><thead><tr><th>도시</th><th>${sc.label}</th><th>관측 기준</th></tr></thead><tbody>${DISPLAY_CITIES.map(city=>{
+      const value=valueOf(String(city.stn));
+      return `<tr><th>${cityLabel(city.name)}</th><td>${finiteValue(value)?value.toFixed(1)+unitTxt:"자료 없음"}</td><td>${fmtDate(obsState.date)}${h===null?"":" "+String(h).padStart(2,"0")+"시 KST"}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    <p class="note">12개 도시 모두 같은 선택 시각을 사용하며 누락을 과거 관측으로 대신하지 않습니다.</p>
     <p class="note">지점 ${n}곳 — 원 색이 값. 마우스를 올리거나(휴대폰은 짚으면) 지점명과 값이 표시됩니다. ${sub}</p>`;
 
   bindDotHover("obsSvg", (t) => {
     const v = +t.dataset.v;
-    return `<b>${t.dataset.n}</b> ${h == null ? fmtDate(obsState.date) : String(h).padStart(2, "0") + "시"}<br>${sc.label} ${anom && v > 0 ? "+" : ""}${v.toFixed(1)}${unitTxt}`;
+    return `<b>${cityLabel(t.dataset.n)}</b> ${h == null ? fmtDate(obsState.date) : String(h).padStart(2, "0") + "시"}<br>${sc.label} ${anom && v > 0 ? "+" : ""}${v.toFixed(1)}${unitTxt}`;
   });
 }
 
@@ -1028,8 +1050,6 @@ document.querySelectorAll("#vmWinBtns button").forEach((b) => {
 });
 
 // ── 검증 탭: 일별 검증표 ──
-const CITY_ORDER = ["서울", "원주", "대전", "대구", "광주", "부산",
-                    "인천", "수원", "전주", "강릉", "제주"];
 async function renderVerifDaily() {
   const d = $("dateSelV").value;
   const data = await fetchJSON(`verif/daily/${d}.json`);
@@ -1044,9 +1064,9 @@ async function renderVerifDaily() {
     const fmt = (v) => v === null || v === undefined ? "-" : v.toFixed(nd);
     let html = "<table><tr><th>지점</th>" +
       hours.map((h) => `<th>${String(h).padStart(2, "0")}시</th>`).join("") + "</tr>";
-    for (const city of CITY_ORDER.filter((c) => vd[c])) {
-      const c = vd[city];
-      html += `<tr class="city-sep"><th>${city} 관측</th>` + hours.map((h) =>
+    for (const city of CITY_ORDER) {
+      const c = vd[city] || {obs:{},models:{}};
+      html += `<tr class="city-sep"><th>${cityLabel(city)} 관측${vd[city] ? "" : " · 자료 없음"}</th>` + hours.map((h) =>
         `<td><b>${fmt(c.obs[h])}</b></td>`).join("") + "</tr>";
       for (const m of models.filter((m) => c.models[m])) {
         html += `<tr><th>　${m}</th>` + hours.map((h) => {

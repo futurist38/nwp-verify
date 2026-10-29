@@ -12,12 +12,12 @@ import math
 from pathlib import Path
 import re
 
-from config import VERIF_DIR
+from config import VERIF_DIR, DISPLAY_CITIES
 
-# 원주: KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10)
-CITY_REGIONS = {"서울": "11B00000", "인천": "11B00000", "수원": "11B00000",
-                "대전": "11C20000", "대구": "11H10000", "부산": "11H20000",
-                "광주": "11F20000", "전주": "11F10000", "강릉": "11D20000", "원주": "11D10000", "제주": "11G00000"}
+# KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10).
+CITY_REGIONS = {"서울": "11B00000", "인천": "11B00000", "수원": "11B00000", "원주": "11D10000",
+                "강릉": "11D20000", "대전": "11C20000", "청주": "11C10000", "전주": "11F10000",
+                "광주": "11F20000", "대구": "11H10000", "부산": "11H20000", "제주": "11G00000"}
 SKY = {1: ("clear", "맑음"), 3: ("partly", "구름많음"), 4: ("overcast", "흐림")}
 PTY = {1: "비", 2: "비/눈", 3: "눈", 4: "소나기"}
 VERSION = 1
@@ -217,13 +217,14 @@ def export(site_dir, verif_dir=VERIF_DIR, archive=False):
             continue
         entries.append({"issue": doc["issue"], "kind": doc["kind"], "file": "issues/" + path.name,
                         "rev": hashlib.sha256(path.read_bytes()).hexdigest()[:12],
-                        "cities": sorted(doc["cities"]),
-                        "temperature_cities": sorted(c for c, days in doc["cities"].items()
-                                                     if any(r.get("tmin") or r.get("tmax") for r in days.values())),
-                        "weather_cities": sorted(c for c, days in doc["cities"].items()
-                                                 if any(r.get("wx_am") or r.get("wx_pm") or r.get("wx_day") for r in days.values())),
+                        "cities": [c for c in DISPLAY_CITIES if c in doc["cities"]],
+                        "temperature_cities": [c for c in DISPLAY_CITIES if c in doc["cities"]
+                                               and any(r.get("tmin") or r.get("tmax") for r in doc["cities"][c].values())],
+                        "weather_cities": [c for c in DISPLAY_CITIES if c in doc["cities"]
+                                           and any(r.get("wx_am") or r.get("wx_pm") or r.get("wx_day") for r in doc["cities"][c].values())],
                         "targets": sorted({d for days in doc["cities"].values() for d in days})})
-    write(dest / "index.json", {"schema": VERSION, "timezone": "Asia/Seoul", "issues": entries})
+    write(dest / "index.json", {"schema": VERSION, "timezone": "Asia/Seoul",
+                                "city_order": list(DISPLAY_CITIES), "issues": entries})
     print(f"[예보 비교] 발표별 자료 {len(entries)}건")
     return entries
 

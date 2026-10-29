@@ -24,7 +24,7 @@ import shutil
 
 import pandas as pd
 
-from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN, DISABLED_UPPER_LEVELS
+from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN, DISPLAY_CITIES, DISABLED_UPPER_LEVELS
 from solar_radiation import is_solar_step
 
 KMAFCST_DATES: list[str] = []
@@ -258,7 +258,7 @@ def copy_nowcast(site_dir: str) -> dict | None:
     return info
 
 
-KMAF_CITIES = ["서울", "대전", "대구", "부산", "광주", "원주", "강릉"]
+KMAF_CITIES = list(DISPLAY_CITIES)
 KMAF_PREV_H, KMAF_DAY_H = (11, 17), (5, 11, 17)
 
 
@@ -297,7 +297,9 @@ def export_kmafcst(site_dir: str) -> list[str]:
         keys = [f"{g:%Y%m%d%H}" for g in grid]
 
         data = {"cities": KMAF_CITIES, "t0": f"{t0:%Y%m%d%H}", "hours": hours,
-                "fcst": {}, "obs": {}, "sky": {}, "pty": {}, "pop": {}, "obs_ca": {}}
+                "fcst": {}, "obs": {c: [None] * hours for c in KMAF_CITIES},
+                "sky": {}, "pty": {}, "pop": {},
+                "obs_ca": {c: [None] * hours for c in KMAF_CITIES}}
         for b in issues:
             data["fcst"][b] = {c: [cache[b].get(c, {}).get(k) for k in keys]
                                for c in KMAF_CITIES}
@@ -443,19 +445,18 @@ def export_midfcst(site_dir: str) -> bool:
         return False
     cut = (dt.date.today() - dt.timedelta(days=21)).strftime("%Y%m%d")
     src = [f for f in src if os.path.basename(f)[:8] >= cut]
-    out = {"issues": [], "cities": [], "fcst": {}, "obs": {}}
-    cities: set[str] = set()
+    out = {"issues": [], "cities": list(DISPLAY_CITIES), "fcst": {},
+           "obs": {c: {} for c in DISPLAY_CITIES}}
     for f in src:
         tmfc = os.path.basename(f)[:-5]
         d = json.load(open(f, encoding="utf-8"))
         out["issues"].append(tmfc)
-        out["fcst"][tmfc] = {}
+        out["fcst"][tmfc] = {c: {} for c in DISPLAY_CITIES}
         for c, days in d.items():
-            cities.add(c)
+            if c not in DISPLAY_CITIES:
+                continue
             out["fcst"][tmfc][c] = {ymd: [v.get("min"), v.get("max"), v.get("min_l"), v.get("min_h"),
                                           v.get("max_l"), v.get("max_h")] for ymd, v in days.items()}
-    out["cities"] = [c for c in ("서울", "인천", "수원", "대전", "대구", "광주", "전주", "부산", "원주", "강릉", "제주")
-                     if c in cities]
     # 실측 일 극값 (시간값 기반 — 정시 사이 극값은 놓친다; 표출에 명시)
     months = sorted({f"{(dt.date.today() - dt.timedelta(days=k)):%Y-%m}" for k in (0, 21, 35)})
     frames = [pd.read_csv(os.path.join(VERIF_DIR, "obs", f"{mm}.csv"), parse_dates=["TM"])
@@ -564,13 +565,12 @@ def export_obs(site_dir: str) -> list[str]:
     with open(os.path.join(out_dir, "stations.json"), "w", encoding="utf-8") as f:
         # 주요 도시는 지도에 값을 함께 적는다(L=1) — 나머지는 마우스로 확인
         label_stn = {CITY_OBS_STN[c] for c in
-                     ("서울", "대전", "대구", "부산", "광주", "원주", "강릉")
-                     if CITY_OBS_STN.get(c)}
+                     DISPLAY_CITIES if CITY_OBS_STN.get(c)}
         json.dump({"stations": [{"s": int(r.STN), "n": r.name_,
                                  "x": round(r.vx, 1), "y": round(r.vy, 1),
                                  "L": 1 if int(r.STN) in label_stn else 0}
                                 for r in st.rename(columns={"name": "name_"}).itertuples()],
-                   "scales": scales}, f, ensure_ascii=False, separators=(",", ":"))
+                   "scales": scales, "city_order": list(DISPLAY_CITIES)}, f, ensure_ascii=False, separators=(",", ":"))
 
     # 자체 산출 평년(1991~2020, tools/build_normals.py) — 있으면 날짜별 JSON 에 그날 값만 싣는다
     normals: dict[tuple[int, str], list] = {}
@@ -665,7 +665,7 @@ def to_webp(site_dir: str):
 def build_manifest(site_dir: str, nowcast: dict | None = None):
     """archive/ 를 스캔해 manifest.json 생성 — 파일명이 유일한 진실."""
     manifest = {"generated_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"),
-                "max_days": MAX_DAYS, "dates": {}}
+                "max_days": MAX_DAYS, "dates": {}, "city_order": list(DISPLAY_CITIES)}
     if nowcast:
         manifest["nowcast"] = nowcast
     # 그림이 R2 에 있으면(2026-09-08 이관) 러너의 archive/ 에는 이번 산출만 있다 → R2 목록(R2_LISTING,

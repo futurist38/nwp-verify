@@ -1,6 +1,8 @@
 /* 발표 시점 A/B의 같은 대상일 비교. 외부 라이브러리 없이 동작. */
 (function (root) {
   "use strict";
+  const CITIES = root.WeatherOverview?.CITIES || root.WeatherCities || [["서울",108],["인천",112],["수원",119],["원주",114],["강릉",105],["대전",133],["청주",131],["전주",146],["광주",156],["대구",143],["부산",159],["제주",184]].map(([name,stn])=>({name,stn,reference:name==="강릉"}));
+  const cityLabel = c => c === "강릉" ? "강릉 · 참조" : c;
   const COLORS = {same: "#ffffff", clear: "#fff6d5", partly: "#ebedef", overcast: "#cbd0d6", rain: "#dceffc"};
   const finite = v => typeof v === "number" && Number.isFinite(v);
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -12,36 +14,40 @@
   const kstToday = () => dateKey(new Date(Date.now()+9*3600000));
   const lastFriday = d => { const w=asDate(d).getUTCDay(); return offsetDay(d, -((w+2)%7 || 7)); };
   function range(a, b) { const out=[]; for(let d=a;d<=b;d=offsetDay(d,1)) out.push(d); return out; }
-  function selectEntries(entries, cutoff, city) {
-    const list = entries.filter(e => e.issue <= cutoff && e.cities.includes(city)).sort((a,b)=>b.issue.localeCompare(a.issue));
-    const chosen = [list.find(e=>e.kind==="short"),
-      list.find(e=>e.kind==="mid" && e.temperature_cities.includes(city)),
-      list.find(e=>e.kind==="mid" && e.weather_cities.includes(city))].filter(Boolean);
-    return [...new Map(chosen.map(e=>[e.file,e])).values()];
+  function selectEntries(entries, cutoff) {
+    // Select one issue per product globally, before looking at a city's records.
+    // Missing cities/metrics must not cause a search through older stored issues.
+    const list = entries.filter(e => e.issue <= cutoff).sort((a,b)=>b.issue.localeCompare(a.issue));
+    return [list.find(e=>e.kind==="short"),list.find(e=>e.kind==="mid")].filter(Boolean);
+  }
+  function defaultPair(entries) {
+    const short=[...new Set(entries.filter(e=>e.kind==="short").map(e=>e.issue))].sort();
+    const refs=short.length?short:[...new Set(entries.map(e=>e.issue))].sort();
+    return {latest:refs.at(-1)||null,previous:refs.at(-2)||null};
   }
   function assemble(docs, city) {
+    // Guard this boundary too: callers may supply more than one archived issue.
     const ordered = [...docs].sort((a,b)=>b.issue.localeCompare(a.issue));
-    const dates = [...new Set(ordered.flatMap(d=>Object.keys(d.cities[city]||{})))].sort();
+    const short = ordered.find(d=>d.kind==="short"), mid = ordered.find(d=>d.kind==="mid");
+    const daysOf = d => Object.values(d?.cities||{}).flatMap(records=>Object.keys(records));
+    const shortDays = new Set(daysOf(short));
+    const dates = [...new Set([...shortDays,...daysOf(mid)])].sort();
     const output={};
     for(const day of dates) {
-      const get = (kind, field) => {
-        for(const d of ordered.filter(x=>x.kind===kind)) {
-          const v=d.cities[city]?.[day]?.[field];
-          if(v) return {...v,issue:d.issue,kind:d.kind};
-        }
-        return null;
-      };
-      const pick = field => get("short",field) || get("mid",field);
-      const wx = {am:pick("wx_am"),pm:pick("wx_pm"),day:null};
-      if(!wx.am && !wx.pm) wx.day=get("mid","wx_day");
+      // Keep the short/medium horizon bridge, not a fallback for a missing city,
+      // metric, or hour inside the latest short issue's coverage.
+      const d = shortDays.has(day) ? short : mid;
+      const r = d?.cities?.[city]?.[day];
+      if(!r) continue;
+      const get = field => r[field] ? {...r[field],issue:d.issue,kind:d.kind} : null;
+      const wx = {am:get("wx_am"),pm:get("wx_pm"),day:null};
+      if(!wx.am && !wx.pm && d.kind==="mid") wx.day=get("wx_day");
       const hourly={};
-      for(const d of ordered.filter(x=>x.kind==="short")) {
-        for(const [key, h] of Object.entries(d.cities[city]?.[day]?.hourly||{})) {
-          if(!hourly[key]) hourly[key]={...h,issue:d.issue,kind:"short",basis:"TMP1",
-            wx:h.wx?{...h.wx,issue:d.issue,kind:"short"}:null};
-        }
+      if(d.kind==="short") for(const [key,h] of Object.entries(r.hourly||{})) {
+        hourly[key]={...h,issue:d.issue,kind:"short",basis:"TMP1",
+          wx:h.wx?{...h.wx,issue:d.issue,kind:"short"}:null};
       }
-      output[day]={tmin:pick("tmin"),tmax:pick("tmax"),wx,hourly};
+      output[day]={tmin:get("tmin"),tmax:get("tmax"),wx,hourly};
     }
     return output;
   }
@@ -64,12 +70,12 @@
     slots.forEach((s,i)=>{const v=s[side]?.temp;if(finite(v)){path+=`${active?"L":"M"}${x(i)},${y(v)} `;active=true;}else active=false;});
     return path;
   }
-  const api={COLORS,selectEntries,assemble,compareWeather,delta,lastFriday,range,bounds,hourlySlots,hourlyPath};
+  const api={CITIES,COLORS,defaultPair,selectEntries,assemble,compareWeather,delta,lastFriday,range,bounds,hourlySlots,hourlyPath};
   if(typeof module!=="undefined" && module.exports) module.exports=api;
   if(!root.document) return;
 
   const $=id=>document.getElementById("fc-"+id);
-  let index, refs=[], records={a:{},b:{}}, available=[], selected="", selectedHour="", serial=0, initialized=false;
+  let index, refs=[], records={a:{},b:{}}, available=[], selected="", selectedHour="", serial=0, initialized=false, priorMissing=false;
   const cache=new Map();
   async function json(url) {
     const r=await fetch(url,{cache:"no-cache"});
@@ -99,7 +105,7 @@
     const b=todayRefs.at(-1), ad=mode==="friday"?lastFriday(today):offsetDay(today,-1);
     const ar=refs.filter(r=>r.startsWith(ad) && r.slice(8)<=b.slice(8));
     if(!ar.length) { $("status").textContent=`${dayLabel(ad)}에 선택 가능한 예보가 없습니다.`; return; }
-    setRef("a",ar.at(-1));setRef("b",b);update(true);
+    priorMissing=false;setRef("a",ar.at(-1));setRef("b",b);update(true);
   }
   function source(rec) {
     if(!rec) return "자료 없음";
@@ -115,7 +121,7 @@
     selected=day;
     document.querySelectorAll("#fc-timeline [data-day]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.day===day)));
     const a=records.a[day]||{}, b=records.b[day]||{};
-    let out=`<h3>${esc(dayLabel(day))} 상세 · ${esc($("city").value)}</h3><div class="fc-details-grid">`;
+    let out=`<h3>${esc(dayLabel(day))} 상세 · ${esc(cityLabel($("city").value))}</h3><div class="fc-details-grid">`;
     for(const [key,name,cls] of [["tmax","최고기온","max"],["tmin","최저기온","min"]]) {
       out+=`<div class="fc-detail"><strong class="fc-${cls}">${name}</strong><div class="fc-values">${temp(a[key])} → ${temp(b[key])} <b>${deltaText(a[key],b[key])}</b></div><p>A ${esc(source(a[key])+rangeText(a[key]))}</p><p>B ${esc(source(b[key])+rangeText(b[key]))}</p></div>`;
     }
@@ -262,6 +268,10 @@
     $("timeline").innerHTML="";$("detail").innerHTML="";$("summary").textContent="";
     $("hourly").hidden=true;$("hourly-plot").innerHTML="";$("hourly-detail").innerHTML="";
     try {
+      if(priorMissing) {
+        available=[];$("start").disabled=$("end").disabled=true;
+        $("status").textContent="직전 저장된 단기 발표가 없어 기본 변화 비교를 할 수 없습니다. 과거 비교는 A·B 날짜와 시각을 직접 선택하세요.";return;
+      }
       const a=refValue("a"),b=refValue("b"),city=$("city").value;
       const entriesA=selectEntries(index.issues,a,city),entriesB=selectEntries(index.issues,b,city);
       const [da,db]=await Promise.all([Promise.all(entriesA.map(load)),Promise.all(entriesB.map(load))]);
@@ -290,22 +300,22 @@
       if(index.schema!==1) throw new Error("지원하지 않는 자료 형식");
       refs=[...new Set(index.issues.map(e=>e.issue))].sort();
       if(!refs.length) {$("status").textContent="아직 비교할 발표 자료가 없습니다. 다음 자료 수집 후 표시됩니다.";return;}
-      // Keep newly configured Wonju selectable before its first reception.
-      const cities=[...new Set([...index.issues.flatMap(e=>e.cities),"원주"])];
-      options($("city"),cities,c=>c,cities.includes("서울")?"서울":cities[0]);
+      // Keep all configured cities selectable even before their first reception.
+      const cities=CITIES.map(c=>c.name);
+      options($("city"),cities,cityLabel,"서울");
       const dates=[...new Set(refs.map(r=>r.slice(0,8)))].reverse();
       for(const side of ["a","b"]) {
         options($(side+"-date"),dates,d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`);
-        $(side+"-date").onchange=()=>{fillTimes(side,$(side+"-time").value);update(true);};
-        $(side+"-time").onchange=()=>update(true);
+        $(side+"-date").onchange=()=>{priorMissing=false;fillTimes(side,$(side+"-time").value);update(true);};
+        $(side+"-time").onchange=()=>{priorMissing=false;update(true);};
       }
-      const b=refs.at(-1), previous=offsetDay(b.slice(0,8),-1)+b.slice(8);
-      setRef("b",b);setRef("a",refs.filter(r=>r<=previous).at(-1)||refs[0]);
+      const pair=defaultPair(index.issues),b=pair.latest,a=pair.previous || b;
+      priorMissing=!pair.previous;setRef("b",b);setRef("a",a);
       $("city").onchange=()=>update(true);
       $("start").onchange=()=>{if($("start").value>$("end").value)$("end").value=$("start").value;render();};
       $("end").onchange=()=>{if($("end").value<$("start").value)$("start").value=$("end").value;render();};
       $("yesterday").onclick=()=>preset("yesterday");$("friday").onclick=()=>preset("friday");
-      $("swap").onclick=()=>{const a=refValue("a"),b=refValue("b");setRef("a",b);setRef("b",a);update();};
+      $("swap").onclick=()=>{priorMissing=false;const a=refValue("a"),b=refValue("b");setRef("a",b);setRef("b",a);update();};
       $("ranges").onchange=render;
       update(true);
     } catch(e) {

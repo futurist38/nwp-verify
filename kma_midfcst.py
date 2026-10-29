@@ -27,13 +27,12 @@ from config import VERIF_DIR
 
 URL = "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php"
 CACHE_DIR = os.path.join(VERIF_DIR, "midfcst")
-# 중기예보 기온 예보구역 코드 (2026-09-06 실측: 10도시 전부 200·자료 있음)
-# 원주: KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10)
-REGS = {"서울": "11B10101", "인천": "11B20201", "수원": "11B20601", "대전": "11C20401",
-        "대구": "11H10701", "부산": "11H20201", "광주": "11F20501", "전주": "11F10201",
-        "강릉": "11D20501", "원주": "11D10401", "제주": "11G00201"}
-# 원주 수신 지연이 기존 10도시의 신규 발표 저장을 막지 않게 기존 완전성 기준 유지.
-REQUIRED_CITIES = frozenset(REGS) - {"원주"}
+# KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10).
+REGS = {"서울": "11B10101", "인천": "11B20201", "수원": "11B20601", "원주": "11D10401",
+        "강릉": "11D20501", "대전": "11C20401", "청주": "11C10301", "전주": "11F10201",
+        "광주": "11F20501", "대구": "11H10701", "부산": "11H20201", "제주": "11G00201"}
+# 신규 원주·청주 수신 지연이 기존 10도시의 저장을 막지 않게 종전 완전성 기준 유지.
+REQUIRED_CITIES = frozenset(REGS) - {"원주", "청주"}
 
 
 def fetch_city(reg: str, tmfc1: str, tmfc2: str, key: str) -> list[list[str]]:
@@ -103,7 +102,7 @@ def main():
                 continue
             cities = {**existing, **additions}
         elif not REQUIRED_CITIES.issubset(cities):
-            # 기존 도시 누락은 종전대로 대기. 원주만 누락되면 기존 도시는 저장하고 추후 보충.
+            # 기존 도시 누락은 종전대로 대기. 원주·청주 누락은 결측으로 저장하고 추후 보충.
             print(f"[중기예보] {tmfc}: 기존 필수 도시 누락 — 아직 미완, 다음 실행에")
             continue
         tmp = path + ".tmp"
