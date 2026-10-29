@@ -134,6 +134,8 @@ def collect(day):
             'status':'automatic','automatic_generation':True}
 
 def fetch_image(kind,cutoff,destination):
+    if kind=='radar':
+        return fetch_radar_image(cutoff,destination)
     origin='https://www.weather.go.kr'
     params={'mapType':'img','tm':cutoff.strftime('%Y.%m.%d.%H:%M'),'itv':'0.5','leaflet':'0','kmap':'0'}
     if kind=='satellite':
@@ -156,3 +158,23 @@ def fetch_image(kind,cutoff,destination):
         return {'time':tm.isoformat(),'url':url,'available':True}
     except Exception:
         return {'available':False,'reason':'Image unavailable at 07 KST cutoff'}
+
+
+def fetch_radar_image(cutoff,destination):
+    """KMA HSR graphic including map and rainfall-rate legend; never log authKey."""
+    endpoint='https://apihub.kma.go.kr/api/typ03/cgi/rdr/nph-rdr_cmp1_img'
+    params=dict(tm=cutoff.strftime('%Y%m%d%H%M'),cmp='HSR',qcd='HSLP',obs='ECHD',
+                color='C4',aws=0,acc='',map='HR',grid=2,legend=1,size=900,itv=5,
+                zoom_level=0,zoom_x='0000000',zoom_y='0000000',gov='')
+    try:
+        url=endpoint+'?'+urlencode(dict(params,authKey=os.environ['KMA_AUTH_KEY']))
+        with urlopen(url,timeout=45) as response:body=response.read(12_000_001)
+        if len(body)>12_000_000:raise ValueError('Oversized radar image')
+        from PIL import Image
+        im=Image.open(io.BytesIO(body));im.load()
+        if min(im.size)<500:raise ValueError('Unexpected radar graphic size')
+        im.convert('RGB').save(destination)
+        return dict(available=True,time=cutoff.isoformat(),url=endpoint,
+                    parameters=params,product='HSR graphic with map and mm/h legend')
+    except Exception:
+        return dict(available=False,reason='KMA HSR graphic unavailable at report cutoff')

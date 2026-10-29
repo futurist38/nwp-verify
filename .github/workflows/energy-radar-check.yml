@@ -1,0 +1,30 @@
+name: energy-radar-check
+on:
+  push:
+    paths: ['.github/workflows/energy-radar-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install Pillow
+      - name: Verify HSR graphic
+        env:
+          KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+        run: |
+          PYTHONPATH=energy_runtime python - <<'PY'
+          from energy_data import fetch_radar_image,KST
+          import datetime as dt,base64,json
+          from pathlib import Path
+          p=Path('/tmp/radar-check.png')
+          r=fetch_radar_image(dt.datetime(2026,10,29,7,tzinfo=KST),p)
+          print(json.dumps(r))
+          assert r['available'], 'HSR graphic fetch failed'
+          print('RADAR_PNG_BASE64='+base64.b64encode(p.read_bytes()).decode())
+          PY
