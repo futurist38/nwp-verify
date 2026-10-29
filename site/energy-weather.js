@@ -8,7 +8,7 @@ function image(src){return new Promise((resolve,reject)=>{const im=new Image();i
 async function sprite(src){if(!spriteImages.has(src))spriteImages.set(src,await image(src));return spriteImages.get(src);}
 function remember(){history.push(clone(scene));if(history.length>40)history.shift();}
 function draw(handles=editing){
- ctx.clearRect(0,0,1920,1080);if(!background||!scene)return;ctx.drawImage(background,0,0,1920,1080);drawPanels();
+ ctx.clearRect(0,0,1920,1080);if(!background||!scene)return;ctx.drawImage(background,0,0,1920,1080);
  for(const b of scene.boundaries){const p=b.points;ctx.beginPath();ctx.moveTo(...p[0]);ctx.bezierCurveTo(...p[1],...p[2],...p[3]);ctx.strokeStyle=b.color;ctx.lineWidth=b.width;ctx.stroke();}
  for(let i=0;i<scene.groups.length;i++){const g=scene.groups[i],im=spriteImages.get(g.src);if(im)ctx.drawImage(im,g.x,g.y,g.w,g.h);
   if(handles&&selected?.type==='group'&&selected.index===i){ctx.strokeStyle='#7c3aed';ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.strokeRect(g.x-5,g.y-5,g.w+10,g.h+10);ctx.setLineDash([]);}}
@@ -26,8 +26,8 @@ canvas.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=point(e);i
 function endDrag(){drag=null;}
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
 el('edit').onclick=()=>{editing=!editing;el('editorControls').hidden=!editing;canvas.hidden=!editing;el('page1').hidden=editing;el('edit').textContent=editing?'편집 닫기':'1페이지 편집';draw();};
-el('undo').onclick=()=>{if(history.length){scene=history.pop();selected=null;controls();syncPanelControls();draw();}};
-el('reset').onclick=()=>{remember();scene=clone(original);selected=null;controls();syncPanelControls();draw();};
+el('undo').onclick=()=>{if(history.length){scene=history.pop();selected=null;controls();draw();}};
+el('reset').onclick=()=>{remember();scene=clone(original);selected=null;controls();draw();};
 el('remove').onclick=()=>{if(!selected)return;remember();scene[selected.type==='group'?'groups':'boundaries'].splice(selected.index,1);selected=null;controls();draw();};
 el('size').onchange=e=>{if(selected?.type!=='group')return;remember();const g=scene.groups[selected.index],scale=Number(e.target.value)/100;const w=Math.min(800,g.w*scale),h=w*g.h/g.w;g.x-=(w-g.w)/2;g.y-=(h-g.h)/2;g.w=w;g.h=h;controls();draw();};
 el('addIcon').onclick=async()=>{if(!scene)return;remember();const src=scene.palette[el('iconChoice').value];const im=await sprite(src);const s=130/Math.max(im.width,im.height);scene.groups.push({id:'added-'+Date.now(),x:800,y:450,w:im.width*s,h:im.height*s,src});selected={type:'group',index:scene.groups.length-1};controls();draw();};
@@ -57,49 +57,11 @@ async function show(){
   const bg=await image(`energy/${day}/${data.background}?v=${version}`);if(token!==loadToken)return;
   original=data;original.revision=data.revision||1;scene=clone(original);background=bg;
   try{const saved=JSON.parse(localStorage.getItem(storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries))scene=saved;}catch(e){}
-  if(!scene.panels)scene.panels=clone(original.panels||[]);
-  await Promise.all([...scene.groups,...(scene.panels||[])].filter(g=>g.src).map(g=>sprite(g.src)));if(token!==loadToken)return;
+  await Promise.all(scene.groups.map(g=>sprite(g.src)));if(token!==loadToken)return;
   el('iconChoice').replaceChildren();for(const name of Object.keys(scene.palette)){const option=document.createElement('option');option.value=name;option.textContent=labels[name]||name;el('iconChoice').append(option);}
-  el('edit').disabled=false;el('editStatus').textContent='아이콘을 끌어 이동하고, 경계선의 보라색 조절점을 움직이세요. 편집 내용은 자동 생성 원본에 영향을 주지 않습니다.';controls();syncPanelControls();draw();
+  el('edit').disabled=false;el('editStatus').textContent='아이콘을 끌어 이동하고, 경계선의 보라색 조절점을 움직이세요. 편집 내용은 자동 생성 원본에 영향을 주지 않습니다.';controls();draw();
  }catch(e){if(token===loadToken)el('editStatus').textContent='이 날짜의 편집 정보를 불러오지 못했습니다.';}
 }
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>draw(false));window.addEventListener('afterprint',()=>draw());
 (async()=>{try{const r=await fetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch(e){el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
-
-function drawPanels(){
- for(const [i,p] of (scene?.panels||[]).entries()){
-  const y=i===0?151:622,iy=i===0?202:659;
-  ctx.fillStyle='white';ctx.fillRect(55,y-5,455,(i===0?450:410));
-  const im=spriteImages.get(p.src);
-  if(im){const scale=Math.min(1,365/im.width,365/im.height);const w=im.width*scale,h=im.height*scale;ctx.drawImage(im,282-w/2,iy+(365-h)/2,w,h);}
-  else{ctx.font='28px sans-serif';ctx.fillStyle='#666';ctx.textAlign='center';ctx.fillText('자료 수신 지연',282,iy+180);}
-  let fs=24;ctx.font=`bold ${fs}px sans-serif`;while(ctx.measureText(p.title).width>240&&fs>14){fs--;ctx.font=`bold ${fs}px sans-serif`;}
-  const width=Math.min(260,ctx.measureText(p.title).width+26);
-  ctx.fillStyle='#fff300';ctx.fillRect(67,y,width,35);ctx.strokeStyle='black';ctx.lineWidth=1;ctx.strokeRect(67,y,width,35);
-  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='black';ctx.fillText(p.title,67+width/2,y+18);
-  if(p.time){ctx.font='21px sans-serif';ctx.textAlign='right';ctx.fillStyle='#333';ctx.fillText(p.time.slice(11,16)+' KST',497,y+18);}
- }
-}
-function syncPanelControls(){
- const p=scene?.panels?.[Number(el('panelTarget').value)];el('applyPanel').disabled=!p;
- if(!p)return;el('panelTitle').value=p.title;el('panelTime').value=p.time?.slice(0,16)||'';el('panelFile').value='';
- el('panelType').value=[...el('panelType').options].some(o=>o.value===p.title)?p.title:'직접 입력';
-}
-el('panelTarget').onchange=syncPanelControls;
-el('panelType').onchange=()=>{if(el('panelType').value!=='직접 입력')el('panelTitle').value=el('panelType').value;};
-el('applyPanel').onclick=async()=>{
- const token=loadToken,idx=Number(el('panelTarget').value),p=scene?.panels?.[idx];if(!p)return;
- try{
-  const title=el('panelTitle').value.trim(),time=el('panelTime').value,file=el('panelFile').files[0];
-  if(!title||!time)throw Error('제목과 자료 시각을 입력해 주세요.');
-  if(title!==p.title&&!file)throw Error('영상 종류를 바꿀 때는 해당 이미지도 선택해 주세요.');
-  let src=p.src;
-  if(file){
-   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024)throw Error('20MB 이하의 PNG·JPG·WebP 파일을 선택해 주세요.');
-   const url=URL.createObjectURL(file);let im;try{im=await image(url);}finally{URL.revokeObjectURL(url);}
-   const scale=Math.min(1,365/im.width,365/im.height),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*scale));c.height=Math.max(1,Math.round(im.height*scale));c.getContext('2d').drawImage(im,0,0,c.width,c.height);src=c.toDataURL('image/png');await sprite(src);
-  }
-  if(token!==loadToken)return;remember();scene.panels[idx]={...p,title,time:time+'+09:00',src};draw();el('editStatus').textContent='영상과 자료 시각을 적용했습니다. 편집본 PNG 저장으로 내려받으세요.';
- }catch(e){el('editStatus').textContent=e.message;}
-};
