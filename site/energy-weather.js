@@ -3,12 +3,14 @@ const el=id=>document.getElementById(id);
 const format=d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
 const clone=o=>JSON.parse(JSON.stringify(o));
 let index,scene,original,background,selected=null,drag=null,history=[],editing=false,loadToken=0;
+const imageryEndpoint=document.querySelector('meta[name=energy-imagery-endpoint]')?.content.trim().replace(/\/$/,'')||'';
+let refreshing=false;
 const spriteImages=new Map();const canvas=el('editorCanvas'),ctx=canvas.getContext('2d');
 function image(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src;});}
 async function sprite(src){if(!spriteImages.has(src))spriteImages.set(src,await image(src));return spriteImages.get(src);}
 function remember(){history.push(clone(scene));if(history.length>40)history.shift();}
 function draw(handles=editing){
- ctx.clearRect(0,0,1920,1080);if(!background||!scene)return;ctx.drawImage(background,0,0,1920,1080);
+ ctx.clearRect(0,0,1920,1080);if(!background||!scene)return;ctx.drawImage(background,0,0,1920,1080);drawPanels();
  for(const b of scene.boundaries){const p=b.points;ctx.beginPath();ctx.moveTo(...p[0]);ctx.bezierCurveTo(...p[1],...p[2],...p[3]);ctx.strokeStyle=b.color;ctx.lineWidth=b.width;ctx.stroke();}
  for(let i=0;i<scene.groups.length;i++){const g=scene.groups[i],im=spriteImages.get(g.src);if(im)ctx.drawImage(im,g.x,g.y,g.w,g.h);
   if(handles&&selected?.type==='group'&&selected.index===i){ctx.strokeStyle='#7c3aed';ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.strokeRect(g.x-5,g.y-5,g.w+10,g.h+10);ctx.setLineDash([]);}}
@@ -25,6 +27,42 @@ canvas.addEventListener('pointerdown',e=>{
 canvas.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=point(e);if(drag.type==='point')scene.boundaries[drag.b].points[drag.p]=[Math.max(0,Math.min(1920,x)),Math.max(90,Math.min(1025,y))];else{const g=scene.groups[drag.index];g.x=Math.max(0,Math.min(1920-g.w,x-drag.dx));g.y=Math.max(90,Math.min(1025-g.h,y-drag.dy));}draw();});
 function endDrag(){drag=null;}
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);canvas.addEventListener('lostpointercapture',endDrag);
+function drawPanels(){
+ for(const p of scene.panels||[]){
+  if(!p.updated)continue;const im=spriteImages.get(p.src);if(!im)continue;
+  const top=p.id==='satellite'?202:659,y=p.id==='satellite'?151:622;
+  ctx.fillStyle='white';ctx.fillRect(65,top,435,365);ctx.fillRect(310,y,190,36);
+  const scale=Math.min(365/im.width,365/im.height,1),w=im.width*scale,h=im.height*scale;
+  ctx.drawImage(im,282-w/2,top+(365-h)/2,w,h);
+  ctx.fillStyle='#333333';ctx.font='21px system-ui, sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+  const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(p.time));
+  ctx.fillText(time+' KST',497,y+18);
+ }
+}
+function refreshControls(){const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');el('refreshImages').hidden=!imageryEndpoint;el('refreshImages').disabled=refreshing||!scene||el('date').value!==today;}
+el('refreshImages').onclick=async()=>{
+ if(refreshing||!scene||!imageryEndpoint)return;
+ const token=loadToken;refreshing=true;refreshControls();el('status').textContent='기상청에서 최신 공개 위성·레이더 영상을 확인하고 있습니다…';
+ try{
+  const result=await Promise.allSettled(['satellite','radar'].map(async kind=>{
+   const r=await fetch(imageryEndpoint+'/latest/'+kind,{credentials:'omit',signal:AbortSignal.timeout(90000)});
+   if(!r.ok)throw Error('unavailable');const p=await r.json();
+   if(p.id!==kind||typeof p.src!=='string'||p.src.length>5500000||!p.src.startsWith('data:image/png;base64,')||!Number.isFinite(Date.parse(p.time)))throw Error('invalid');
+   const ms=Date.parse(p.time);if(ms>Date.now()+60000||ms<Date.now()-3600000)throw Error('stale');
+   // Keep browser storage compact while retaining the entire image and legend.
+   const full=await image(p.src),thumb=document.createElement('canvas'),scale=Math.min(365/full.width,365/full.height,1);
+   thumb.width=Math.round(full.width*scale);thumb.height=Math.round(full.height*scale);thumb.getContext('2d').drawImage(full,0,0,thumb.width,thumb.height);
+   p.src=thumb.toDataURL('image/png');await sprite(p.src);return {...p,updated:true};
+  }));
+  if(token!==loadToken)return;
+  const good=result.filter(r=>r.status==='fulfilled').map(r=>r.value);
+  if(!good.length)throw Error('unavailable');remember();scene.panels=scene.panels||clone(original.panels||[]);
+  for(const p of good){const i=scene.panels.findIndex(x=>x.id===p.id);if(i<0)scene.panels.push(p);else scene.panels[i]=p;}
+  if(!editing)el('edit').click();draw();
+  el('status').textContent=(good.length===2?'최신 위성·레이더 영상을 적용했습니다.':'불러온 영상만 갱신했습니다. 실패한 영상은 기존 상태로 유지됩니다.')+' 영상별 관측 시각을 확인해 주세요. 예보와 지도 편집 내용은 유지됩니다. 편집본 PNG 저장으로 내려받을 수 있습니다.';
+ }catch{if(token===loadToken)el('status').textContent='최신 영상을 가져오지 못했습니다. 기존 영상과 편집 내용은 유지됩니다. 잠시 후 다시 시도해 주세요.';}
+ finally{refreshing=false;refreshControls();}
+};
 el('edit').onclick=()=>{editing=!editing;el('editorControls').hidden=!editing;canvas.hidden=!editing;el('page1').hidden=editing;el('edit').textContent=editing?'편집 닫기':'1페이지 편집';draw();};
 el('undo').onclick=()=>{if(history.length){scene=history.pop();selected=null;controls();draw();}};
 el('reset').onclick=()=>{remember();scene=clone(original);selected=null;controls();draw();};
@@ -46,7 +84,7 @@ el('save1').onclick=e=>{e.preventDefault();downloadPng(1);};el('save2').onclick=
 const labels={clear:'맑음',sun_cloud_a:'구름조금',sun_cloud_b:'구름많음',cloudy:'흐림',rain:'비',shower:'소나기',snow:'눈',snow_rain_a:'눈·비',thunderstorm:'뇌우',fog:'안개',haze:'연무',dust:'황사'};
 async function show(){
  const token=++loadToken,day=el('date').value;if(!/^\d{8}$/.test(day))return;
- editing=false;scene=null;background=null;history=[];selected=null;drag=null;el('editorControls').hidden=true;canvas.hidden=true;el('page1').hidden=false;el('edit').disabled=true;el('edit').textContent='1페이지 편집';
+ editing=false;scene=null;background=null;history=[];selected=null;drag=null;el('editorControls').hidden=true;canvas.hidden=true;el('page1').hidden=false;el('edit').disabled=true;refreshControls();el('edit').textContent='1페이지 편집';
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');
  el('status').textContent=`${format(day)} 자료입니다. `+(index.automatic_generation?'매일 오전 7시 기준 자동 생성 · ':'자동 생성 연결 중 · ')+(day!==today?'오늘 자료가 아니므로 날짜를 확인해 주세요.':'');
  const version=encodeURIComponent(index.updated_kst||'editor-v1');
@@ -57,11 +95,13 @@ async function show(){
   const bg=await image(`energy/${day}/${data.background}?v=${version}`);if(token!==loadToken)return;
   original=data;original.revision=data.revision||1;scene=clone(original);background=bg;
   try{const saved=JSON.parse(localStorage.getItem(storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries))scene=saved;}catch(e){}
-  await Promise.all(scene.groups.map(g=>sprite(g.src)));if(token!==loadToken)return;
+  scene.panels=scene.panels||clone(original.panels||[]);
+  await Promise.all([...scene.groups,...scene.panels.filter(p=>p.updated)].map(g=>sprite(g.src)));if(token!==loadToken)return;
   el('iconChoice').replaceChildren();for(const name of Object.keys(scene.palette)){const option=document.createElement('option');option.value=name;option.textContent=labels[name]||name;el('iconChoice').append(option);}
-  el('edit').disabled=false;el('editStatus').textContent='아이콘을 끌어 이동하고, 경계선의 보라색 조절점을 움직이세요. 편집 내용은 자동 생성 원본에 영향을 주지 않습니다.';controls();draw();
+  el('edit').disabled=false;refreshControls();el('editStatus').textContent='아이콘을 끌어 이동하고, 경계선의 보라색 조절점을 움직이세요. 편집 내용은 자동 생성 원본에 영향을 주지 않습니다.';controls();draw();
  }catch(e){if(token===loadToken)el('editStatus').textContent='이 날짜의 편집 정보를 불러오지 못했습니다.';}
 }
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>draw(false));window.addEventListener('afterprint',()=>draw());
 (async()=>{try{const r=await fetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch(e){el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
