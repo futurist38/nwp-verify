@@ -1,0 +1,41 @@
+name: energy-daily
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - energy_runtime/**
+      - .github/workflows/energy-daily.yml
+      - energy-run-request.json
+  schedule:
+    - cron: '0 22 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: energy-daily
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Seoul
+      KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          pip install Pillow numpy scipy
+      - name: Test source handling and report logic
+        run: python -m unittest discover -s energy_runtime -p 'test_*.py' -v
+      - name: Generate 07 KST report
+        run: python energy_runtime/build_energy.py
+      - name: Publish energy report only
+        run: |
+          git config user.name nwp-bot
+          git config user.email actions@users.noreply.github.com
+          python energy_runtime/publish_energy.py
