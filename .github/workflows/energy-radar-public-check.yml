@@ -2,46 +2,38 @@ name: energy-radar-public-check
 on:
   push:
     paths: ['.github/workflows/energy-radar-public-check.yml']
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
-      - name: Inspect public imagery without credentials
+      - name: Verify public radar graphic
         shell: python
         run: |
-          import urllib.request, urllib.parse, re, json, concurrent.futures
-          def get(url):
-              req=urllib.request.Request(url,headers={'Origin':'https://futurist38.github.io'})
-              with urllib.request.urlopen(req,timeout=20) as r:
-                  body=r.read(2000000)
-                  return body,r.headers
+          import urllib.request,urllib.parse,re,json,datetime,struct,base64
+          def get(url,origin=False):
+              req=urllib.request.Request(url,headers={'Origin':'https://futurist38.github.io'} if origin else {})
+              with urllib.request.urlopen(req,timeout=25) as r:return r.read(3000000),dict(r.headers)
           def inspect(url):
-              try:
-                  body,h=get(url);s=body.decode('utf-8','replace')
-                  print('DOCUMENT',url,'CORS',h.get('Access-Control-Allow-Origin'),'BYTES',len(body),flush=True)
-                  scripts=re.findall(r'<script[^>]*src=["\x27]([^"\x27]+)',s)
-                  print('SCRIPTS',json.dumps(scripts),flush=True)
-                  for line in s.splitlines():
-                      if re.search(r'nph-|cgi-bin|imageUrl|imgUrl|cgiUrl|cgiURL|cgi_id|cgiId|imgsrc|IMG_URL',line,re.I):print('SOURCE',line[:1600],flush=True)
-                  urls=[urllib.parse.urljoin(url,p) for p in scripts if not re.search(r'jquery|bootstrap|moment|datepicker|calendar|swiper|d3|html2canvas|polyfill',p,re.I)]
-                  urls=[u for u in urls if urllib.parse.urlparse(u).hostname=='radar.kma.go.kr'][:12]
-                  for u in urls:
-                      try:
-                          b,_=get(u);text=b.decode('utf-8','replace')
-                          lines=[line[:1800] for line in text.splitlines() if re.search(r'nph-|cgi-bin|imageUrl|imgUrl|cgiUrl|cgiURL|IMG_URL',line,re.I)]
-                          if lines:print('SCRIPT',u,'MATCHES',json.dumps(lines[:25]),flush=True)
-                      except Exception as e:print('SCRIPT_ERROR',u,type(e).__name__,flush=True)
-              except Exception as e:print('ERROR',url,str(e),flush=True)
-          inspect('https://radar.kma.go.kr/radar/main.do')
-          url='https://www.weather.go.kr/w/wnuri-img/rest/radar/cmp/images.do?mapType=img&tm=&itv=5&leaflet=0&kmap=0&area=KWK&data=pop'
-          try:
-              b,h=get(url);rows=json.loads(b);print('RADAR_META_CORS',h.get('Access-Control-Allow-Origin'));print('RADAR_META_SAMPLE',json.dumps(rows[-2:]),flush=True)
-              if rows:
-                  u=urllib.parse.urljoin('https://www.weather.go.kr',rows[-1]['url']);b,h=get(u)
-                  print('RADAR_IMAGE',u,'CORS',h.get('Access-Control-Allow-Origin'),'BYTES',len(b),'TYPE',h.get('Content-Type'),flush=True)
-          except Exception as e:print('RADAR_META_ERROR',str(e),flush=True)
+              b,h=get(url);s=b.decode('utf-8','replace')
+              print('PAGE',url,'BYTES',len(b),flush=True)
+              lines=s.splitlines()
+              hits=[i for i,l in enumerate(lines) if re.search(r'nph-rdr_cmp|cgi-bin/center|radar_comp_gis|UNIT_BAR|crossOrigin|crossorigin',l)]
+              indexes=set()
+              for i in hits:indexes.update(range(max(0,i-3),min(len(lines),i+12)))
+              for i in sorted(indexes):print('SOURCE',i,lines[i][:1500],flush=True)
+              return s
+          s=inspect('https://radar.kma.go.kr/radar/main2.do')
+          tm=(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))-datetime.timedelta(minutes=10)).strftime('%Y%m%d%H%M')
+          tm=tm[:-1]+str(int(tm[-1])//5*5)
+          if 'nph-rdr_cmp1_img' in s:
+              p=dict(tm=tm,cmp='HSR',qcd='HSLP',obs='ECHD',color='C4',aws='0',acc='',map='HR',grid='2',legend='1',size='600',itv='5',zoom_level='0',zoom_x='0000000',zoom_y='0000000',gov='')
+              u='https://radar.kma.go.kr/cgi-bin/center/nph-rdr_cmp1_img?'+urllib.parse.urlencode(p)
+              for origin in [False,True]:
+                  try:
+                      b,h=get(u,origin);print('PUBLIC_GRAPHIC',json.dumps(dict(url=u,origin=origin,headers={k:v for k,v in h.items() if k.lower() in ['content-type','access-control-allow-origin','content-length']},bytes=len(b),png=b.startswith(b'\\x89PNG'),head=b[:12].hex())),flush=True)
+                      if b.startswith(bytes([137,80,78,71])):print('GRAPHIC_PNG',base64.b64encode(b).decode(),flush=True)
+                  except Exception as e:print('PUBLIC_GRAPHIC_ERROR',origin,str(e),flush=True)
           
