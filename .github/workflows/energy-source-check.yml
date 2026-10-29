@@ -1,0 +1,22 @@
+name: energy-source-check
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - tools/check_energy_source.py
+      - .github/workflows/energy-source-check.yml
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check city short forecast against supplied spreadsheet date
+        env:
+          KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+        run: python tools/check_energy_source.py
