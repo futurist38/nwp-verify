@@ -1,0 +1,29 @@
+{
+  "validated_date": "2026-10-29",
+  "timezone": "Asia/Seoul",
+  "target_publish_time": "07:00",
+  "retention_days": 30,
+  "short": {
+    "issue": "05:00",
+    "endpoint": "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_dl.php",
+    "type": "city_land_forecast",
+    "coverage_verified": [
+      "2026-10-29",
+      "2026-11-01"
+    ],
+    "temperature_matches": 56,
+    "weather_matches_after_whitespace_normalization": 56
+  },
+  "mid": {
+    "issue": "06:00",
+    "endpoint": "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php",
+    "coverage_verified": [
+      "2026-11-02",
+      "2026-11-07"
+    ],
+    "temperature_matches": 96
+  },
+  "rounding": "ROUND_HALF_UP to one decimal before daily differences",
+  "pending": "Current-day minimum is missing (-99) in 05:00 city forecast. Confirm handling of preliminary observations available at 07:00; do not silently substitute previous forecast or hourly minima.",
+  "automatic_generation": false
+}

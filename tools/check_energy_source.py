@@ -22,8 +22,8 @@ for row in csv.reader(io.StringIO(raw)):
     if not row or row[0] not in REGS.values():continue
     # Whitelist public meteorological fields, excluding forecaster identifiers.
     if len(row)>=16:
-        out.append({'reg':row[0],'issue':row[1],'valid':row[3],'mod':row[4],
-                    'ne':row[5],'temperature':row[12],'probability':row[13],
+        out.append({'reg':row[0],'issue':row[1],'valid':row[2],'mod':row[3],
+                    'ne':row[4],'temperature':row[12],'probability':row[13],
                     'sky':row[14],'precipitation':row[15],
                     'weather':row[16] if len(row)>16 else ''})
 print(json.dumps({'rows':out,'count':len(out)},ensure_ascii=False))
