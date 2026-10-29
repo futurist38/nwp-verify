@@ -2,7 +2,9 @@
 const el=id=>document.getElementById(id);
 const format=d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
 const clone=o=>JSON.parse(JSON.stringify(o));
-const labels={clear:'맑음',sun_cloud_a:'구름조금',sun_cloud_b:'구름많음',cloudy:'흐림',rain:'비',shower:'소나기',snow:'눈',snow_rain_a:'눈·비',thunderstorm:'뇌우',fog:'안개',haze:'연무',dust:'황사'};
+const labels={clear:'맑음',sun_cloud_a:'구름조금',sun_cloud_b:'구름많음',cloudy:'흐림',rain:'비',shower:'소나기',snow:'눈',snow_rain_a:'눈·비',thunderstorm:'뇌우',fog:'안개',haze:'연무',dust:'황사',arrow_right:'화살표 →'};
+// Editor-only symbols are available for both archived and newly generated reports.
+const editorSymbols={arrow_right:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="76" height="50" viewBox="0 0 76 50"><path d="M2 13 H46 V2 L74 25 L46 48 V37 H2 Z" fill="#ffd1c9" stroke="#c74848" stroke-width="3" stroke-linejoin="round"/></svg>')};
 const imageryEndpoint=document.querySelector('meta[name=energy-imagery-endpoint]')?.content.trim().replace(/\/$/,'')||'';
 let index,loadToken=0,refreshing=false;
 function image(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src;});}
@@ -44,11 +46,11 @@ class ReportEditor {
  resize(scale){if(this.selected?.type!=='group'||!Number.isFinite(scale)||scale<=0)return;this.remember();const g=this.scene.groups[this.selected.index],w=Math.min(800,g.w*scale),h=w*g.h/g.w;g.x-=(w-g.w)/2;g.y-=(h-g.h)/2;g.w=w;g.h=h;this.constrain(g);this.controls();this.draw();}
  async chooseIcon(replace){
   if(!this.scene||(replace&&this.selected?.type!=='group'))return;
-  const active=this.scene,token=loadToken,chosen=this.selected?.index,src=this.scene.palette[this.node('iconChoice').value];if(!src)return;
+  const active=this.scene,token=loadToken,chosen=this.selected?.index,iconName=this.node('iconChoice').value,src=this.scene.palette[iconName];if(!src)return;
   try{const im=await this.sprite(src);if(token!==loadToken||active!==this.scene||(replace&&(this.selected?.type!=='group'||this.selected.index!==chosen)))return;
    this.remember();let g;
    if(replace){const prev=this.scene.groups[chosen],scale=Math.min(prev.w/im.width,prev.h/im.height);g={id:prev.id,src,w:im.width*scale,h:im.height*scale};g.x=prev.x+(prev.w-g.w)/2;g.y=prev.y+(prev.h-g.h)/2;this.scene.groups[chosen]=g;}
-   else{const scale=(this.page===2?70:130)/Math.max(im.width,im.height);g={id:'added-'+Date.now(),src,w:im.width*scale,h:im.height*scale,x:this.page===2?240:800,y:this.page===2?260:450};this.scene.groups.push(g);this.selected={type:'group',index:this.scene.groups.length-1};}
+   else{const size=iconName==='arrow_right'?(this.page===2?30:50):(this.page===2?70:130),scale=size/Math.max(im.width,im.height);g={id:'added-'+Date.now(),src,w:im.width*scale,h:im.height*scale,x:this.page===2?240:800,y:this.page===2?260:450};this.scene.groups.push(g);this.selected={type:'group',index:this.scene.groups.length-1};}
    this.constrain(g);this.controls();this.draw();
   }catch{this.node('editStatus').textContent='날씨 아이콘을 불러오지 못했습니다.';}
  }
@@ -66,6 +68,7 @@ class ReportEditor {
   try{
    const r=await fetch(`energy/${day}/editor${this.page===2?'2':''}.json?v=${version}`);if(!r.ok)throw Error('editor');const data=await r.json();
    if(!Array.isArray(data.groups)||!Array.isArray(data.boundaries)||!data.palette)throw Error('schema');
+   data.palette={...data.palette,...editorSymbols};
    const bg=await image(`energy/${day}/${data.background}?v=${version}`);if(token!==loadToken)return;
    this.original=data;this.original.revision=data.revision||1;this.scene=clone(data);this.background=bg;
    try{const saved=JSON.parse(localStorage.getItem(this.storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries)&&saved.groups.every(g=>['x','y','w','h'].every(k=>Number.isFinite(g[k]))&&g.w>0&&g.h>0&&typeof g.src==='string')){this.scene=saved;this.scene.palette=clone(data.palette);this.changed=true;}}catch{}
