@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>KPX 에너지기상정보</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#edf1f5;color:#1e293b;font-family:system-ui,sans-serif}header,main{max-width:1600px;margin:auto;padding:20px}header{display:flex;gap:20px;align-items:center;flex-wrap:wrap}h1{font-size:26px;margin:0}a{color:#1b4f82}nav{display:flex;gap:16px;align-items:center;flex-wrap:wrap}select,button{font:inherit;padding:8px;border:1px solid #9aa8b8;border-radius:6px;background:white}p{line-height:1.65}.notice{padding:14px 18px;background:#fff7df;border-radius:10px}figure{margin:24px 0}img{width:100%;height:auto;display:block;background:white;box-shadow:0 2px 12px #0002;border-radius:8px}figcaption{padding:10px 0;font-weight:600}[hidden]{display:none!important}@media print{header,.notice,nav,figcaption,details{display:none}body,main{padding:0;background:white}figure{margin:0;break-after:page}img{box-shadow:none;border-radius:0}@page{size:landscape;margin:0}}</style></head>
+<body><header><h1>KPX 에너지기상정보</h1><a href="index.html">기상정보 분석 플랫폼</a></header><main>
+<nav><label for="date">자료 날짜</label><select id="date" disabled></select><span>최근 30일 보관</span><a id="save1" hidden>1페이지 저장</a><a id="save2" hidden>2페이지 저장</a><button id="print" disabled>인쇄 / PDF 저장</button></nav>
+<p class="notice" id="status" role="status">자료를 확인하고 있습니다.</p>
+<div id="report" hidden><figure><img id="page1" width="1920" height="1080" alt="오늘·내일의 지역별 날씨와 전국가중 최고·최저기온"><figcaption>1페이지 · 오늘과 내일</figcaption></figure><figure><img id="page2" width="1920" height="1080" alt="전국가중 기온 전망과 평년 범위, 이상기온"><figcaption>2페이지 · 기온 전망</figcaption></figure></div>
+<details><summary>자료 안내</summary><p>본 자료는 기상청 자료를 이용해 제작되었습니다. 전국가중 기온은 8개 도시 가중합을 소수점 한 자리로 반올림한 뒤 전일대비 변동을 계산합니다. 이상기온은 1991–2020년 동일 날짜의 10·90퍼센타일을 기준으로 표시합니다.</p><p>2026년 10월 29일 게시본은 제공받은 10일예보와 당일 위성·레이더 패널로 제작한 확정 시안입니다.</p></details>
+</main><script>
+'use strict';
+const el=id=>document.getElementById(id);
+let index;
+const format=d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+function show(){
+ const day=el('date').value;
+ if(!/^\d{8}$/.test(day))return;
+ const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');
+ el('status').textContent=`${format(day)} 자료입니다. `+(index.automatic_generation?'': '매일 오전 7시 자동 생산은 원본 수신 경로 연결 전으로, 아직 가동하지 않습니다. ')+(day!==today?'오늘 자료가 아니므로 날짜를 확인해 주세요.':'');
+ for(const n of [1,2]){
+  const url=`energy/${day}/0${n}.webp`;
+  el(`page${n}`).src=url;
+  el(`page${n}`).onerror=()=>{el('status').textContent='이미지를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';};
+  const a=el(`save${n}`);a.href=url;a.download=`KPX_weather_${day}_0${n}.webp`;a.hidden=false;
+ }
+ el('report').hidden=false;el('print').disabled=false;
+}
+el('date').addEventListener('change',show);el('print').addEventListener('click',()=>window.print());
+(async()=>{try{
+ const response=await fetch('energy/index.json',{cache:'no-store'});if(!response.ok)throw Error('index');index=await response.json();
+ const dates=index.dates.filter(d=>/^\d{8}$/.test(d));
+ if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}
+ for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}
+ el('date').disabled=false;show();
+}catch(e){el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+</script></body></html>

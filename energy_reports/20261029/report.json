@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-29",
+  "status": "approved_snapshot",
+  "source": "User-supplied KMA-based 10-day forecast and daily satellite/radar panels",
+  "short_issue_kst": "2026-10-29T05:00:00+09:00",
+  "mid_issue_kst": "2026-10-29T06:00:00+09:00",
+  "retention_days": 30,
+  "automatic_generation": false
+}

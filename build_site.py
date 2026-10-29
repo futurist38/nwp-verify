@@ -760,6 +760,8 @@ def main():
     args = p.parse_args()
 
     os.makedirs(args.site_dir, exist_ok=True)
+    from energy_archive import publish_energy
+    publish_energy(args.site_dir)
     # 정적 파일
     for fn in os.listdir(SITE_SRC):
         shutil.copy2(os.path.join(SITE_SRC, fn), args.site_dir)
