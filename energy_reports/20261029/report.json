@@ -5,5 +5,7 @@
   "short_issue_kst": "2026-10-29T05:00:00+09:00",
   "mid_issue_kst": "2026-10-29T06:00:00+09:00",
   "retention_days": 30,
-  "automatic_generation": false
+  "automatic_generation": false,
+  "publication_kst": "2026-10-29T09:00:00+09:00",
+  "publication_label": "발표시점: 2026. 10. 29.(목) 09시 기준"
 }
