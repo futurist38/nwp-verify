@@ -6,7 +6,7 @@ const pending = new Map();
 export function parseTime(value) {
  if (!/^\d{12}$/.test(value)) throw Error('time');
  const iso = `${value.slice(0,4)}-${value.slice(4,6)}-${value.slice(6,8)}T${value.slice(8,10)}:${value.slice(10)}:00+09:00`;
- const ms = Date.parse(iso); if (!Number.isFinite(ms)) throw Error('time');
+ const ms = Date.parse(iso); if (!Number.isFinite(ms) || new Date(ms+9*3600000).toISOString().replace(/\D/g,'').slice(0,12)!==value) throw Error('time');
  return {iso,ms};
 }
 async function get(url, limit=MAX_BYTES) {
@@ -28,7 +28,7 @@ export function pngData(bytes) {
  let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
  return 'data:image/png;base64,'+btoa(binary);
 }
-async function panel(kind,env) {
+async function panel(kind) {
  const now=Date.now();const kst=new Date(now+9*3600000).toISOString();
  const query=new URLSearchParams({mapType:'img',tm:kst.slice(0,16).replaceAll('-','.').replace('T','.'),itv:kind==='satellite'?'0.5':'5',leaflet:'0',kmap:'0',area:kind==='satellite'?'ko020lc':'KWK',data:kind==='satellite'?'rgb-s-daynight':'pop'});
  const path=kind==='satellite'?'/w/wnuri-img/rest/sat/images/gk2a.do':'/w/wnuri-img/rest/radar/cmp/images.do';
@@ -41,8 +41,8 @@ async function panel(kind,env) {
    let url;
    if(kind==='satellite')url=satelliteUrl(row.url);
    else{
-    url=new URL('https://apihub-pub.kma.go.kr/api/typ03/cgi/rdr/nph-rdr_cmp1_img');
-    url.search=new URLSearchParams({tm:row.tm,cmp:'HSR',qcd:'HSLP',obs:'ECHD',color:'C4',aws:'0',acc:'',map:'HR',grid:'2',legend:'1',size:'600',itv:'5',zoom_level:'0',zoom_x:'0000000',zoom_y:'0000000',gov:'',authKey:env.KMA_AUTH_KEY});
+    url=new URL('https://radar.kma.go.kr/cgi-bin/center/nph-rdr_cmp2_img');
+    url.search=new URLSearchParams({tm:row.tm,cmp:'HSR',qcd:'HSO',obs:'ECHO',color:'C4',aws:'1',map:'HR',grid:'2',legend:'1',size:'643',itv:'',zoom_level:'0',zoom_x:'0000000',zoom_y:'0000000',gov:'KMA',lonlat:'0',xp:'512',yp:'512',zoom:'1'});
    }
    return {id:kind,title:kind==='satellite'?'위성영상':'강수현황(레이더)',time:row.iso,src:pngData(await get(url))};
   }catch{/* No upstream URLs or exception text in public responses/logs. */}
@@ -55,18 +55,19 @@ export default {async fetch(req,env,ctx){
  if(req.method!=='GET')return response({error:'method'},405);
  if(!match||url.search)return response({error:'route'},404);
  if(req.headers.get('Origin')!==ORIGIN)return response({error:'origin'},403);
- // Fail closed if the deployment forgot its secret or server-side limiter.
- if(!env.KMA_AUTH_KEY||!env.IMAGERY_LIMITER)return response({error:'not_configured'},503);
+ // Public imagery uses no credentials. Fail closed if the limiter binding is absent.
+ if(!env.IMAGERY_LIMITER)return response({error:'not_configured'},503);
  const ip=req.headers.get('CF-Connecting-IP')||'unknown';
  if(!(await env.IMAGERY_LIMITER.limit({key:'ip:'+ip})).success)return response({error:'rate_limit'},429);
- const kind=match[1];const key=new Request(url.origin+'/cache-v1/'+kind);const cached=await caches.default.match(key);
+ const kind=match[1];const key=new Request(url.origin+'/cache-public-v2/'+kind);const cached=await caches.default.match(key);
  if(cached)return cached;
  if(!pending.has(kind)){
-  if(!(await env.IMAGERY_LIMITER.limit({key:'upstream:'+kind})).success)return response({error:'rate_limit'},429);
   pending.set(kind,(async()=>{try{
-   const result=response(await panel(kind,env));result.headers.set('Cache-Control','public, max-age=60');
+   if(!(await env.IMAGERY_LIMITER.limit({key:'upstream:'+kind})).success)return response({error:'rate_limit'},429);
+   const result=response(await panel(kind));result.headers.set('Cache-Control','public, max-age=60');
    await caches.default.put(key,result.clone());return result;
   }catch{return response({error:'image_unavailable'},502);}finally{pending.delete(kind);}})());
  }
  return (await pending.get(kind)).clone();
 }};
+

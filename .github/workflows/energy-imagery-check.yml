@@ -1,0 +1,23 @@
+name: energy-imagery-check
+on:
+  push:
+    paths:
+      - 'imagery-service/**'
+      - 'scheduler/**'
+      - 'site/energy-weather.*'
+      - '.github/workflows/energy-imagery-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test imagery-service/*.test.*
+      - name: Public imagery preflight without credentials
+        run: node imagery-service/live-check.mjs

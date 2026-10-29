@@ -1,49 +1,34 @@
-# 에너지기상 최신 영상 수신 서비스 — 연결 대기
+# 에너지기상 수동 영상 갱신
 
-현재 상태: 서버 및 버튼 코드 준비, 모의 요청 테스트 통과. **Cloudflare 미배포, 실시간 기상청 연결 및 화면 통합 미검증.**
-`site/energy-weather.html`의 `energy-imagery-endpoint`가 비어 있으면 버튼을 숨긴다.
-기존 예약 실행 서버와 별도 Worker로 배포하여 일일 생성에 영향을 주지 않는다.
+기존 `nwp-verify-scheduler` Worker에 `/latest/satellite`, `/latest/radar`를 추가한다. 새 서버와 새 기상청 인증키는 필요하지 않다. 예약 실행과 보호된 수동 dispatch 경로는 유지한다.
 
-## 배포
+## 배포 상태
 
-Cloudflare에 로그인한 관리 환경에서 이 폴더를 기준으로 실행한다.
+소스 및 모의 테스트 준비. Cloudflare 운영 배포와 브라우저 실영상·PNG 확인 전에는 `site/energy-weather.html`의 `energy-imagery-endpoint`를 비워 두고 버튼을 숨긴다. GitHub에 코드를 반영하는 것만으로 Cloudflare가 배포되는 것은 아니다.
 
-```
-npx wrangler deploy
-npx wrangler secret put KMA_AUTH_KEY
-```
+## 기존 Worker 배포
 
-기상청 키는 비밀값 입력 프롬프트에 입력한다. 코드, GitHub 파일, 채팅, 명령행 인자에 넣지 않는다.
-`wrangler.toml`의 `IMAGERY_LIMITER`도 함께 생성해야 한다. 계정에서 namespace 1001을 이미 사용한다면 고유한 숫자로 변경한다.
+Cloudflare 인증이 된 환경에서 저장소 `scheduler/` 폴더를 기준으로 `npx wrangler deploy`를 실행한다. 기존 GH_TOKEN 및 TEST_KEY 비밀값을 유지한다. 요청 제한 바인딩 `IMAGERY_LIMITER`를 wrangler.toml대로 등록한다(namespace 1001을 다른 용도로 사용한다면 고유한 숫자로 변경).
 
-배포 후 실제 Worker URL로 아래 두 경로를 호출하여 원본과 관측 시각을 확인한다.
-요청 Origin은 `https://futurist38.github.io`이다.
+대시보드 편집 시 `scheduler/worker.bundle.js`는 모듈 코드를 하나로 합친 동일 구현이다. 예약 cron은 기존대로 유지하며, 요청 제한 바인딩이 없으면 영상 경로는 안전하게 503으로 중단한다.
 
-- `/latest/satellite`: 주야간 합성 RGB, 한반도
-- `/latest/radar`: HSR, 한반도 지도 및 mm/h 범례
+배포 후 실제 기존 Worker 주소에 Origin `https://futurist38.github.io`로 두 영상 경로를 요청해 200 응답, 영상 시각, 이미지 내용을 확인한다. 그 다음 HTML의 `energy-imagery-endpoint`에 Worker HTTPS 주소를 넣어 main/site-data 프런트엔드를 배포한다. URL에 토큰이나 키를 넣지 않는다.
 
-응답은 PNG data URI, 영상 종류, 실제 프레임 시각만 포함한다. 공개된 프레임 목록의 최근 1시간 이내 시각만 사용한다. 기상청 원격 접속 실패나 PNG 검증 실패는 502를 반환한다.
-실영상 확인 후 `site/energy-weather.html`의 `energy-imagery-endpoint` content에 Worker HTTPS 주소를 넣고, main/site-data 양쪽 프런트엔드를 배포한다.
+## 자료
 
-## 사용 동작
+- 위성: 날씨누리 공개 프레임 목록 및 RGB 주야간합성 원본 PNG.
+- 레이더: 공개 프레임 목록의 최신 유효시각 + `https://radar.kma.go.kr/cgi-bin/center/nph-rdr_cmp2_img`. HSR, HSO, ECHO, map=HR, legend=1. 2026-10-29 18:25 실제 수신 검증(678×663 PNG, 지도와 mm/h 범례 포함).
+- API허브 인증키 및 GitHub 토큰은 영상 수신에 사용하지 않는다.
+- 프레임 목록과 이미지가 불일치하거나 수신에 실패하면 다른 최신 프레임 한 번만 시도하고 중단한다. 관측시각을 현재시각으로 대체하지 않는다.
 
-오늘 자료에서만 최신 영상 버튼을 활성화한다. 영상별 실패는 기존 그림을 보존하고 성공한 영상만 교체한다. 예보 수치, 지도 아이콘, 경계선은 보존한다. 이미지 전체 비율을 유지하여 기존 패널에 배치한다. 기존 날짜별 브라우저 저장과 편집본 PNG 내보내기를 사용한다.
+## 화면
 
-## 보호와 한계
+오늘 자료에서만 갱신 가능. 위성·레이더는 각각 성공한 것만 교체하며 실패한 패널은 보존한다. 지도 아이콘·경계선·예보는 유지한다. 실제 영상 시각을 표기하고, 편집을 닫아도 갱신 화면을 유지한다. 상단 1페이지 PNG 저장도 갱신·편집 상태를 저장한다. 원본 자동 생성 보고서는 수정하지 않으며 브라우저 저장은 기존 날짜별 저장 버튼을 사용한다.
 
-키는 Worker secret에만 저장한다. 임의 URL·시각·상품 입력을 받지 않는다. 응답/오류에 인증 URL이나 키를 넣지 않는다. HTTPS 고정 호스트 및 리다이렉트 거부, 응답 크기 제한, 타임아웃, PNG 헤더/크기 검사를 적용한다.
+## 보호 및 검증
 
-Origin 검사는 인증 수단이 아니다. 서버에서 IP별 요청 제한, 지점별 상품 요청 제한, 60초 캐시 및 동일 프로세스 중복 요청 합치기를 추가한다. Cloudflare 제한과 캐시는 지점별이므로 전 세계 총량을 엄격히 보장하지 않는다. 공개 배포 시 계정 한도/기상청 이용량을 확인한다. 악의적인 분산 호출까지 방지해야 하면 사용자 인증 또는 전역 요청 예산을 추가해야 한다.
+고정 공개 호스트/상품만 사용하고 임의 URL, 시간, 쿼리를 거부한다. 타임아웃, 응답 크기 제한, PNG 헤더/크기 검사, 서버 요청 제한, 60초 캐시, 프로세스 내 동시 요청 합치기를 적용한다. Origin은 브라우저 허용 범위이며 인증 수단이 아니다. 제한과 캐시는 Cloudflare 지점별이므로 전 세계 총량에 대한 절대 상한은 아니다.
 
-## 검증
+`node --test imagery-service/*.test.*` — 모의 테스트 13개: 기존 예약 실행, 제한/허용 경로, 인증키 불필요, 중복 수신 억제, 최신 시각, 실패 처리, 기존 편집 유지, 날짜 전환, PNG 내보내기 경로.
 
-```
-node --test worker.test.mjs
-node --check ../site/energy-weather.js
-```
-
-모의 테스트는 허용 경로, Origin/메서드 거부, 비밀값 누락 시 중단, 요청 제한, 캐시, 프레임 시각, 오류 응답의 비밀값 비노출을 검증한다. 실배포 후 최신 위성/레이더 로딩, 기존 편집 유지, 실패 시 보존, 날짜 전환 도중 응답 무시, 브라우저 저장과 PNG를 추가 확인해야 한다.
-
-참고: https://developers.cloudflare.com/workers/configuration/secrets/
-https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
-https://developers.cloudflare.com/workers/runtime-apis/cache/
+`node imagery-service/live-check.mjs` — 비밀값 없이 실제 기상청 접속 확인. Cloudflare 환경에서 수신 성공하는지와 실제 PNG 내보내기는 운영 연결 후 별도 확인한다.

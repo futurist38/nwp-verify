@@ -5,3 +5,10 @@ compatibility_date = "2026-09-01"
 # 시각은 UTC. KST = UTC+9.
 [triggers]
 crons = ["25 * * * *", "10 21 * * *", "40 1 * * *"]
+
+
+# Public imagery requests only; existing schedules and secrets stay unchanged.
+[[ratelimits]]
+name = "IMAGERY_LIMITER"
+namespace_id = "1001"
+simple = { limit = 6, period = 60 }

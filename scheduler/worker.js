@@ -1,3 +1,5 @@
+import imagery from '../imagery-service/worker.mjs';
+
 // GitHub Actions 예약 대행 (Cloudflare Worker, 2026-09-01)
 //
 // 왜 필요한가: GitHub 의 schedule 이 이 저장소에서 신뢰할 수 없다.
@@ -49,7 +51,9 @@ export default {
     ctx.waitUntil(dispatch(wf, env));
   },
 
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
+    // Imagery never reaches dispatch and never receives a token in its requests.
+    if (new URL(req.url).pathname.startsWith('/latest/')) return imagery.fetch(req, env, ctx);
     const key = new URL(req.url).searchParams.get("key");
     const wf = new URL(req.url).searchParams.get("wf");
     // 시험 경로는 TEST_KEY 를 설정한 경우에만 열린다 (열어두면 그 자체가 남용 통로)
@@ -62,3 +66,4 @@ export default {
     return new Response(`${wf} -> ${await dispatch(wf, env)}\n`);
   },
 };
+
