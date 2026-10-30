@@ -9,13 +9,13 @@ const imageryEndpoint=document.querySelector('meta[name=energy-imagery-endpoint]
 let index,loadToken=0,refreshing=false;
 function image(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src;});}
 // Keep the opposite corner fixed, preserving aspect ratio and page edit bounds.
-function resizedGroupRect(start,corner,x,y,bounds){
+function resizedGroupRect(start,corner,x,y,bounds,maxWidth=800){
  const east=corner.includes('e'),south=corner.includes('s');
  const ax=east?start.x:start.x+start.w,ay=south?start.y:start.y+start.h;
  const dx=(x-ax)*(east?1:-1),dy=(y-ay)*(south?1:-1);
  const availableW=east?bounds.x+bounds.w-ax:ax-bounds.x;
  const availableH=south?bounds.y+bounds.h-ay:ay-bounds.y;
- const maxScale=Math.max(0,Math.min(800/start.w,availableW/start.w,availableH/start.h));
+ const maxScale=Math.max(0,Math.min(maxWidth/start.w,availableW/start.w,availableH/start.h));
  const minScale=Math.min(maxScale,20/Math.max(start.w,start.h));
  const scale=Math.max(minScale,Math.min(maxScale,(dx*start.w+dy*start.h)/(start.w*start.w+start.h*start.h)));
  const w=start.w*scale,h=start.h*scale;
@@ -28,8 +28,10 @@ class ReportEditor {
   this.node('edit').onclick=()=>{if(!this.scene)return;this.editing=!this.editing;this.node('editorControls').hidden=!this.editing;this.node('edit').textContent=this.editing?`${page}페이지 편집 닫기`:this.title();this.draw();};
   this.node('undo').onclick=()=>{if(this.history.length){this.scene=this.history.pop();this.selected=null;this.changed=true;this.controls();this.draw();}};
   this.node('reset').onclick=()=>{if(!this.scene)return;this.remember();this.scene=clone(this.original);this.selected=null;this.controls();this.draw();};
-  this.node('remove').onclick=()=>{if(!this.selected)return;this.remember();this.scene[this.selected.type==='group'?'groups':'boundaries'].splice(this.selected.index,1);this.selected=null;this.controls();this.draw();};
+  this.node('remove').onclick=()=>{if(!this.selected)return;this.remember();this.objects(this.selected.type).splice(this.selected.index,1);this.selected=null;this.controls();this.draw();};
   this.node('size').onchange=e=>this.resize(Number(e.target.value)/100);
+  this.node('addText').onclick=()=>this.editText(false);
+  this.node('updateText').onclick=()=>this.editText(true);
   this.node('addIcon').onclick=()=>this.chooseIcon(false);
   this.node('replaceIcon').onclick=()=>this.chooseIcon(true);
   if(page===1)this.node('addBoundary').onclick=()=>{if(!this.scene)return;this.remember();this.scene.boundaries.push({points:[[650,620],[790,620],[990,550],[1100,470]],color:'#3c6090',width:5});this.selected={type:'boundary',index:this.scene.boundaries.length-1};this.controls();this.draw();};
@@ -40,17 +42,47 @@ class ReportEditor {
   this.canvas.addEventListener('pointermove',e=>this.pointerMove(e));
   for(const event of ['pointerup','pointercancel','lostpointercapture'])this.canvas.addEventListener(event,()=>{this.drag=null;this.canvas.style.cursor=this.editing?'grab':'default';});
  }
- title(){return this.page===1?'1페이지 편집':'2페이지 날씨 아이콘 편집';}
- clear(){this.scene=null;this.original=null;this.background=null;this.selected=null;this.drag=null;this.history=[];this.editing=false;this.changed=false;this.day='';this.sprites.clear();this.node('editorControls').hidden=true;this.canvas.hidden=true;el('page'+this.page).hidden=false;this.node('edit').disabled=true;this.node('edit').textContent=this.title();}
+ title(){return `${this.page}페이지 편집`;}
+ clear(){this.scene=null;this.original=null;this.background=null;this.selected=null;this.drag=null;this.history=[];this.editing=false;this.changed=false;this.day='';this.sprites.clear();this.node('editorControls').hidden=true;this.canvas.hidden=true;el('page'+this.page).hidden=false;this.node('edit').disabled=true;this.node('edit').textContent=this.title();this.node('textInput').value='';}
  storageKey(){return `kpx-energy-editor-v1-${this.day}-${this.original?.revision}`+(this.page===2?'-page2':'');}
  remember(){this.changed=true;this.history.push(clone(this.scene));if(this.history.length>40)this.history.shift();}
  async sprite(src){if(!this.sprites.has(src))this.sprites.set(src,await image(src));return this.sprites.get(src);}
- bounds(){return this.page===2?{x:188,y:234,w:1648,h:210}:{x:0,y:90,w:1920,h:935};}
- constrain(g){const b=this.bounds();const scale=Math.min(1,b.w/g.w,b.h/g.h);g.w*=scale;g.h*=scale;g.x=Math.max(b.x,Math.min(b.x+b.w-g.w,g.x));g.y=Math.max(b.y,Math.min(b.y+b.h-g.h,g.y));}
- controls(){this.node('remove').disabled=!this.selected;this.node('size').disabled=this.selected?.type!=='group';this.node('replaceIcon').disabled=this.selected?.type!=='group';this.node('size').value='100';this.node('undo').disabled=!this.history.length;}
+ bounds(type='group'){if(type==='text')return {x:8,y:8,w:1904,h:1064};return this.page===2?{x:188,y:234,w:1648,h:210}:{x:0,y:90,w:1920,h:935};}
+ constrain(g,type='group'){const b=this.bounds(type);const scale=Math.min(1,b.w/g.w,b.h/g.h);g.w*=scale;g.h*=scale;g.x=Math.max(b.x,Math.min(b.x+b.w-g.w,g.x));g.y=Math.max(b.y,Math.min(b.y+b.h-g.h,g.y));}
+ objects(type){return this.scene?.[type==='text'?'texts':type==='group'?'groups':'boundaries']||[];}
+ selectedObject(){return ['group','text'].includes(this.selected?.type)?this.objects(this.selected.type)[this.selected.index]:null;}
+ controls(){
+  const g=this.selectedObject();this.node('remove').disabled=!this.selected;this.node('size').disabled=!g;
+  this.node('replaceIcon').disabled=this.selected?.type!=='group';this.node('updateText').disabled=this.selected?.type!=='text';
+  if(this.selected?.type==='text'&&g)this.node('textInput').value=g.text;
+  this.node('size').value='100';this.node('undo').disabled=!this.history.length;
+ }
+ textMetrics(text){
+  const c=this.ctx,lines=text.split('\n');c.save();c.font='700 32px system-ui, sans-serif';
+  const w=Math.max(48,...lines.map(line=>c.measureText(line).width))+32;c.restore();
+  return {lines,w,h:lines.length*44+24};
+ }
+ editText(replace){
+  if(!this.scene||(replace&&this.selected?.type!=='text'))return;
+  const input=this.node('textInput'),text=input.value.replace(/\r\n?/g,'\n').slice(0,200).trim();
+  if(!text){this.node('editStatus').textContent='주석 문구를 입력한 뒤 글상자를 삽입해 주세요.';input.focus();return;}
+  const prev=replace?this.selectedObject():null;if(prev?.text===text)return;
+  const m=this.textMetrics(text),scale=prev?prev.w/this.textMetrics(prev.text).w:1;
+  this.remember();this.scene.texts=this.scene.texts||[];
+  const g={id:prev?.id||'text-'+Date.now(),text,x:prev?.x??800,y:prev?.y??(this.page===2?300:450),w:m.w*scale,h:m.h*scale};
+  this.constrain(g,'text');
+  if(replace)this.scene.texts[this.selected.index]=g;
+  else{this.scene.texts.push(g);this.selected={type:'text',index:this.scene.texts.length-1};}
+  this.controls();this.draw();this.node('editStatus').textContent='글상자를 끌어 원하는 곳에 놓으세요. 모서리로 크기를 조절하고, 문구를 바꾼 뒤 선택 글상자 수정을 누르세요.';
+ }
+ drawText(g){
+  const c=this.ctx,m=this.textMetrics(g.text);c.save();c.translate(g.x,g.y);c.scale(g.w/m.w,g.h/m.h);
+  c.fillStyle='#ffffff';c.fillRect(0,0,m.w,m.h);c.strokeStyle='#000000';c.lineWidth=3;c.setLineDash([]);c.strokeRect(1.5,1.5,m.w-3,m.h-3);
+  c.fillStyle='#0653b8';c.font='700 32px system-ui, sans-serif';c.textAlign='center';c.textBaseline='middle';
+  m.lines.forEach((line,i)=>c.fillText(line,m.w/2,12+44*(i+.5)));c.restore();
+ }
  selectionHandles(){
-  if(this.selected?.type!=='group'||!this.scene)return [];
-  const g=this.scene.groups[this.selected.index];if(!g)return [];
+  const g=this.selectedObject();if(!g)return [];
   return [['nw',g.x,g.y],['ne',g.x+g.w,g.y],['se',g.x+g.w,g.y+g.h],['sw',g.x,g.y+g.h]];
  }
  handleAt(x,y,pointerType='mouse'){
@@ -58,8 +90,8 @@ class ReportEditor {
   return this.selectionHandles().map(([corner,hx,hy])=>({corner,distance:Math.hypot(x-hx,y-hy)})).filter(h=>h.distance<=radius).sort((a,b)=>a.distance-b.distance)[0]?.corner;
  }
  drawSelection(){
-  if(this.selected?.type!=='group')return;
-  const g=this.scene.groups[this.selected.index],c=this.ctx,unit=1920/this.canvas.getBoundingClientRect().width;
+  const g=this.selectedObject();if(!g)return;
+  const c=this.ctx,unit=1920/this.canvas.getBoundingClientRect().width;
   c.save();c.strokeStyle='#7c3aed';c.fillStyle='white';c.lineWidth=2*unit;c.setLineDash([6*unit,4*unit]);c.strokeRect(g.x,g.y,g.w,g.h);c.setLineDash([]);
   for(const [,x,y] of this.selectionHandles()){c.fillRect(x-5*unit,y-5*unit,10*unit,10*unit);c.strokeRect(x-5*unit,y-5*unit,10*unit,10*unit);}
   c.restore();
@@ -69,10 +101,11 @@ class ReportEditor {
   if(!this.editing||!this.scene)return;
   const [x,y]=this.point(e),corner=this.handleAt(x,y,e.pointerType);this.drag=null;
   if(corner){
-   const index=this.selected.index;this.drag={type:'resize',index,corner,start:clone(this.scene.groups[index])};
+   const index=this.selected.index;this.drag={type:'resize',objectType:this.selected.type,index,corner,start:clone(this.selectedObject())};
   }else{
    this.selected=null;
-   if(this.page===1)for(let b=0;b<this.scene.boundaries.length;b++)for(let p=0;p<4;p++){const xy=this.scene.boundaries[b].points[p];if(Math.hypot(x-xy[0],y-xy[1])<20){this.selected={type:'boundary',index:b};this.drag={type:'point',b,p};}}
+   for(let i=(this.scene.texts||[]).length-1;i>=0;i--){const g=this.scene.texts[i];if(x>=g.x&&x<=g.x+g.w&&y>=g.y&&y<=g.y+g.h){this.selected={type:'text',index:i};this.drag={type:'text',index:i,dx:x-g.x,dy:y-g.y};break;}}
+   if(!this.drag&&this.page===1)for(let b=0;b<this.scene.boundaries.length;b++)for(let p=0;p<4;p++){const xy=this.scene.boundaries[b].points[p];if(Math.hypot(x-xy[0],y-xy[1])<20){this.selected={type:'boundary',index:b};this.drag={type:'point',b,p};}}
    if(!this.drag)for(let i=this.scene.groups.length-1;i>=0;i--){const g=this.scene.groups[i];if(x>=g.x&&x<=g.x+g.w&&y>=g.y&&y<=g.y+g.h){this.selected={type:'group',index:i};this.drag={type:'group',index:i,dx:x-g.x,dy:y-g.y};break;}}
   }
   if(this.drag){e.preventDefault();this.remember();this.canvas.setPointerCapture(e.pointerId);this.canvas.style.cursor=this.drag.type==='resize'?(['nw','se'].includes(corner)?'nwse-resize':'nesw-resize'):'grabbing';}
@@ -81,12 +114,12 @@ class ReportEditor {
  pointerMove(e){
   if(!this.editing||!this.scene)return;const [x,y]=this.point(e);
   if(!this.drag){const corner=this.handleAt(x,y,e.pointerType);this.canvas.style.cursor=corner?(['nw','se'].includes(corner)?'nwse-resize':'nesw-resize'):'grab';return;}
-  if(this.drag.type==='resize')Object.assign(this.scene.groups[this.drag.index],resizedGroupRect(this.drag.start,this.drag.corner,x,y,this.bounds()));
+  if(this.drag.type==='resize')Object.assign(this.objects(this.drag.objectType)[this.drag.index],resizedGroupRect(this.drag.start,this.drag.corner,x,y,this.bounds(this.drag.objectType),this.drag.objectType==='text'?1904:800));
   else if(this.drag.type==='point'&&this.page===1)this.scene.boundaries[this.drag.b].points[this.drag.p]=[Math.max(0,Math.min(1920,x)),Math.max(90,Math.min(1025,y))];
-  else if(this.drag.type==='group'){const g=this.scene.groups[this.drag.index];g.x=x-this.drag.dx;g.y=y-this.drag.dy;this.constrain(g);}
+  else if(['group','text'].includes(this.drag.type)){const g=this.objects(this.drag.type)[this.drag.index];g.x=x-this.drag.dx;g.y=y-this.drag.dy;this.constrain(g,this.drag.type);}
   this.draw();
  }
- resize(scale){if(this.selected?.type!=='group'||!Number.isFinite(scale)||scale<=0)return;this.remember();const g=this.scene.groups[this.selected.index],w=Math.min(800,g.w*scale),h=w*g.h/g.w;g.x-=(w-g.w)/2;g.y-=(h-g.h)/2;g.w=w;g.h=h;this.constrain(g);this.controls();this.draw();}
+ resize(scale){const g=this.selectedObject();if(!g||!Number.isFinite(scale)||scale<=0)return;this.remember();const w=Math.min(this.selected.type==='text'?1904:800,g.w*scale),h=w*g.h/g.w;g.x-=(w-g.w)/2;g.y-=(h-g.h)/2;g.w=w;g.h=h;this.constrain(g,this.selected.type);this.controls();this.draw();}
  async chooseIcon(replace){
   if(!this.scene||(replace&&this.selected?.type!=='group'))return;
   const active=this.scene,token=loadToken,chosen=this.selected?.index,iconName=this.node('iconChoice').value,src=this.scene.palette[iconName];if(!src)return;
@@ -104,6 +137,7 @@ class ReportEditor {
   if(this.page===1)for(const b of this.scene.boundaries){const p=b.points;c.beginPath();c.moveTo(...p[0]);c.bezierCurveTo(...p[1],...p[2],...p[3]);c.strokeStyle=b.color;c.lineWidth=b.width;c.stroke();}
   c.save();if(this.page===2){const b=this.bounds();c.beginPath();c.rect(b.x,b.y,b.w,b.h);c.clip();}
   for(let i=0;i<this.scene.groups.length;i++){const g=this.scene.groups[i],im=this.sprites.get(g.src);if(im)c.drawImage(im,g.x,g.y,g.w,g.h);}c.restore();
+  for(const g of this.scene.texts||[])this.drawText(g);
   if(handles)this.drawSelection();
   if(handles&&this.page===1)for(const b of this.scene.boundaries){c.strokeStyle='#6d28d9';c.lineWidth=1;c.setLineDash([6,6]);c.beginPath();c.moveTo(...b.points[0]);for(const xy of b.points.slice(1))c.lineTo(...xy);c.stroke();c.setLineDash([]);for(const xy of b.points){c.beginPath();c.arc(...xy,8,0,2*Math.PI);c.fillStyle='white';c.fill();c.strokeStyle='#7c3aed';c.lineWidth=3;c.stroke();}}
  }
@@ -112,14 +146,15 @@ class ReportEditor {
   try{
    const r=await fetch(`energy/${day}/editor${this.page===2?'2':''}.json?v=${version}`);if(!r.ok)throw Error('editor');const data=await r.json();
    if(!Array.isArray(data.groups)||!Array.isArray(data.boundaries)||!data.palette)throw Error('schema');
-   data.palette={...data.palette,...editorSymbols};
+   data.palette={...data.palette,...editorSymbols};data.texts=[];
    const bg=await image(`energy/${day}/${data.background}?v=${version}`);if(token!==loadToken)return;
    this.original=data;this.original.revision=data.revision||1;this.scene=clone(data);this.background=bg;
    try{const saved=JSON.parse(localStorage.getItem(this.storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries)&&saved.groups.every(g=>['x','y','w','h'].every(k=>Number.isFinite(g[k]))&&g.w>0&&g.h>0&&typeof g.src==='string')){this.scene=saved;this.scene.palette=clone(data.palette);this.changed=true;}}catch{}
+   this.scene.texts=(Array.isArray(this.scene.texts)?this.scene.texts:[]).filter(g=>g&&typeof g.text==='string'&&g.text.trim()&&g.text.length<=200&&['x','y','w','h'].every(k=>Number.isFinite(g[k]))&&g.w>0&&g.h>0);this.scene.texts.forEach(g=>this.constrain(g,'text'));
    this.scene.panels=this.scene.panels||clone(data.panels||[]);if(this.page===2){this.scene.boundaries=[];this.scene.panels=[];this.scene.groups.forEach(g=>this.constrain(g));}
    await Promise.all([...this.scene.groups,...this.scene.panels.filter(p=>p.updated)].map(g=>this.sprite(g.src)));if(token!==loadToken)return;
    this.node('iconChoice').replaceChildren();for(const name of Object.keys(this.scene.palette)){const option=document.createElement('option');option.value=name;option.textContent=labels[name]||name;this.node('iconChoice').append(option);}
-   this.node('edit').disabled=false;this.node('editStatus').textContent=this.page===2?'아이콘·화살표를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동합니다. 날짜·기온 그래프·수치·범례는 고정입니다.':'아이콘·화살표를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동하고, 경계선은 보라색 조절점으로 수정합니다.';this.controls();this.draw();
+   this.node('edit').disabled=false;this.node('editStatus').textContent=this.page===2?'아이콘·화살표·글상자를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동합니다. 주석 문구를 입력하고 글상자 삽입을 누르면 페이지 어디에나 주석을 놓을 수 있습니다.':'아이콘·화살표·글상자를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동하고, 경계선은 보라색 조절점으로 수정합니다. 주석은 문구를 입력하고 글상자 삽입을 누르세요.';this.controls();this.draw();
   }catch{if(token===loadToken){this.scene=null;this.node('editStatus').textContent='이 날짜의 편집 정보를 불러오지 못했습니다.';}}
  }
  async download(edited=false){
@@ -148,3 +183,4 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{try{const r=await fetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
