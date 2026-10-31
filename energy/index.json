@@ -1,0 +1,12 @@
+{
+  "dates": [
+    "20261031",
+    "20261030",
+    "20261029"
+  ],
+  "retention_days": 30,
+  "target_time_kst": "07:00",
+  "automatic_generation": true,
+  "status": "enabled",
+  "updated_kst": "2026-11-01T04:34:11+09:00"
+}
