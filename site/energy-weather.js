@@ -26,6 +26,7 @@ class ReportEditor {
   this.page=page;this.node=id=>el(id+(page===2?'2':''));
   this.canvas=this.node('editorCanvas');this.ctx=this.canvas.getContext('2d');this.sprites=new Map();this.clear();
   this.node('edit').onclick=()=>{if(!this.scene)return;this.editing=!this.editing;this.node('editorControls').hidden=!this.editing;this.node('edit').textContent=this.editing?`${page}페이지 편집 닫기`:this.title();this.draw();};
+  this.setupReportFields();
   this.node('undo').onclick=()=>{if(this.history.length){this.scene=this.history.pop();this.selected=null;this.changed=true;this.controls();this.draw();}};
   this.node('reset').onclick=()=>{if(!this.scene)return;this.remember();this.scene=clone(this.original);this.selected=null;this.controls();this.draw();};
   this.node('remove').onclick=()=>{if(!this.selected)return;this.remember();this.objects(this.selected.type).splice(this.selected.index,1);this.selected=null;this.controls();this.draw();};
@@ -52,6 +53,7 @@ class ReportEditor {
  objects(type){return this.scene?.[type==='text'?'texts':type==='group'?'groups':'boundaries']||[];}
  selectedObject(){return ['group','text'].includes(this.selected?.type)?this.objects(this.selected.type)[this.selected.index]:null;}
  controls(){
+  this.syncReportFields();
   const g=this.selectedObject();this.node('remove').disabled=!this.selected;this.node('size').disabled=!g;
   this.node('replaceIcon').disabled=this.selected?.type!=='group';this.node('updateText').disabled=this.selected?.type!=='text';
   if(this.selected?.type==='text'&&g)this.node('textInput').value=g.text;
@@ -130,7 +132,51 @@ class ReportEditor {
    this.constrain(g);this.controls();this.draw();
   }catch{this.node('editStatus').textContent='날씨 아이콘을 불러오지 못했습니다.';}
  }
- drawPanels(){if(this.page!==1)return;const c=this.ctx;for(const p of this.scene.panels||[]){if(!p.updated)continue;const im=this.sprites.get(p.src);if(!im)continue;const top=p.id==='satellite'?202:659,y=p.id==='satellite'?151:622;c.fillStyle='white';c.fillRect(65,top,435,365);c.fillRect(310,y,190,36);const scale=Math.min(365/im.width,365/im.height,1),w=im.width*scale,h=im.height*scale;c.drawImage(im,282-w/2,top+(365-h)/2,w,h);c.fillStyle='#333333';c.font='21px system-ui, sans-serif';c.textAlign='right';c.textBaseline='middle';const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(p.time));c.fillText(time+' KST',497,y+18);}}
+ setupReportFields(){
+  const box=document.createElement('div');box.className='text-tools';
+  const field=(id,label,placeholder,max=60)=>{const wrap=document.createElement('label');wrap.textContent=label+' ';const input=document.createElement('input');input.id=id+(this.page===2?'2':'');input.type='text';input.maxLength=max;input.placeholder=placeholder;input.style.cssText='font:inherit;padding:8px;border:1px solid #9aa8b8;border-radius:6px;width:260px';wrap.append(input);box.append(wrap);return input;};
+  field('publicationText','우측 상단 기준시각','자동 표시 유지 (예: 2026.11.02.(월) 09시 기준)');
+  if(this.page===1){
+   field('satelliteTime','위성 시각','자동 표시 유지 (예: 06:30 KST)',30);
+   field('radarTime','레이더·대체 이미지 시각','자동 표시 유지 (예: 09:00 KST)',30);
+   field('radarTitle','레이더 영역 제목','자동 표시 유지 (예: 황사 현황)',30);
+   const label=document.createElement('label');label.textContent='레이더 영역 이미지 선택 ';const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id='radarUpload';input.onchange=()=>this.uploadRadar(input);label.append(input);box.append(label);
+   const restore=document.createElement('button');restore.textContent='기존 레이더로 복원';restore.onclick=()=>{if(!this.scene)return;this.remember();this.scene.panels=this.scene.panels.filter(p=>p.id!=='radar');const original=this.original.panels?.find(p=>p.id==='radar');if(original)this.scene.panels.push(clone(original));this.controls();this.draw();};box.append(restore);
+  }
+  const apply=document.createElement('button');apply.textContent='시각·제목 적용';apply.onclick=()=>{
+   if(!this.scene)return;this.remember();this.scene.publicationText=this.node('publicationText').value.trim();
+   if(this.page===1)for(const id of ['satellite','radar']){let panel=this.scene.panels.find(p=>p.id===id);if(!panel){panel={id};this.scene.panels.push(panel);}panel.timeText=this.node(id+'Time').value.trim();if(id==='radar')panel.titleText=this.node('radarTitle').value.trim();}
+   this.controls();this.draw();this.node('editStatus').textContent='입력한 표시 문구를 적용했습니다. 실제 예보·관측자료의 시각은 변경되지 않습니다.';
+  };box.append(apply);
+  const hint=document.createElement('span');hint.textContent='빈 입력칸은 자동 표시를 유지합니다. 기준시각은 페이지별로 적용됩니다.';box.append(hint);this.node('editorControls').append(box);
+ }
+ syncReportFields(){
+  if(!this.scene)return;this.node('publicationText').value=this.scene.publicationText||'';
+  if(this.page===1){for(const id of ['satellite','radar']){const p=this.scene.panels?.find(p=>p.id===id);this.node(id+'Time').value=p?.timeText||'';}this.node('radarTitle').value=this.scene.panels?.find(p=>p.id==='radar')?.titleText||'';}
+ }
+ async uploadRadar(input){
+  const file=input.files?.[0];input.value='';if(!file||!this.scene)return;
+  const active=this.scene,token=loadToken;let url;
+  try{
+   if(file.size>20*1024*1024||!/^image\/(png|jpeg|webp|gif)$/.test(file.type))throw Error('format');
+   url=URL.createObjectURL(file);const full=await image(url);if(full.width*full.height>40000000)throw Error('size');
+   const thumb=document.createElement('canvas'),scale=Math.min(1,870/full.width,730/full.height);thumb.width=Math.max(1,Math.round(full.width*scale));thumb.height=Math.max(1,Math.round(full.height*scale));thumb.getContext('2d').drawImage(full,0,0,thumb.width,thumb.height);
+   const src=thumb.toDataURL('image/png');await this.sprite(src);if(token!==loadToken||active!==this.scene)return;
+   this.remember();let panel=this.scene.panels.find(p=>p.id==='radar');if(!panel){panel={id:'radar'};this.scene.panels.push(panel);}Object.assign(panel,{src,updated:true,custom:true,timeText:this.node('radarTime').value.trim(),titleText:this.node('radarTitle').value.trim()});
+   this.controls();this.draw();this.node('editStatus').textContent='선택한 이미지를 레이더 영역에 적용했습니다. 제목과 시각을 확인하고 시각·제목 적용을 눌러 주세요. 이미지 비율은 유지됩니다.';
+  }catch{if(token===loadToken)this.node('editStatus').textContent='이미지를 읽지 못했습니다. 20MB 이하 PNG·JPG·WebP·GIF 파일을 선택해 주세요.';}finally{if(url)URL.revokeObjectURL(url);}
+ }
+ drawPanels(){
+  const c=this.ctx;c.save();
+  if(this.scene.publicationText){c.fillStyle='#ffc400';c.fillRect(1290,15,620,65);c.fillStyle='black';c.font='700 24px system-ui, sans-serif';c.textAlign='right';c.textBaseline='middle';c.fillText(this.scene.publicationText,1880,49,585);}
+  if(this.page===1)for(const p of this.scene.panels||[]){
+   const top=p.id==='satellite'?202:659,y=p.id==='satellite'?151:622;
+   if(p.updated){const im=this.sprites.get(p.src);if(im){c.fillStyle='white';c.fillRect(65,top,435,365);const scale=Math.min((p.custom?435:365)/im.width,365/im.height),w=im.width*scale,h=im.height*scale;c.drawImage(im,282-w/2,top+(365-h)/2,w,h);}}
+   if(p.updated||p.timeText){c.fillStyle='white';c.fillRect(310,y,190,36);c.fillStyle='#333333';c.font='21px system-ui, sans-serif';c.textAlign='right';c.textBaseline='middle';const time=p.timeText||(Number.isFinite(Date.parse(p.time))?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(p.time))+' KST':'');c.fillText(time,497,y+18,184);}
+   if(p.titleText){c.fillStyle='#fff300';c.fillRect(67,y,240,35);c.strokeStyle='black';c.lineWidth=1;c.strokeRect(67,y,240,35);c.fillStyle='black';c.font='700 24px system-ui, sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(p.titleText,187,y+18,228);}
+  }c.restore();
+ }
+
  draw(handles=this.editing){
   this.canvas.hidden=!this.editing&&!this.changed;el('page'+this.page).hidden=this.editing||this.changed;
   const c=this.ctx;c.clearRect(0,0,1920,1080);if(!this.background||!this.scene)return;c.drawImage(this.background,0,0,1920,1080);this.drawPanels();
@@ -183,4 +229,5 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{try{const r=await fetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
 
