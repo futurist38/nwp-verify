@@ -2,7 +2,8 @@ import unittest,datetime as dt
 from unittest.mock import patch
 from energy_data import number,weighted,parse_short,minute_minimum,WEIGHTS
 from energy_publication import publication_label
-from build_energy import state_from
+from build_energy import state_from,weather_groups
+from energy_layout import state,tokens
 
 class EnergyTests(unittest.TestCase):
     def test_negative_winter_temperature_and_rounding(self):
@@ -31,4 +32,43 @@ class EnergyTests(unittest.TestCase):
         self.assertIsNone(state_from('흐리고 비')['frequency'])
         self.assertEqual(state_from('흐리고 때때로 비')['frequency'],'가끔')
 
+    def test_thursday_rain_deduplicates_visible_icons_only(self):
+        record={'cities':{c:{'weather':['흐림','구름많음']} for c in WEIGHTS}}
+        for c in ('대구','광주'):
+            record['cities'][c]['weather']=['흐리고 한때 비','구름많고 한때 비']
+        record['cities']['부산']['weather']=['흐리고 가끔 비','구름많고 가끔 비']
+        groups,_=weather_groups(record)
+        self.assertEqual(len(groups['south']),2)  # Keep the source sky change.
+        self.assertEqual(tokens(groups['south']),[
+            {'kind':'weather','icon':'rain','parentheses':False,'auxiliary':None}])
+        self.assertEqual([t.get('icon',t['kind']) for t in tokens(groups['north'])],
+                         ['cloudy','arrow','sun_cloud_b'])
+
+    def test_same_visible_precipitation_has_no_arrow(self):
+        for precip in ('rain','snow','snow_rain_a','shower'):
+            with self.subTest(precip=precip):
+                states=[state('cloudy',precip),state('sun_cloud_b',precip)]
+                self.assertEqual(len(tokens(states)),1)
+                self.assertEqual(tokens(states)[0]['icon'],precip)
+                self.assertNotEqual(states[0],states[1])
+
+    def test_only_adjacent_duplicates_are_collapsed(self):
+        states=[state(),state(),state('cloudy','rain'),state('sun_cloud_b','rain'),state()]
+        self.assertEqual([t.get('icon',t['kind']) for t in tokens(states)],
+                         ['clear','arrow','rain','arrow','clear'])
+        self.assertEqual(tokens([]),[])
+
+    def test_parenthesized_weather_changes_remain_visible(self):
+        for states in (
+            [state('cloudy','rain','가끔'),state('sun_cloud_b','rain','가끔')],
+            [state('cloudy','rain','가끔'),state('cloudy','snow','가끔')],
+            [state('cloudy','rain'),state('cloudy','rain','가끔')],
+        ):
+            with self.subTest(states=states):
+                self.assertEqual(len(tokens(states)),3)
+                self.assertEqual(tokens(states)[1],{'kind':'arrow'})
+        self.assertEqual(len(tokens([state('cloudy','rain','가끔'),
+                                     state('cloudy','rain','때때로')])),1)
+
 if __name__=='__main__':unittest.main()
+

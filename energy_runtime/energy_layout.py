@@ -29,10 +29,14 @@ def base():
 def state(sky='clear',precip=None,frequency=None):return {'sky':sky,'precip':precip,'frequency':frequency}
 def tokens(states):
  out=[]
- for i,s in enumerate(states):
-  if i:out.append({'kind':'arrow'})
+ for s in states:
   occasional=bool(s['precip'] and s['frequency'] in ['가끔','때때로'])
-  out.append({'kind':'weather','icon':s['sky'] if occasional else (s['precip'] or s['sky']),'parentheses':occasional,'auxiliary':s['precip'] if occasional else None})
+  token={'kind':'weather','icon':s['sky'] if occasional else (s['precip'] or s['sky']),'parentheses':occasional,'auxiliary':s['precip'] if occasional else None}
+  # A sky change can still render as the same precipitation icon. Compare the
+  # complete visible symbol before inserting an arrow; retain source states.
+  if out and out[-1]==token:continue
+  if out:out.append({'kind':'arrow'})
+  out.append(token)
  return out
 clear=[state()];rain=[state('cloudy','rain')];occasion=[state('cloudy','rain','가끔')]
 partly=[state('sun_cloud_b')]
@@ -71,3 +75,4 @@ def group(im,states,cx,cy,maxwidth=500,size=100,tag=''):
     parenthesis(im,')',x+size*1.77,cy,rain_height*1.03)
   x+=w+gap
  placed.append({'tag':tag,'center':[cx,cy],'max_width':maxwidth,'visible_icon_size':size,'auxiliary_ratio':.52,'tokens':ts})
+
