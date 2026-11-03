@@ -1,11 +1,11 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
 const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{try{const r=await fetch('energy/index.json'"));
 function setup(fetcher){
- const calls={exports:0,draws:[],downloads:[],texts:[],rects:[]},nodes={},saved=new Map();
+ const calls={exports:0,draws:[],downloads:[],texts:[],rects:[]},nodes={},saved=new Map();let created=0;
  function makeCanvas(id){const ctx=new Proxy({measureText(text){return {width:[...text].length*32};},fillText(text){calls.texts.push({canvas:id,text,color:this.fillStyle,font:this.font});},fillRect(){calls.rects.push({canvas:id,kind:'fill',color:this.fillStyle});},strokeRect(){calls.rects.push({canvas:id,kind:'stroke',color:this.strokeStyle});},drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,style:{},hidden:true,width:1920,height:1080,getContext:()=>ctx,addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
- function node(id){return nodes[id]??=(id.startsWith('editorCanvas')?makeCanvas(id):{id,value:'',disabled:false,hidden:false,textContent:'',focus(){},addEventListener(){},click(){if(this.download)calls.downloads.push(this.download);return this.onclick?.({preventDefault(){}});},replaceChildren(){this.value='';},append(option){if(!this.value)this.value=option.value;}});}
+ function node(id){return nodes[id]??=(id.startsWith('editorCanvas')?makeCanvas(id):{id,style:{},children:[],value:'',disabled:false,hidden:false,textContent:'',focus(){},addEventListener(){},click(){if(this.download)calls.downloads.push(this.download);return this.onclick?.({preventDefault(){}});},replaceChildren(){this.value='';},append(...options){this.children.push(...options);for(const option of options){if(option.id)nodes[option.id]=option;if(!this.value)this.value=option.value;}}});}
  class Image{constructor(){this.width=678;this.height=663;}set src(x){this._src=x;queueMicrotask(()=>this.onload());}get src(){return this._src;}}
- const sandbox={document:{getElementById:node,querySelector:()=>({content:'https://example.workers.dev'}),createElement:tag=>tag==='canvas'?makeCanvas('export'):node('created-'+tag)},Image,console,Intl,Date,Map,Promise,Number,JSON,Error,Boolean,AbortSignal,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout:()=>0,localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){},print(){}},fetch:fetcher};
+ const sandbox={document:{getElementById:node,querySelector:()=>({content:'https://example.workers.dev'}),createElement:tag=>tag==='canvas'?makeCanvas('export'):node('created-'+tag+'-'+(++created))},Image,console,Intl,Date,Map,Promise,Number,JSON,Error,Boolean,AbortSignal,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout:()=>0,localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){},print(){}},fetch:fetcher};
  const context=vm.createContext(sandbox);vm.runInContext(source,context);node('date').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');
  vm.runInContext("for(const ed of Object.values(editors)){ed.day=el('date').value;ed.original={revision:1,background:'bg'+ed.page,groups:[{id:'moved',x:ed.page===2?240:777,y:ed.page===2?260:200,w:100,h:100,src:'icon'}],boundaries:ed.page===2?[]:[{points:[[1,2],[3,4],[5,6],[7,8]],color:'blue',width:2}],panels:ed.page===2?[]:[{id:'radar',src:'old-radar',time:'old'},{id:'satellite',src:'old-satellite',time:'old'}],palette:{clear:'clear-icon',rain:'rain-icon'},forecastMarker:14.5};ed.scene=clone(ed.original);ed.background={id:'fixed-background-'+ed.page};}refreshControls();",context);
  return {nodes,calls,saved,context,run:s=>vm.runInContext(s,context)};
@@ -95,3 +95,19 @@ test('corner drag resizes both pages with fixed aspect ratio and one undo step',
  }
 });
 
+
+test('custom satellite and radar uploads restore independently and survive save/export',async()=>{
+ const t=setup();
+ for(const kind of ['satellite','radar']){
+  t.nodes[kind+'Time'].value='09:00 KST';
+  await t.run("editors[1].uploadPanel('"+kind+"',{files:[{size:100,type:'image/png'}],value:'test'})");
+  assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='"+kind+"').custom"),true);
+  assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='"+kind+"').timeText"),'09:00 KST');
+ }
+ t.nodes.saveLayout.click();assert.ok([...t.saved.values()].some(s=>JSON.parse(s).panels.every(p=>p.custom)));
+ const button=Object.values(t.nodes).find(n=>n.textContent==='기존 위성 복원');button.click();
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'old-satellite');
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').custom"),true);
+ t.nodes.undo.click();assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').custom"),true);
+ await t.nodes.save1.click();assert.ok(t.calls.downloads.at(-1).endsWith('_01_edited.png'));
+});
