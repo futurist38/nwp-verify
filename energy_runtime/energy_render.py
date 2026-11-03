@@ -87,7 +87,7 @@ def render_page1(background=False):
     boundary(im,[(x+80,568),(x+300,508),(x+310,418),(x+270,261)])
   else:
    north,south=week[idx]['north'],week[idx]['south']
-   if north==south:group(im,north,x+330,530,maxwidth=480,size=145,tag=f'day{idx}-nationwide')
+   if tokens(north)==tokens(south):group(im,north,x+330,530,maxwidth=480,size=145,tag=f'day{idx}-nationwide')
    else:
     group(im,north,x+330,435,maxwidth=450,size=135,tag=f'day{idx}-central')
     group(im,south,x+330,710,maxwidth=450,size=135,tag=f'day{idx}-south')
@@ -123,7 +123,7 @@ for i,day in enumerate(dates):
  if i:
   for y in range(155,449,8):d.line((x0+i*cw,y,x0+i*cw,y+2),fill='#888888')
  n,s=week[i]['north'],week[i]['south']
- if n==s:group(im,n,cx,321,maxwidth=cw-18,size=100,tag=f'day{i}-merged')
+ if tokens(n)==tokens(s):group(im,n,cx,321,maxwidth=cw-18,size=100,tag=f'day{i}-merged')
  else:
   group(im,n,cx,279,maxwidth=cw-18,size=67,tag=f'day{i}-central');group(im,s,cx,369,maxwidth=cw-18,size=67,tag=f'day{i}-south')
 text(im,(139,280),'중부',33,bold=True);text(im,(139,375),'남부',33,bold=True);text(im,(139,717),'기온',33,bold=True)

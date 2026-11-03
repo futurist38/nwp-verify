@@ -52,6 +52,17 @@ class EnergyTests(unittest.TestCase):
                 self.assertEqual(tokens(states)[0]['icon'],precip)
                 self.assertNotEqual(states[0],states[1])
 
+    def test_regional_icons_merge_by_visible_sequence(self):
+        north=[state('cloudy','rain'),state('sun_cloud_b','rain')]
+        south=[state('cloudy','rain')]
+        self.assertNotEqual(north,south)
+        self.assertEqual(tokens(north),tokens(south))
+        self.assertEqual(tokens([state('cloudy','rain','가끔')]),
+                         tokens([state('cloudy','rain','때때로')]))
+        self.assertNotEqual(tokens(north),tokens([state('cloudy','rain','가끔')]))
+        self.assertNotEqual(tokens([state(),state('cloudy','rain')]),
+                            tokens([state('cloudy','rain'),state()]))
+
     def test_only_adjacent_duplicates_are_collapsed(self):
         states=[state(),state(),state('cloudy','rain'),state('sun_cloud_b','rain'),state()]
         self.assertEqual([t.get('icon',t['kind']) for t in tokens(states)],

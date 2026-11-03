@@ -140,8 +140,10 @@ class ReportEditor {
    field('satelliteTime','위성 시각','자동 표시 유지 (예: 06:30 KST)',30);
    field('radarTime','레이더·대체 이미지 시각','자동 표시 유지 (예: 09:00 KST)',30);
    field('radarTitle','레이더 영역 제목','자동 표시 유지 (예: 황사 현황)',30);
-   const label=document.createElement('label');label.textContent='레이더 영역 이미지 선택 ';const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id='radarUpload';input.onchange=()=>this.uploadRadar(input);label.append(input);box.append(label);
-   const restore=document.createElement('button');restore.textContent='기존 레이더로 복원';restore.onclick=()=>{if(!this.scene)return;this.remember();this.scene.panels=this.scene.panels.filter(p=>p.id!=='radar');const original=this.original.panels?.find(p=>p.id==='radar');if(original)this.scene.panels.push(clone(original));this.controls();this.draw();};box.append(restore);
+   for(const [kind,name] of [['satellite','위성'],['radar','레이더']]){
+   const label=document.createElement('label');label.textContent=name+' 영역 이미지 선택 ';const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp,image/gif';input.id=kind+'Upload';input.onchange=()=>this.uploadPanel(kind,input);label.append(input);box.append(label);
+   const restore=document.createElement('button');restore.textContent='기존 '+name+' 복원';restore.onclick=()=>{if(!this.scene)return;this.remember();this.scene.panels=this.scene.panels.filter(p=>p.id!==kind);const original=this.original.panels?.find(p=>p.id===kind);if(original)this.scene.panels.push(clone(original));this.controls();this.draw();};box.append(restore);
+   }
   }
   const apply=document.createElement('button');apply.textContent='시각·제목 적용';apply.onclick=()=>{
    if(!this.scene)return;this.remember();this.scene.publicationText=this.node('publicationText').value.trim();
@@ -154,7 +156,8 @@ class ReportEditor {
   if(!this.scene)return;this.node('publicationText').value=this.scene.publicationText||'';
   if(this.page===1){for(const id of ['satellite','radar']){const p=this.scene.panels?.find(p=>p.id===id);this.node(id+'Time').value=p?.timeText||'';}this.node('radarTitle').value=this.scene.panels?.find(p=>p.id==='radar')?.titleText||'';}
  }
- async uploadRadar(input){
+ async uploadPanel(kind,input){
+  if(!['satellite','radar'].includes(kind))return;
   const file=input.files?.[0];input.value='';if(!file||!this.scene)return;
   const active=this.scene,token=loadToken;let url;
   try{
@@ -162,8 +165,8 @@ class ReportEditor {
    url=URL.createObjectURL(file);const full=await image(url);if(full.width*full.height>40000000)throw Error('size');
    const thumb=document.createElement('canvas'),scale=Math.min(1,870/full.width,730/full.height);thumb.width=Math.max(1,Math.round(full.width*scale));thumb.height=Math.max(1,Math.round(full.height*scale));thumb.getContext('2d').drawImage(full,0,0,thumb.width,thumb.height);
    const src=thumb.toDataURL('image/png');await this.sprite(src);if(token!==loadToken||active!==this.scene)return;
-   this.remember();let panel=this.scene.panels.find(p=>p.id==='radar');if(!panel){panel={id:'radar'};this.scene.panels.push(panel);}Object.assign(panel,{src,updated:true,custom:true,timeText:this.node('radarTime').value.trim(),titleText:this.node('radarTitle').value.trim()});
-   this.controls();this.draw();this.node('editStatus').textContent='선택한 이미지를 레이더 영역에 적용했습니다. 제목과 시각을 확인하고 시각·제목 적용을 눌러 주세요. 이미지 비율은 유지됩니다.';
+   this.remember();let panel=this.scene.panels.find(p=>p.id===kind);if(!panel){panel={id:kind};this.scene.panels.push(panel);}Object.assign(panel,{src,updated:true,custom:true,timeText:this.node(kind+'Time').value.trim()});if(kind==='radar')panel.titleText=this.node('radarTitle').value.trim();
+   this.controls();this.draw();this.node('editStatus').textContent=`선택한 이미지를 ${kind==='satellite'?'위성':'레이더'} 영역에 적용했습니다. 시각을 확인하고 시각·제목 적용을 눌러 주세요. 이미지 비율은 유지됩니다.`;
   }catch{if(token===loadToken)this.node('editStatus').textContent='이미지를 읽지 못했습니다. 20MB 이하 PNG·JPG·WebP·GIF 파일을 선택해 주세요.';}finally{if(url)URL.revokeObjectURL(url);}
  }
  drawPanels(){
