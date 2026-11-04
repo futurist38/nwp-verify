@@ -69,6 +69,53 @@ test('hourly alignment preserves one-sided data, midnight, gaps, and real issue 
   assert.equal(fc.hourlySlots(mid,{},['20261002']).some(h=>h.a),false);
 });
 
+test('terminal midnight uses medium daily values while keeping the short hourly point',()=>{
+  for(const [issue,day,previous] of [['2026110411','20261108','20261107'],['2026110317','20261108','20261107']]) {
+    const short={issue,kind:'short',cities:{서울:{
+      [previous]:{tmax:{value:9,basis:'TMX'},hourly:{[previous+'21']:{temp:2}}},
+      [day]:{hourly:{[day+'00']:{temp:1,wx:wx('clear')}}}
+    }}};
+    const mid={issue:'2026110306',kind:'mid',cities:{서울:{[day]:{
+      tmin:{value:0,basis:'MID',lower:-1,upper:1},tmax:{value:7,basis:'MID'},wx_am:wx('overcast'),wx_pm:wx('overcast')
+    }}}};
+    const got=fc.assemble([short,mid],'서울')[day];
+    assert.equal(got.tmin.value,0); assert.equal(got.tmax.value,7);
+    assert.equal(got.tmin.issue,mid.issue); assert.equal(got.wx.am.issue,mid.issue);
+    assert.equal(got.hourly[day+'00'].temp,1);
+    assert.equal(got.hourly[day+'00'].issue,short.issue);
+    assert.equal(fc.assemble([short],'서울')[day].tmax,null);
+    assert.equal(fc.assemble([short],'서울')[day].hourly[day+'00'].temp,1);
+    // Daily coverage is global, never dependent on a particular city's outage.
+    short.cities.원주={[day]:{tmax:{value:8,basis:'TMX'}}};
+    assert.equal(fc.assemble([short,mid],'서울')[day].tmax,null);
+  }
+});
+
+test('an interior midnight-only day remains missing and never uses medium values',()=>{
+  const short={issue:'2026110411',kind:'short',cities:{서울:{
+    20261105:{hourly:{2026110523:{temp:2}}},
+    20261106:{hourly:{2026110600:{temp:1}}},
+    20261107:{tmax:{value:9,basis:'TMX'}}
+  }}};
+  const mid={issue:'2026110406',kind:'mid',cities:{서울:{20261106:{tmax:{value:99,basis:'MID'}}}}};
+  assert.equal(fc.assemble([short,mid],'서울')['20261106'].tmax,null);
+});
+
+test('complete three-hour series joins real samples and preserves missing samples and midnight',()=>{
+  const hours=Object.fromEntries(Array.from({length:8},(_,i)=>['20261107'+String(i*3).padStart(2,'0'),{temp:i,wx:wx('clear')}]));
+  const doc={issue:'2026110411',kind:'short',cities:{서울:{20261107:{hourly:hours},20261108:{hourly:{2026110800:{temp:8}}}}}};
+  let data=fc.assemble([doc],'서울'),slots=fc.hourlySlots(data,{},['20261107','20261108']);
+  assert.equal(data['20261107'].hourly['2026110700'].basis,'TMP3');
+  assert.equal(slots[1].a,null); // No synthesized intermediate values.
+  assert.equal(fc.hourlyPath(slots,'a',i=>i,v=>v),'M0,0 L3,1 L6,2 L9,3 L12,4 L15,5 L18,6 L21,7 L24,8 ');
+  hours['2026110706'].temp=null;
+  data=fc.assemble([doc],'서울'); slots=fc.hourlySlots(data,{},['20261107']);
+  assert.equal(fc.hourlyPath(slots,'a',i=>i,v=>v),'M0,0 L3,1 M9,3 L12,4 L15,5 L18,6 L21,7 ');
+  delete hours['2026110706'];
+  data=fc.assemble([doc],'서울'); slots=fc.hourlySlots(data,{},['20261107']);
+  assert.doesNotMatch(fc.hourlyPath(slots,'a',i=>i,v=>v),/L/);
+});
+
 test('screen controls render four real series, change periods, swap, and recover from fetch failure',async()=>{
   const fs=require('fs'),vm=require('vm');
   class Element {
@@ -168,3 +215,4 @@ test('comparison retains all cities and correct default without optional overvie
   assert.deepEqual(fc.CITIES.map(c=>c.name),require('../site/overview.js').CITIES.map(c=>c.name));
   assert.deepEqual(fc.CITIES.map(c=>c.stn),require('../site/overview.js').CITIES.map(c=>c.stn));
 });
+
