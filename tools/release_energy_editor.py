@@ -2,7 +2,7 @@
 import base64,json,os,shutil,subprocess,sys,tempfile,zipfile
 from pathlib import Path
 ROOT=Path.cwd();STAGE=ROOT/'energy_editor_stage';STATE=ROOT/'energy_editor_release_state.json'
-FRONT=['energy-weather.html','energy-weather.js','energy-editor.css','inline-edit.js','energy-shared.js','energy-shared-ui.js']
+FRONT=['energy-radar-map.json','energy-weather.html','energy-weather.js','energy-editor.css','inline-edit.js','energy-shared.js','energy-shared-ui.js']
 def git(*args,**kwargs):return subprocess.check_output(['git',*args],**kwargs)
 def ref():
  git('fetch','--depth=1','origin','site-data');return git('rev-parse','FETCH_HEAD').decode().strip()
@@ -17,12 +17,17 @@ def prepare():
   prefix='energy/'+date+'/';dest=STAGE/prefix;dest.mkdir(parents=True)
   for name in ['report.json','editor.json']:
    key=prefix+name;raw=git('show',base+':'+key);(dest/name).write_bytes(raw);guards[key]=git('rev-parse',base+':'+key).decode().strip()
+  # Keep archived optional images. Current-day sources are refreshed below.
+  try:(dest/'sources.json').write_bytes(git('show',base+':'+prefix+'sources.json',stderr=subprocess.DEVNULL))
+  except subprocess.CalledProcessError:pass
   report=json.loads((dest/'report.json').read_text());assert len(report['forecast'])==9
   for panel in json.loads((dest/'editor.json').read_text()).get('panels',[]):
    if panel.get('src') and panel['id'] in ['radar','satellite']:(dest/(panel['id']+'.png')).write_bytes(base64.b64decode(panel['src'].split(',',1)[1]))
   subprocess.run([sys.executable,'energy_runtime/energy_render.py',str(dest/'report.json'),str(dest)],check=True)
   for name in ['editor.json','editor2.json','background.webp','background2.webp','01.webp','02.webp']:files.append(prefix+name)
  for name in FRONT:shutil.copy2(ROOT/'site'/name,STAGE/name);files.append(name)
+ subprocess.run([sys.executable,'tools/collect_energy_sources.py','--out',str(STAGE/'energy')],check=True)
+ for date in manifest['dates']:files.append('energy/'+date+'/sources.json')
  (STAGE/'energy/index.json').write_text(json.dumps(manifest));STATE.write_text(json.dumps({'guards':guards,'files':files}))
  print('Prepared',len(manifest['dates']),'reports and editor files')
 def publish():
@@ -43,4 +48,5 @@ def publish():
 if __name__=='__main__':
  if sys.argv[1]=='prepare':prepare()
  else:raise SystemExit(publish())
+
 

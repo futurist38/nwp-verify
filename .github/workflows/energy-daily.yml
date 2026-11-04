@@ -34,6 +34,8 @@ jobs:
         run: python -m unittest discover -s energy_runtime -p 'test_*.py' -v
       - name: Generate 07 KST report
         run: python energy_runtime/build_energy.py
+      - name: Collect optional editor images
+        run: python tools/collect_energy_sources.py
       - name: Publish energy report only
         run: |
           git config user.name nwp-bot
@@ -44,3 +46,4 @@ jobs:
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: python tools/sync_energy_supabase.py
+

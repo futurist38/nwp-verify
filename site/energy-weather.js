@@ -46,7 +46,7 @@ class ReportEditor {
   for(const event of ['pointerup','pointercancel','lostpointercapture'])this.canvas.addEventListener(event,()=>{this.drag=null;this.canvas.style.cursor=this.editing?'grab':'default';});
  }
  title(){return `${this.page}페이지 편집`;}
- clear(){this.finishInline?.(true);this.scene=null;this.original=null;this.background=null;this.selected=null;this.drag=null;this.history=[];this.editing=false;this.changed=false;this.day='';this.sprites.clear();this.node('editorControls').hidden=true;this.canvas.hidden=true;el('page'+this.page).hidden=false;this.node('edit').disabled=true;this.node('edit').textContent=this.title();this.node('textInput').value='';}
+ clear(){this.sourceQueryTime='';this.sourceBatch=null;this.sourceQueryMessage='';this.queriedSources={};this.sourceRequests={};this.sourceStates={};this.finishInline?.(true);this.scene=null;this.original=null;this.background=null;this.selected=null;this.drag=null;this.history=[];this.editing=false;this.changed=false;this.day='';this.sprites.clear();this.node('editorControls').hidden=true;this.canvas.hidden=true;el('page'+this.page).hidden=false;this.node('edit').disabled=true;this.node('edit').textContent=this.title();this.node('textInput').value='';}
  storageKey(){return `kpx-energy-editor-v1-${this.day}-${this.original?.revision}`+(this.page===2?'-page2':'');}
  remember(){this.changed=true;this.history.push(clone(this.scene));if(this.history.length>40)this.history.shift();}
  async sprite(src){if(!this.sprites.has(src))this.sprites.set(src,await image(src));return this.sprites.get(src);}
@@ -157,6 +157,7 @@ class ReportEditor {
  syncReportFields(){
   if(!this.scene)return;this.node('publicationText').value=this.scene.publicationText||this.scene.labels?.find(t=>t.text.startsWith('발표시점:'))?.text||'';
   if(this.page===1){for(const id of ['satellite','radar']){const p=this.scene.panels?.find(p=>p.id===id);this.node(id+'Time').value=p?.timeText||'';}this.node('radarTitle').value=this.scene.panels?.find(p=>p.id==='radar')?.titleText||'';}
+  for(const [button,source] of this.sourceButtons||[])button.setAttribute('aria-pressed',String(this.scene.panels?.find(p=>p.id==='radar')?.src===source.src&&Boolean(source.src)));
  }
  async uploadPanel(kind,input){
   if(!['satellite','radar'].includes(kind))return;
@@ -304,16 +305,119 @@ Object.assign(ReportEditor.prototype,{
  async chooseIcon(replace){await originalChoose.call(this,replace);this.setSelection(this.selected?[this.selected]:[]);this.controls();this.draw();},
  editText(replace){originalEditText.call(this,replace);this.setSelection(this.selected?[this.selected]:[]);this.controls();this.draw();},
  buildSourceChoices(){
-  if(this.page!==1)return;
+  if(this.page!==1||!this.original)return;
   let box=this.node('sourceChoices');if(box)box.remove();
-  box=document.createElement('div');box.id='sourceChoices';box.className='source-choices';
-  const title=document.createElement('span');title.textContent='왼쪽 아래 자료';box.append(title);
-  for(const source of this.original.panels||[]){
-   if(!source.src)continue;const button=document.createElement('button');button.type='button';
-   button.textContent=source.id==='radar'?'저장된 레이더':'저장된 위성';
-   button.onclick=async()=>{const active=this.scene;await this.sprite(source.src);if(active!==this.scene)return;this.remember();const panel=this.scene.panels.find(p=>p.id==='radar');Object.assign(panel,clone(source),{id:'radar',updated:true,custom:false,titleText:source.id==='radar'?'강수현황(레이더)':'위성영상',timeText:''});this.controls();this.draw();};box.append(button);
+  box=document.createElement('section');box.id='sourceChoices';box.className='source-choices';this.sourceButtons=[];
+  const title=document.createElement('h3');title.textContent='왼쪽 아래 자료 선택';box.append(title);
+  const hint=document.createElement('p');hint.className='source-hint';hint.textContent='조회 시각을 한 번 지정하면 모든 자료를 함께 불러옵니다. 썸네일을 눌러 적용하세요. 최근 30일 이내 제공 자료만 조회할 수 있습니다.';box.append(hint);
+  const query=document.createElement('div');query.className='source-query';
+  const field=document.createElement('label');field.textContent='조회 시각 (KST)';
+  const input=document.createElement('input');input.id='sourceQueryTime';input.type='datetime-local';input.step='60';input.setAttribute('aria-label','공통 조회 시각 (KST)');
+  const today=new Date(),kst=ms=>new Date(ms+9*3600000).toISOString().slice(0,16);input.max=kst(today.getTime());input.min=kst(today.getTime()-30*86400000);
+  input.value=this.sourceQueryTime||((/^\d{8}$/.test(this.day)?format(this.day):input.max.slice(0,10))+'T07:00');this.sourceQueryTime=input.value;input.disabled=!!this.sourceBatch;
+  input.oninput=()=>{this.sourceQueryTime=input.value;};field.append(input);
+  const fetchButton=document.createElement('button');fetchButton.type='button';fetchButton.className='primary';fetchButton.textContent=this.sourceBatch?'자료 불러오는 중…':'모든 자료 불러오기';fetchButton.disabled=!!this.sourceBatch;fetchButton.onclick=()=>this.queryAllSources(input.value);
+  const queryStatus=document.createElement('p');queryStatus.className='source-query-summary';queryStatus.setAttribute('role','status');queryStatus.textContent=this.sourceQueryMessage||'각 썸네일에는 실제 관측·발표 시각이 표시됩니다.';
+  query.append(field,fetchButton,queryStatus);box.append(query);
+  const grid=document.createElement('div');grid.className='source-grid';box.append(grid);
+  for(const [id,label,provider,interval] of [['satellite','위성','기상청','2분 간격'],['radar','레이더','기상청','5분 간격'],['warning','특보현황','기상청','지정 시각 이전 최신 발표'],['pm10','미세먼지(PM10)','기상청 황사 관측망','1시간 평균']]){
+   const saved=['satellite','radar'].includes(id)?this.original.panels?.find(p=>p.id===id):this.extraSources?.find(p=>p.id===id);
+   const source={id,label,provider,title:id==='radar'?'강수현황(레이더)':id==='satellite'?'위성영상':label,reason:this.sourcesLoading?'불러오는 중…':this.sourcesError||'이 날짜에 저장된 자료가 없습니다.',...saved,...this.queriedSources?.[id]};source.label=label;
+   const option=document.createElement('article');option.className='source-option';
+   const button=document.createElement('button');button.type='button';button.className='source-card';button.setAttribute('aria-pressed','false');button.setAttribute('aria-label',label+' 적용');
+   const preview=document.createElement(source.src?'img':'span');preview.className='source-thumbnail';
+   if(source.src){preview.src=window.ENERGY_PREVIEW?.images?.[source.src.split('?')[0]]||source.src;preview.alt=label+' 미리보기';preview.onerror=()=>{preview.hidden=true;button.disabled=true;status.textContent='이미지를 불러오지 못했습니다';};}
+   else preview.textContent='자료 없음';
+   const name=document.createElement('strong');name.textContent=label;
+   const status=document.createElement('span');status.className='source-time';status.textContent=source.time?this.sourceStamp(source):source.reason||'';
+   const origin=document.createElement('span');origin.className='source-provider';origin.textContent=provider;
+   button.append(preview,name,status,origin);button.disabled=!source.src;button.onclick=()=>this.applyPanelSource(source);option.append(button);this.sourceButtons.push([button,source]);
+   const detail=document.createElement('p');detail.className='source-query-status';detail.setAttribute('role','status');detail.textContent=this.sourceStates[id]?.message||interval;
+   option.append(detail);grid.append(option);
   }
-  const hint=document.createElement('span');hint.textContent='저장된 영상은 바로 선택 · 황사·산불 자료는 아래에서 직접 업로드';box.append(hint);this.node('reportFields').prepend(box);
+  this.node('reportFields').prepend(box);this.syncReportFields();
+ },
+ sourceStamp(source){return (source.timeKind?source.timeKind+' ':'')+this.sourceTime(source.time);},
+ async renderRadar(src,time){
+  if(!/^data:image\/png;base64,/.test(src||''))throw Error('radar');
+  const [layer,map]=await Promise.all([image(src),reportFetch('energy-radar-map.json').then(r=>{if(!r.ok)throw Error('map');return r.json();})]);
+  if(layer.width!==640||layer.height!==640||map.schema!==1||map.width!==640||map.height!==640||!Array.isArray(map.paths))throw Error('map dimensions');
+  const canvas=document.createElement('canvas');canvas.width=740;canvas.height=710;const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,740,710);c.drawImage(layer,0,30,640,640);c.save();c.beginPath();c.rect(0,30,640,640);c.clip();c.strokeStyle='#526575';c.lineWidth=.9;
+  for(const path of map.paths){c.beginPath();path.forEach(([x,y],i)=>{if(i)c.lineTo(x,y+30);else c.moveTo(x,y+30);});c.stroke();}c.restore();
+  // Same thresholds and colors as KMA MAP_ATTR['cmp']['SFC-HSR'].
+  const red=[0,0,0,0,0,0,0,255,255,249,224,204,255,255,210,180,224,201,179,147,179,76,0,51],green=[200,155,51,255,190,140,90,255,220,205,185,170,102,50,0,0,169,105,41,0,180,78,3,51],blue=[255,245,245,0,0,0,0,0,31,0,0,0,0,0,0,0,255,255,255,228,222,177,144,51],values=[0,.1,.5,1,2,3,4,5,6,7,8,9,10,15,20,25,30,40,50,60,70,80,90,110];
+  c.font='15px '+reportFont;c.textAlign='left';c.textBaseline='middle';
+  for(let i=0;i<24;i++){const y=50+(23-i)*24;c.fillStyle=`rgb(${red[i]},${green[i]},${blue[i]})`;c.fillRect(654,y,22,24);c.fillStyle='#172431';c.fillText(String(values[i]),683,y+12);}
+  c.font='17px '+reportFont;c.fillText('mm/h',650,30);c.textAlign='center';c.font='bold 23px '+reportFont;c.fillText('레이더 강수강도(HSR)',320,15);c.font='20px '+reportFont;c.fillText(this.sourceTime(time)+' · 기상청',370,690);return canvas.toDataURL('image/png');
+ },
+ async renderPM10(map,time){
+  if(!map||!/^data:image\/png;base64,/.test(map.basemap)||!Array.isArray(map.rows)||map.rows.length>50)throw Error('map');
+  const bg=await image(map.basemap),canvas=document.createElement('canvas');canvas.width=760;canvas.height=940;const c=canvas.getContext('2d');
+  c.fillStyle='white';c.fillRect(0,0,760,940);c.drawImage(bg,-36,54,756,780);c.textAlign='center';c.textBaseline='top';c.font='bold 30px '+reportFont;c.fillStyle='#172431';c.fillText('미세먼지(PM10) 1시간 평균',380,20);
+  for(const r of map.rows){
+   if(typeof r.name!=='string'||r.name.length>16||![r.x,r.y].every(Number.isFinite)||r.x<0||r.x>400||r.y<0||r.y>450||!(r.value===null||Number.isFinite(r.value)&&r.value>=0&&r.value<=100000))throw Error('station');
+   const value=r.value===null?'–':String(r.value),x=40+r.x*2,y=90+r.y*2;c.font='21px '+reportFont;const nameWidth=c.measureText(r.name).width;c.font='23px '+reportFont;const w=nameWidth+c.measureText(value).width+16;
+   c.fillStyle='white';c.fillRect(x,y,w,34);c.strokeStyle='#cbd5e1';c.strokeRect(x,y,w,34);c.textAlign='left';c.font='21px '+reportFont;c.fillStyle='#172431';c.fillText(r.name,x+4,y+5);c.textAlign='right';c.font='23px '+reportFont;c.fillStyle=r.value===null?'#64748b':'#b42318';c.fillText(value,x+w-4,y+4);
+  }
+  c.fillStyle='white';c.fillRect(0,878,760,62);c.textAlign='center';c.font='24px '+reportFont;c.fillStyle='#334155';c.fillText(this.sourceTime(time)+' · 단위: ㎍/㎥',380,879);c.font='20px '+reportFont;c.fillStyle='#64748b';c.fillText('기상청 황사 관측망 · 미관측: –',380,913);return canvas.toDataURL('image/png');
+ },
+ async queryAllSources(value){
+  if(this.page!==1||!this.scene||this.sourceBatch)return;
+  const requested=Date.parse(value+':00+09:00'),now=Date.now();
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)||!Number.isFinite(requested)||requested>now||requested<now-30*86400000){this.sourceQueryMessage='최근 30일 이내의 과거 시각을 입력하세요.';this.buildSourceChoices();return;}
+  const batch={value,original:this.original,token:loadToken};this.sourceBatch=batch;this.sourceQueryTime=value;this.sourceQueryMessage='같은 시각으로 위성·레이더·특보·미세먼지를 불러오고 있습니다.';this.buildSourceChoices();
+  const results=await Promise.allSettled(['satellite','radar','warning','pm10'].map(id=>this.querySource(id,value)));
+  if(this.sourceBatch!==batch||this.original!==batch.original||loadToken!==batch.token)return;
+  this.sourceBatch=null;const count=results.filter(r=>r.status==='fulfilled'&&r.value===true).length;
+  this.sourceQueryMessage=count===4?'네 자료를 불러왔습니다. 실제 자료 시각을 확인하고 썸네일을 눌러 적용하세요.':`${count}/4개 자료를 불러왔습니다. 실패한 자료는 이전 썸네일과 실제 시각을 유지합니다.`;this.buildSourceChoices();
+ },
+ async querySource(id,value){
+  if(this.page!==1||!this.scene)return;
+  const requested=Date.parse(value+':00+09:00'),now=Date.now();
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)||!Number.isFinite(requested)||requested>now||requested<now-30*86400000){this.sourceStates[id]={message:'최근 30일 이내의 과거 시각을 입력하세요.'};this.buildSourceChoices();return;}
+  const original=this.original,token=loadToken,request=(this.sourceRequests[id]||0)+1;this.sourceRequests[id]=request;
+  const current=()=>token===loadToken&&original===this.original&&request===this.sourceRequests[id];
+  let succeeded=false;this.sourceStates[id]={loading:true,message:'지정한 시각의 자료를 확인하고 있습니다…'};this.buildSourceChoices();
+  try{
+   if(!window.energyShared?.imagery)throw Error('not_connected');
+   const result=await window.energyShared.imagery(id,value.replace(/\D/g,''));const actual=Date.parse(result?.time);
+   if(result?.id!==id||Date.parse(result.requestedTime)!==requested||!Number.isFinite(actual)||actual>requested||actual<requested-(id==='warning'?30*86400000:id==='pm10'?3600000:id==='satellite'?120000:300000))throw Error('invalid');
+   const src=id==='pm10'?await this.renderPM10(result.map,result.time):id==='radar'?await this.renderRadar(result.src,result.time):result.src;
+   if(typeof src!=='string'||src.length>7000000||!/^data:image\/png;base64,/.test(src))throw Error('image');
+   const full=await image(src);if(full.width<200||full.height<200||full.width>2200||full.height>2200)throw Error('dimensions');
+   // Keep saved/shared raster images within the existing 2 MiB storage limit.
+   const canvas=document.createElement('canvas'),scale=Math.min(1000/full.width,1000/full.height,1);canvas.width=Math.round(full.width*scale);canvas.height=Math.round(full.height*scale);const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,canvas.width,canvas.height);c.drawImage(full,0,0,canvas.width,canvas.height);const raster=canvas.toDataURL('image/png');if(raster.length>2750000)throw Error('size');
+   if(!current())return; succeeded=true;this.queriedSources[id]={...result,src:raster,map:undefined};
+   const effective=Array.isArray(result.effectiveTimes)?result.effectiveTimes.map(t=>this.sourceTime(t)).filter(Boolean).join(', '):'';
+   this.sourceStates[id]={message:'불러옴 · '+this.sourceStamp(result)+(effective?' · 발효 '+effective:'')};
+  }catch(e){if(!current())return;this.sourceStates[id]={message:e.message==='not_connected'||e.status===404?'시간별 조회 연결을 준비 중입니다. 저장된 썸네일은 사용할 수 있습니다.':e.status===401||e.status===403?'편집을 종료한 뒤 다시 열어 권한을 확인해 주세요.':'해당 시각의 자료를 불러오지 못했습니다. 기존 이미지가 유지됩니다.'};}
+  if(current()){this.buildSourceChoices();return succeeded;}return false;
+ },
+ sourceTime(time){
+  if(!Number.isFinite(Date.parse(time)))return '';
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(time));const value=type=>parts.find(p=>p.type===type)?.value;
+  return `${value('month')}-${value('day')} ${value('hour')}:${value('minute')} KST`;
+ },
+ async applyPanelSource(source){
+  if(!this.scene||!source.src)return;const active=this.scene,token=loadToken,request=this.panelSourceRequest=(this.panelSourceRequest||0)+1;
+  try{
+   await this.sprite(source.src);if(token!==loadToken||active!==this.scene||request!==this.panelSourceRequest)return;
+   this.remember();this.scene.panels=this.scene.panels||[];
+   const panel={id:'radar',src:source.src,time:source.time||'',updated:true,custom:false,titleText:source.title||source.label,timeText:this.sourceStamp(source),sourceId:source.id,provider:source.provider||'기상청'};
+   const i=this.scene.panels.findIndex(p=>p.id==='radar');if(i<0)this.scene.panels.push(panel);else this.scene.panels[i]=panel;
+   this.controls();this.draw();this.node('editStatus').textContent=source.label+'를 왼쪽 아래에 적용했습니다. 편집 저장으로 보관할 수 있습니다.';
+  }catch{if(token===loadToken&&active===this.scene&&request===this.panelSourceRequest)this.node('editStatus').textContent='이미지를 불러오지 못했습니다. 다시 선택해 주세요.';}
+ },
+ async loadSourceChoices(day,version,token){
+  this.extraSources=[];this.sourcesError='';this.sourcesLoading=true;this.buildSourceChoices();const original=this.original;
+  try{
+   const response=await reportFetch(`energy/${day}/sources.json?v=${version}`,{signal:AbortSignal.timeout(15000)});
+   if(!response.ok)throw Error('sources');const data=await response.json();
+   if(data.day!==day||!Array.isArray(data.sources))throw Error('date');
+   if(token!==loadToken||this.day!==day||original!==this.original)return;
+   this.extraSources=data.sources.filter(s=>['warning','pm10'].includes(s.id)).map(s=>({...s,src:s.available&&/^data:image\/(png|jpeg|webp);base64,/.test(s.src||'')?s.src:null}));
+  }catch{if(token!==loadToken||this.day!==day||original!==this.original)return;this.sourcesError='이 날짜의 저장 자료를 불러오지 못했습니다.';}
+  if(token!==loadToken||this.day!==day||original!==this.original)return;this.sourcesLoading=false;this.buildSourceChoices();
  },
  drawLabels(){
   const c=this.ctx;c.save();c.textBaseline='middle';
@@ -330,7 +434,7 @@ Object.assign(ReportEditor.prototype,{
   const text=document.createElement('button');text.className='palette-item';text.innerHTML='<b style="font-size:20px">T</b><span>글상자</span>';text.onclick=()=>{this.setSelection([]);this.controls();this.draw();this.node('textTools').hidden=false;this.node('textInput').value='';this.node('textInput').focus();};this.node('symbolGrid').append(text);
   if(this.page===1){const boundary=document.createElement('button');boundary.className='palette-item';boundary.textContent='경계선';boundary.onclick=()=>this.node('addBoundary').click();this.node('symbolGrid').append(boundary);}
  },
- async load(day,version,token){await originalLoad.call(this,day,version,token);if(this.scene&&token===loadToken){this.buildPalette();this.buildSourceChoices();this.node('editStatus').textContent='아이콘을 클릭해 추가하고, 화면에서 선택해 이동·크기 조절하세요.';this.controls();this.draw();}},
+ async load(day,version,token){await originalLoad.call(this,day,version,token);if(this.scene&&token===loadToken){this.buildPalette();if(this.page===1)this.loadSourceChoices(day,version,token);this.node('editStatus').textContent='아이콘을 클릭해 추가하고, 화면에서 선택해 이동·크기 조절하세요.';this.controls();this.draw();}},
 });
 function installEditorUX(){
  for(const ed of Object.values(editors)){
@@ -368,5 +472,6 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
 
 

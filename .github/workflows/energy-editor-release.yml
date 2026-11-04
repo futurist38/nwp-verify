@@ -2,13 +2,17 @@ name: energy-editor-release
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - site/energy-weather.*
       - site/energy-editor.css
+      - site/energy-radar-map.json
       - site/inline-edit.js
       - site/energy-shared*.js
       - energy_runtime/energy_render.py
       - tools/release_energy_editor.py
+      - tools/collect_energy_sources.py
+      - tests/test_energy_sources.py
       - imagery-service/editor.browser.cjs
       - .github/workflows/energy-editor-release.yml
 permissions:
@@ -38,8 +42,9 @@ jobs:
       - name: Test report and editor logic
         run: |
           python -m unittest discover -s energy_runtime -p 'test_*.py' -v
-          node --test imagery-service/editor.test.cjs imagery-service/shared-store.test.cjs
+          node --test imagery-service/editor.test.cjs imagery-service/shared-store.test.cjs imagery-service/source-times.test.mjs
           python imagery-service/test_cloud_sync.py
+          python -m unittest discover -s tests -p 'test_energy_sources.py' -v
       - name: Verify live shared storage permissions
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -66,4 +71,5 @@ jobs:
         with:
           name: energy-editor-validation
           path: energy-browser-results/
+
 

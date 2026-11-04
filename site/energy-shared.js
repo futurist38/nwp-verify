@@ -10,10 +10,10 @@
    this.sessionKey='kpx-energy-supabase-session-v1';
    try{this.session=JSON.parse(storage.getItem(this.sessionKey));}catch{}
   }
-  async request(path,{method='GET',body,token,headers={}}={}){
+  async request(path,{method='GET',body,token,headers={},timeout=20000}={}){
    const h={apikey:KEY,...headers};if(token)h.Authorization='Bearer '+token;
    if(body!==undefined&&!(body instanceof Blob)){h['Content-Type']='application/json';body=JSON.stringify(body);}
-   const response=await this.fetcher(URL+path,{method,headers:h,body,cache:'no-store',signal:AbortSignal.timeout(20000)});
+   const response=await this.fetcher(URL+path,{method,headers:h,body,cache:'no-store',signal:AbortSignal.timeout(timeout)});
    const value=await response.json().catch(()=>null);
    if(!response.ok)throw new SharedError(value?.message||value?.msg||value?.error||'shared_storage_error',response.status);
    return value;
@@ -49,6 +49,7 @@
    const s=await this.authenticate();
    return this.request('/rest/v1/rpc/energy_save_edit',{method:'POST',token:s.access_token,body:{p_day:this.day(day),p_page:page,p_expected_version:version,p_payload:payload}});
   }
+  async imagery(kind,time){const s=await this.authenticate();return this.request('/functions/v1/energy-imagery',{method:'POST',token:s.access_token,body:{kind,time},timeout:55000});}
   async upload(day,blob){
    this.day(day);const ext={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[blob.type];
    if(!ext||!blob.size||blob.size>2097152)throw new SharedError('image_type_or_size',400);
@@ -63,3 +64,4 @@
  root.EnergySharedStore=EnergySharedStore;
  if(typeof module!=='undefined')module.exports={EnergySharedStore,SharedError};
 })(globalThis);
+

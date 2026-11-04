@@ -6,3 +6,16 @@
 
 
 @media print{.shared-reload{display:none!important}}
+
+.source-choices{display:block;margin:14px 0 20px;padding:16px;background:#f4f7fb;border:1px solid #e2e8f0;border-radius:10px}
+.source-choices h3{font-size:14px;margin:0 0 6px}.source-hint{font-size:12px;color:#526781;margin:0 0 12px;line-height:1.6}
+.source-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.source-card{display:flex;flex-direction:column;align-items:stretch;gap:5px;min-width:0;padding:8px;text-align:left;background:white;border:2px solid #d4dce5;border-radius:9px}
+.source-card .source-thumbnail{display:flex;align-items:center;justify-content:center;width:100%;height:150px;object-fit:contain;background:#fff;box-shadow:none;border-radius:5px;color:#65788d}
+.source-card strong{font-size:13px}.source-card .source-time{font-size:12px;color:#344d66;line-height:1.5}.source-card .source-provider{font-size:11px;color:#64748b}
+.source-card[aria-pressed=true]{border-color:#1669b6;background:#edf5ff;box-shadow:0 0 0 1px #1669b6}.source-card:focus-visible{outline:3px solid #6d28d9;outline-offset:2px}.source-card:disabled{opacity:1;background:#f1f4f7;color:#65788d;border-color:#e0e5eb}
+@media(max-width:1000px){.source-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:600px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.source-card .source-thumbnail{height:125px}}
+
+.source-option{min-width:0;background:#fff;border:1px solid #d4dce5;border-radius:9px;overflow:hidden}.source-option .source-card{width:100%;border-radius:8px 8px 0 0;min-height:230px}.source-query{padding:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:end}.source-query label{flex:1;min-width:0;font-size:11px;gap:5px}.source-query input{min-width:0;font-size:12px;padding:7px 4px}.source-query button{font-size:12px;padding:7px 9px}.source-query-status{flex-basis:100%;font-size:11px;line-height:1.5;color:#526781;margin:0;overflow-wrap:anywhere}@media(max-width:1000px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:450px){.source-grid{grid-template-columns:1fr}}
+
+.source-choices>.source-query{padding:0 0 14px;align-items:center;gap:10px}.source-choices>.source-query label{flex:0 1 245px;font-size:12px}.source-query-summary{flex:1;min-width:190px;margin:0;color:#526781;font-size:12px;line-height:1.6}.source-option>.source-query-status{padding:9px 10px;min-height:40px}.source-choices>.source-query input{width:100%;font-size:13px;padding:8px}.source-choices>.source-query button{white-space:nowrap;padding:9px 12px}

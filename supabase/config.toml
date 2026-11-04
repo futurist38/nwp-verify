@@ -1,0 +1,3 @@
+[functions.energy-imagery]
+# Authentication is checked inside the function against the existing editor RLS policy.
+verify_jwt = false

@@ -176,3 +176,55 @@ test('reset restores deleted original sprites and removes only this page saved e
  }
 });
 
+
+test('source thumbnails apply only the lower panel and survive undo, save and export',async()=>{
+ const t=setup(),before=t.run('JSON.stringify(editors[1].scene)'),other=t.run('JSON.stringify(editors[2].scene)');
+ await t.run("editors[1].applyPanelSource({id:'warning',label:'특보현황',title:'특보현황',time:'2026-11-03T02:00:00+09:00',src:'data:image/png;base64,AA'})");
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').titleText"),'특보현황');
+ assert.match(t.run("editors[1].scene.panels.find(p=>p.id==='radar').timeText"),/11-03/);
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'old-satellite');
+ assert.equal(t.run('JSON.stringify(editors[2].scene)'),other);
+ t.nodes.saveLayout.click();assert.equal(JSON.parse([...t.saved.values()][0]).panels[0].sourceId,'warning');
+ await t.run('editors[1].download(true)');assert.equal(t.calls.exports,1);
+ t.nodes.undo.click();assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+});
+test('failed or superseded image selection preserves the current panel',async()=>{
+ const t=setup(),before=t.run('JSON.stringify(editors[1].scene)');
+ t.run("editors[1].sprite=async()=>{throw Error('image unavailable')}");
+ await t.run("editors[1].applyPanelSource({id:'warning',label:'특보현황',src:'broken'})");
+ assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run('editors[1].history.length'),0);
+ t.run("var resolveSource;editors[1].sprite=()=>new Promise(r=>resolveSource=r);var pendingSource=editors[1].applyPanelSource({id:'warning',label:'특보현황',src:'slow'});loadToken++;resolveSource({});");
+ await t.run('pendingSource');assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+});
+
+test('source lookup updates thumbnails before explicit application',async()=>{
+ const t=setup();const value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
+ t.run(`window.energyShared={imagery:async(id,tm)=>({id,requestedTime:'${value}:00+09:00',time:'${value}:00+09:00',src:'data:image/png;base64,AA',title:'위성영상'})}`);
+ const before=t.run('JSON.stringify(editors[1].scene)');await t.run(`editors[1].querySource('satellite','${value}')`);
+ assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run("editors[1].queriedSources.satellite.time"),value+':00+09:00');assert.equal(t.run('editors[1].sourceButtons.length'),4);
+ assert.ok(t.nodes.sourceQueryTime);assert.equal(t.nodes['sourceTime-satellite'],undefined);
+ await t.run("editors[1].applyPanelSource({...editors[1].queriedSources.satellite,label:'위성'})");assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').time"),value+':00+09:00');t.nodes.undo.click();assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+});
+test('time lookup rejects future/mismatched times and discards responses after report switch',async()=>{
+ const t=setup();const value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
+ t.run(`window.energyShared={imagery:async(id)=>({id,requestedTime:'${value}:00+09:00',time:'2099-01-01T00:00:00+09:00',src:'data:image/png;base64,AA'})}`);
+ await t.run(`editors[1].querySource('radar','${value}')`);assert.equal(t.run('editors[1].queriedSources.radar'),undefined);
+ await t.run("editors[1].querySource('radar','2099-01-01T00:00')");assert.match(t.run('editors[1].sourceStates.radar.message'),/30일/);
+ t.run(`window.energyShared={imagery:()=>new Promise(r=>window.resolveSource=r)}`);
+ const pending=t.run(`editors[1].querySource('radar','${value}')`);t.run(`loadToken++;editors[1].clear();window.resolveSource({id:'radar',requestedTime:'${value}:00+09:00',time:'${value}:00+09:00',src:'data:image/png;base64,AA'})`);await pending;assert.equal(t.run('editors[1].queriedSources.radar'),undefined);assert.equal(t.run('editors[1].scene'),null);
+});
+
+
+test('one shared query sends the same KST time to every source and preserves failed thumbnails',async()=>{
+ const t=setup(),value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
+ t.run(`var sourceCalls=[];editors[1].querySource=async(id,time)=>{sourceCalls.push([id,time]);return id!=='pm10';}`);
+ const before=t.run('JSON.stringify(editors[1].scene)');await t.run(`editors[1].queryAllSources('${value}')`);
+ assert.deepEqual(JSON.parse(t.run('JSON.stringify(sourceCalls)')),[['satellite',value],['radar',value],['warning',value],['pm10',value]]);
+ assert.equal(t.run('editors[1].sourceQueryTime'),value);assert.equal(t.nodes.sourceQueryTime.value,value);assert.match(t.run('editors[1].sourceQueryMessage'),/3\/4/);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+});
+test('common lookup cannot repeat while pending or finish on a different report',async()=>{
+ const t=setup(),value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
+ t.run('var sourceCalls=0,resolvers=[];editors[1].querySource=()=>{sourceCalls++;return new Promise(r=>resolvers.push(r));}');
+ const pending=t.run(`editors[1].queryAllSources('${value}')`);await t.run(`editors[1].queryAllSources('${value}')`);assert.equal(t.run('sourceCalls'),4);assert.equal(t.nodes.sourceQueryTime.disabled,true);
+ t.run('loadToken++;editors[1].clear();resolvers.forEach(r=>r(true))');await pending;assert.equal(t.run('editors[1].sourceQueryMessage'),'');assert.equal(t.run('editors[1].sourceBatch'),null);
+});

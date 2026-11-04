@@ -63,7 +63,7 @@
   }catch(e){if(e.status===403)unlocked=0;if(st(ed)===state)note(ed,message(e));}
   finally{state.busy=false;if(st(ed)===state)ed.node('saveLayout').disabled=false;}
  }
- window.energyShared={load:async()=>{await Promise.all(Object.values(editors).map(load));},pack,unpack};
+ window.energyShared={imagery:(kind,time)=>store.imagery(kind,time),load:async()=>{await Promise.all(Object.values(editors).map(load));},pack,unpack};
  for(const ed of Object.values(editors)){
   const edit=ed.node('edit').onclick;ed.node('edit').onclick=async()=>{if(st(ed)?.busy)return;if(ed.editing){edit();return;}try{if(await unlock())edit();}catch(e){unlocked=0;note(ed,message(e));}};
   ed.node('saveLayout').textContent='공유 저장';ed.node('saveLayout').onclick=()=>save(ed);
@@ -74,3 +74,4 @@
   ed.node('editorControls').append(local);
  }
 })();
+
