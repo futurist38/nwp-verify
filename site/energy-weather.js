@@ -2,9 +2,10 @@
 const el=id=>document.getElementById(id);
 const format=d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
 const clone=o=>JSON.parse(JSON.stringify(o));
-const labels={clear:'맑음',sun_cloud_a:'구름조금',sun_cloud_b:'구름많음',cloudy:'흐림',rain:'비',shower:'소나기',snow:'눈',snow_rain_a:'눈·비',thunderstorm:'뇌우',fog:'안개',haze:'연무',dust:'황사',arrow_right:'화살표 →'};
+const labels={clear:'맑음',sun_cloud_a:'구름조금',sun_cloud_b:'구름많음',cloudy:'흐림',rain:'비',shower:'소나기',snow:'눈',snow_rain_a:'눈·비',thunderstorm:'뇌우',fog:'안개',haze:'연무',dust:'황사',arrow_right:'화살표 →',parentheses:'괄호 (  )'};
 // Editor-only symbols are available for both archived and newly generated reports.
 const editorSymbols={arrow_right:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="76" height="50" viewBox="0 0 76 50"><path d="M2 13 H46 V2 L74 25 L46 48 V37 H2 Z" fill="#ffd1c9" stroke="#c74848" stroke-width="3" stroke-linejoin="round"/></svg>')};
+editorSymbols.parentheses='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="150" height="100" viewBox="0 0 150 100"><path d="M20 4 C2 26 2 74 20 96 M130 4 C148 26 148 74 130 96" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>');
 const imageryEndpoint=document.querySelector('meta[name=energy-imagery-endpoint]')?.content.trim().replace(/\/$/,'')||'';
 let index,loadToken=0,refreshing=false;
 function image(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src;});}
