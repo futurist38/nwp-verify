@@ -51,20 +51,54 @@ def weather(base, rain, label, basis, pop=None):
             "basis": basis, "pop": number(pop, 0, 100)}
 
 
-def short_weather(raw, city, day, start):
-    keys = [f"{day}{h:02d}" for h in range(start, start + 12)]
-    skies = [raw.get(city + "#SKY", {}).get(k) for k in keys]
-    rain = [raw.get(city + "#PTY", {}).get(k) for k in keys]
-    if any(v not in SKY for v in skies) or any(v not in (0, 1, 2, 3, 4) for v in rain):
+def sample_step(hourly, day):
+    """Only a complete, aligned eight-sample day establishes the 3-hour grid."""
+    keys = {k for k in hourly if re.fullmatch(day + r"\d{2}", k)}
+    return 3 if keys == {f"{day}{h:02d}" for h in range(0, 24, 3)} else 1
+
+
+def summarize_weather(hourly, day, start):
+    step = sample_step(hourly, day)
+    samples = [hourly.get(f"{day}{h:02d}", {}) for h in range(start, start + 12, step)]
+    skies, rain = [], set()
+    sky_codes = {v[0]: k for k, v in SKY.items()}
+    for sample in samples:
+        wx = sample.get("wx") or {}
+        base, sep, kinds = wx.get("key", "").partition("|")
+        if not sep or base not in sky_codes or any(k not in PTY.values() for k in kinds.split(",") if k):
+            return None
+        skies.append(sky_codes[base])
+        rain.update(k for k in kinds.split(",") if k)
+    if not skies:
         return None
     counts = Counter(skies)
     sky = max(counts, key=lambda v: (counts[v], v))
     base, label = SKY[sky]
-    kinds = sorted({PTY[v] for v in rain if v})
+    kinds = sorted(rain)
     if kinds:
         label += " · " + ", ".join(kinds)
-    pops = [number(raw.get(city + "#POP", {}).get(k), 0, 100) for k in keys]
-    return weather(base, kinds, label, "시간예보 12시간 요약", max(pops) if all(v is not None for v in pops) else None)
+    pops = [number(s.get("pop"), 0, 100) for s in samples]
+    basis = "3시간예보 12시간 요약" if step == 3 else "시간예보 12시간 요약"
+    return weather(base, kinds, label, basis, max(pops) if all(v is not None for v in pops) else None)
+
+
+def short_weather(raw, city, day, start):
+    keys = {k for suffix in ("", "#SKY", "#PTY", "#POP")
+            for k in raw.get(city + suffix, {}) if re.fullmatch(day + r"\d{2}", k)}
+    hourly = {k: {"wx": hourly_weather(raw, city, k),
+                  "pop": raw.get(city + "#POP", {}).get(k)} for k in keys}
+    return summarize_weather(hourly, day, start)
+
+
+def complete_short_weather(doc):
+    """Fill missing summaries from this issue's stored samples, without refetching."""
+    if doc.get("kind") == "short":
+        for days in doc.get("cities", {}).values():
+            for day, rec in days.items():
+                for field, start in (("wx_am", 0), ("wx_pm", 12)):
+                    if rec.get(field) is None:
+                        rec[field] = summarize_weather(rec.get("hourly") or {}, day, start)
+    return doc
 
 
 def hourly_weather(raw, city, key):
@@ -182,7 +216,7 @@ def snapshots(verif):
     out = {}
     def add(doc):
         key = doc["issue"] + "-" + doc["kind"]
-        out[key] = merge(out.get(key), doc)
+        out[key] = complete_short_weather(merge(out.get(key), doc))
     for path in sorted((verif / "forecast_compare").glob("*.json")):
         doc = read(path)
         if doc.get("schema") == VERSION:
@@ -215,6 +249,9 @@ def export(site_dir, verif_dir=VERIF_DIR, archive=False):
         doc = read(path)
         if doc.get("schema") != VERSION:
             continue
+        # Published history may outlive its raw cache or repository archive.
+        # Repair it too, preserving all nonmissing values and issue timestamps.
+        write(path, complete_short_weather(doc))
         entries.append({"issue": doc["issue"], "kind": doc["kind"], "file": "issues/" + path.name,
                         "rev": hashlib.sha256(path.read_bytes()).hexdigest()[:12],
                         "cities": [c for c in DISPLAY_CITIES if c in doc["cities"]],
@@ -235,3 +272,4 @@ if __name__ == "__main__":
     p.add_argument("--archive", action="store_true")
     args = p.parse_args()
     export(args.site_dir, archive=args.archive)
+

@@ -41,6 +41,71 @@ class ForecastComparisonTests(unittest.TestCase):
         self.assertIsNone(rec["wx_am"])
         self.assertEqual(rec["wx_pm"]["key"], "clear|")
 
+    def sparse_raw(self):
+        raw = {k: {t: v for t, v in values.items() if int(t[-2:]) % 3 == 0}
+               for k, values in self.raw.items()}
+        raw["서울#TMN"] = {self.day+"06": 0}
+        raw["서울#TMX"] = {self.day+"15": 17}
+        return raw
+
+    def test_three_hour_weather_uses_all_four_samples_and_official_extrema(self):
+        raw = self.sparse_raw()
+        raw["서울#PTY"][self.day+"09"] = 1
+        raw["서울#POP"][self.day+"09"] = 60
+        rec = self.record(raw)
+        self.assertEqual(rec["wx_am"]["key"], "clear|비")
+        self.assertEqual(rec["wx_am"]["pop"], 60)
+        self.assertEqual(rec["wx_pm"]["key"], "clear|")
+        self.assertEqual(rec["wx_am"]["basis"], "3시간예보 12시간 요약")
+        self.assertEqual(rec["tmin"]["value"], 0)
+        self.assertEqual(rec["tmax"]["basis"], "TMX")
+        raw.pop("서울#TMN"); raw.pop("서울#TMX")
+        self.assertIsNone(self.record(raw)["tmin"])
+        self.assertIsNone(self.record(raw)["tmax"])
+
+    def test_three_hour_missing_weather_or_probability_is_not_fabricated(self):
+        raw = self.sparse_raw()
+        raw["서울#PTY"].pop(self.day+"03")
+        raw["서울#POP"].pop(self.day+"15")
+        rec = self.record(raw)
+        self.assertIsNone(rec["wx_am"])
+        self.assertIsNotNone(rec["wx_pm"])
+        self.assertIsNone(rec["wx_pm"]["pop"])
+
+    def test_incomplete_hourly_day_cannot_be_downgraded_to_three_hour(self):
+        raw = copy.deepcopy(self.raw)
+        raw["서울#SKY"].pop(self.day+"01")
+        self.assertIsNone(self.record(raw)["wx_am"])
+        sparse = self.sparse_raw()
+        for values in sparse.values():
+            values.pop(self.day+"03", None)
+        self.assertIsNone(self.record(sparse)["wx_am"])
+
+    def test_archived_and_published_only_weather_is_repaired_without_changing_values(self):
+        doc = fc.normalize_short("2026100105", self.sparse_raw())
+        rec = doc["cities"]["서울"][self.day]
+        rec["wx_am"] = rec["wx_pm"] = None
+        original = copy.deepcopy(doc)
+        with tempfile.TemporaryDirectory() as tmp:
+            verif, site = Path(tmp)/"verification", Path(tmp)/"site"
+            archive = verif/"forecast_compare"/"2026100105-short.json"
+            fc.write(archive, doc)
+            entries = fc.export(site, verif, archive=True)
+            path = site/"forecast_compare"/entries[0]["file"]
+            repaired = fc.read(path)
+            self.assertEqual(fc.read(archive), repaired)
+            self.assertIsNotNone(repaired["cities"]["서울"][self.day]["wx_am"])
+            for field in ("hourly", "tmin", "tmax"):
+                self.assertEqual(repaired["cities"]["서울"][self.day][field], rec[field])
+            archive.unlink()
+            fc.write(path, original)
+            second = fc.export(site, verif)
+            self.assertEqual(fc.read(path), repaired)
+            self.assertEqual(second, entries)
+            before = path.read_bytes()
+            fc.export(site, verif)
+            self.assertEqual(path.read_bytes(), before)
+
     def test_hourly_values_survive_an_incomplete_day_without_daily_extrema(self):
         raw={"서울":{self.day+"15":22},"서울#SKY":{self.day+"15":4},
              "서울#PTY":{self.day+"15":1},"서울#POP":{self.day+"15":80}}
@@ -170,3 +235,4 @@ class ForecastComparisonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

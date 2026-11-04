@@ -25,27 +25,46 @@
     const refs=short.length?short:[...new Set(entries.map(e=>e.issue))].sort();
     return {latest:refs.at(-1)||null,previous:refs.at(-2)||null};
   }
+  function sampleStep(hourly, day) {
+    const keys=Object.keys(hourly||{}).filter(k=>k.startsWith(day)&&k.length===10).sort();
+    return keys.length===8 && keys.every((k,i)=>k===day+String(i*3).padStart(2,"0")) ? 3 : 1;
+  }
+  function midnightTail(doc, day) {
+    const records=Object.values(doc?.cities||{}).map(days=>days[day]).filter(Boolean);
+    // A trailing 00h point belongs to the hourly timeline, not to daily coverage.
+    // Require the preceding evening and no daily products across the entire issue;
+    // missing cities or individual metrics must not trigger a fallback.
+    return records.length>0 && records.some(r=>r.hourly?.[day+"00"]) &&
+      records.every(r=>!["tmin","tmax","wx_am","wx_pm","wx_day"].some(k=>r[k]) &&
+        Object.keys(r.hourly||{}).every(k=>k===day+"00")) &&
+      Object.values(doc.cities).some(days=>["21","23"].some(h=>days[offsetDay(day,-1)]?.hourly?.[offsetDay(day,-1)+h]));
+  }
   function assemble(docs, city) {
     // Guard this boundary too: callers may supply more than one archived issue.
     const ordered = [...docs].sort((a,b)=>b.issue.localeCompare(a.issue));
     const short = ordered.find(d=>d.kind==="short"), mid = ordered.find(d=>d.kind==="mid");
     const daysOf = d => Object.values(d?.cities||{}).flatMap(records=>Object.keys(records));
     const shortDays = new Set(daysOf(short));
+    const lastShortDay=[...shortDays].sort().at(-1);
+    const tail=lastShortDay && midnightTail(short,lastShortDay) ? lastShortDay : null;
+    const midDays=new Set(daysOf(mid));
     const dates = [...new Set([...shortDays,...daysOf(mid)])].sort();
     const output={};
     for(const day of dates) {
       // Keep the short/medium horizon bridge, not a fallback for a missing city,
       // metric, or hour inside the latest short issue's coverage.
-      const d = shortDays.has(day) ? short : mid;
+      const d = shortDays.has(day) && !(day===tail && midDays.has(day)) ? short : mid;
       const r = d?.cities?.[city]?.[day];
-      if(!r) continue;
-      const get = field => r[field] ? {...r[field],issue:d.issue,kind:d.kind} : null;
+      const shortRecord=short?.cities?.[city]?.[day];
+      if(!r && !shortRecord) continue;
+      const get = field => r?.[field] ? {...r[field],issue:d.issue,kind:d.kind} : null;
       const wx = {am:get("wx_am"),pm:get("wx_pm"),day:null};
-      if(!wx.am && !wx.pm && d.kind==="mid") wx.day=get("wx_day");
+      if(!wx.am && !wx.pm && d?.kind==="mid") wx.day=get("wx_day");
       const hourly={};
-      if(d.kind==="short") for(const [key,h] of Object.entries(r.hourly||{})) {
-        hourly[key]={...h,issue:d.issue,kind:"short",basis:"TMP1",
-          wx:h.wx?{...h.wx,issue:d.issue,kind:"short"}:null};
+      const step=sampleStep(shortRecord?.hourly,day);
+      for(const [key,h] of Object.entries(shortRecord?.hourly||{})) {
+        hourly[key]={...h,issue:short.issue,kind:"short",basis:step===3?"TMP3":"TMP1",step_hours:step,
+          wx:h.wx?{...h.wx,issue:short.issue,kind:"short"}:null};
       }
       output[day]={tmin:get("tmin"),tmax:get("tmax"),wx,hourly};
     }
@@ -66,8 +85,14 @@
       return {key,a:a[d]?.hourly?.[key]||null,b:b[d]?.hourly?.[key]||null};}));
   }
   function hourlyPath(slots,side,x,y) {
-    let path="",active=false;
-    slots.forEach((s,i)=>{const v=s[side]?.temp;if(finite(v)){path+=`${active?"L":"M"}${x(i)},${y(v)} `;active=true;}else active=false;});
+    let path="",previous=null;
+    slots.forEach((s,i)=>{
+      const h=s[side],v=h?.temp;
+      if(!finite(v)) return;
+      const connected=previous && i-previous.i===(previous.h.step_hours||1) && h.issue===previous.h.issue;
+      path+=`${connected?"L":"M"}${x(i)},${y(v)} `;
+      previous={i,h};
+    });
     return path;
   }
   const api={CITIES,COLORS,defaultPair,selectEntries,assemble,compareWeather,delta,lastFriday,range,bounds,hourlySlots,hourlyPath};
@@ -109,7 +134,7 @@
   }
   function source(rec) {
     if(!rec) return "자료 없음";
-    const basis={TMN:"공식 최저",TMX:"공식 최고",TMP24:"24시간 기온 극값",TMP1:"시간별 예보",MID:"공식 일 기온"}[rec.basis]||rec.basis;
+    const basis={TMN:"공식 최저",TMX:"공식 최고",TMP24:"24시간 기온 극값",TMP1:"시간별 예보",TMP3:"3시간 간격 예보",MID:"공식 일 기온"}[rec.basis]||rec.basis;
     return `${rec.kind==="short"?"단기":"중기"} ${stamp(rec.issue)} · ${basis}`;
   }
   const temp = r => finite(r?.value)?`${r.value.toFixed(1).replace(/\.0$/, "")}℃`:"—";
@@ -148,7 +173,8 @@
     const visible=picked==="all"?(covered.length?range(covered[0],covered.at(-1)):[]):[picked];
     const slots=hourlySlots(records.a,records.b,visible);
     const count=side=>slots.filter(s=>finite(s[side]?.temp)).length;
-    $("hourly-info").textContent=`A ${count("a")}시간 · B ${count("b")}시간 · 같은 시각 기온 비교 ${slots.filter(s=>finite(s.a?.temp)&&finite(s.b?.temp)).length}시간`;
+    const sparse=slots.some(s=>s.a?.step_hours===3||s.b?.step_hours===3);
+    $("hourly-info").textContent=`A ${count("a")}개 시각 · B ${count("b")}개 시각 · 같은 시각 기온 비교 ${slots.filter(s=>finite(s.a?.temp)&&finite(s.b?.temp)).length}개`+(sparse?" · 3시간 간격 구간은 제공 시각의 값만 연결":"");
     if(!slots.some(s=>s.a||s.b)) {
       $("hourly-plot").innerHTML='<p class="fc-empty">선택 구간에 저장된 시간별 예보가 없습니다. 중기 자료는 위의 일별 그래프에서 확인하세요.</p>';
       $("hourly-detail").innerHTML="";return;
@@ -327,3 +353,4 @@
   document.querySelector('#tabs [data-tab="compare"]').addEventListener("click",init);
   if(document.getElementById("tab-compare").classList.contains("on")) init();
 })(typeof window!=="undefined"?window:globalThis);
+
