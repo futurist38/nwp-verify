@@ -1,0 +1,57 @@
+name: energy-editor-release
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - site/energy-weather.*
+      - site/energy-editor.css
+      - site/inline-edit.js
+      - energy_runtime/energy_render.py
+      - tools/release_energy_editor.py
+      - imagery-service/editor.browser.cjs
+      - .github/workflows/energy-editor-release.yml
+permissions:
+  contents: write
+concurrency:
+  group: energy-editor-release
+  cancel-in-progress: false
+jobs:
+  validate-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install renderer and browser dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          pip install Pillow numpy scipy pymupdf
+          npm install --prefix /tmp/energy-browser playwright@1.58.2
+          /tmp/energy-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Test report and editor logic
+        run: |
+          python -m unittest discover -s energy_runtime -p 'test_*.py' -v
+          node --test imagery-service/editor.test.cjs
+      - name: Validate real browser and publish approved editor
+        env:
+          NODE_PATH: /tmp/energy-browser/node_modules
+        run: |
+          git config user.name nwp-bot
+          git config user.email actions@users.noreply.github.com
+          for attempt in 1 2 3; do
+            python tools/release_energy_editor.py prepare
+            node imagery-service/editor.browser.cjs
+            if python tools/release_energy_editor.py publish; then exit 0; fi
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: energy-editor-validation
+          path: energy-browser-results/

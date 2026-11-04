@@ -1,12 +1,12 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{try{const r=await fetch('energy/index.json'"));
+const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{try{const r=await reportFetch('energy/index.json'"));
 function setup(fetcher){
- const calls={exports:0,draws:[],downloads:[],texts:[],rects:[]},nodes={},saved=new Map();let created=0;
- function makeCanvas(id){const ctx=new Proxy({measureText(text){return {width:[...text].length*32};},fillText(text){calls.texts.push({canvas:id,text,color:this.fillStyle,font:this.font});},fillRect(){calls.rects.push({canvas:id,kind:'fill',color:this.fillStyle});},strokeRect(){calls.rects.push({canvas:id,kind:'stroke',color:this.strokeStyle});},drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,style:{},hidden:true,width:1920,height:1080,getContext:()=>ctx,addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
- function node(id){return nodes[id]??=(id.startsWith('editorCanvas')?makeCanvas(id):{id,style:{},children:[],value:'',disabled:false,hidden:false,textContent:'',focus(){},addEventListener(){},click(){if(this.download)calls.downloads.push(this.download);return this.onclick?.({preventDefault(){}});},replaceChildren(){this.value='';},append(...options){this.children.push(...options);for(const option of options){if(option.id)nodes[option.id]=option;if(!this.value)this.value=option.value;}}});}
+ const calls={events:{},exports:0,draws:[],downloads:[],texts:[],rects:[]},nodes={},saved=new Map();let created=0;
+ function makeCanvas(id){const ctx=new Proxy({measureText(text){return {width:[...text].length*32};},fillText(text){calls.texts.push({canvas:id,text,color:this.fillStyle,font:this.font});},fillRect(){calls.rects.push({canvas:id,kind:'fill',color:this.fillStyle});},strokeRect(){calls.rects.push({canvas:id,kind:'stroke',color:this.strokeStyle});},drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,style:{},hidden:true,width:1920,height:1080,getContext:()=>ctx,focus(){},addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
+ function node(id){return nodes[id]??=(id.startsWith('editorCanvas')?makeCanvas(id):{id,style:{},classList:{add(){},toggle(){}},setAttribute(){},remove(){},prepend(...items){this.children.unshift(...items);},children:[],value:'',disabled:false,hidden:false,textContent:'',focus(){},addEventListener(){},click(){if(this.download)calls.downloads.push(this.download);return this.onclick?.({preventDefault(){}});},replaceChildren(){this.value='';},append(...options){this.children.push(...options);for(const option of options){if(option.id)nodes[option.id]=option;if(!this.value)this.value=option.value;}}});}
  class Image{constructor(){this.width=678;this.height=663;}set src(x){this._src=x;queueMicrotask(()=>this.onload());}get src(){return this._src;}}
- const sandbox={document:{getElementById:node,querySelector:()=>({content:'https://example.workers.dev'}),createElement:tag=>tag==='canvas'?makeCanvas('export'):node('created-'+tag+'-'+(++created))},Image,console,Intl,Date,Map,Promise,Number,JSON,Error,Boolean,AbortSignal,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout:()=>0,localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){},print(){}},fetch:fetcher};
- const context=vm.createContext(sandbox);vm.runInContext(source,context);node('date').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');
+ const sandbox={document:{addEventListener(type,handler){calls.events[type]=handler;},querySelectorAll:()=>[],getElementById:node,querySelector:()=>({content:'https://example.workers.dev'}),createElement:tag=>tag==='canvas'?makeCanvas('export'):node('created-'+tag+'-'+(++created))},Image,TextEncoder,console,Intl,Date,Map,Promise,Number,JSON,Error,Boolean,AbortSignal,Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout:()=>0,localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){},print(){}},fetch:fetcher};
+ const context=vm.createContext(sandbox);vm.runInContext(source,context);vm.runInContext(fs.readFileSync(__dirname+'/../site/inline-edit.js','utf8'),context);node('date').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');
  vm.runInContext("for(const ed of Object.values(editors)){ed.day=el('date').value;ed.original={revision:1,background:'bg'+ed.page,groups:[{id:'moved',x:ed.page===2?240:777,y:ed.page===2?260:200,w:100,h:100,src:'icon'}],boundaries:ed.page===2?[]:[{points:[[1,2],[3,4],[5,6],[7,8]],color:'blue',width:2}],panels:ed.page===2?[]:[{id:'radar',src:'old-radar',time:'old'},{id:'satellite',src:'old-satellite',time:'old'}],palette:{clear:'clear-icon',rain:'rain-icon'},forecastMarker:14.5};ed.scene=clone(ed.original);ed.background={id:'fixed-background-'+ed.page};}refreshControls();",context);
  return {nodes,calls,saved,context,run:s=>vm.runInContext(s,context)};
 }
@@ -84,7 +84,7 @@ test('corner drag resizes both pages with fixed aspect ratio and one undo step',
   t.run('editors['+page+'].pointerDown({clientX:'+(start.x+50)+',clientY:'+(start.y+50)+',pointerId:1,preventDefault(){}})');
   const history=t.run('editors['+page+'].history.length');
   t.run('editors['+page+'].pointerDown({clientX:'+(start.x+start.w)+',clientY:'+(start.y+start.h)+',pointerId:1,preventDefault(){}})');
-  assert.equal(t.run('editors['+page+'].drag.type'),'resize');
+  assert.equal(t.run('editors['+page+'].drag.type'),'multiResize');
   for(const size of [130,160])t.run('editors['+page+'].pointerMove({clientX:'+(start.x+size)+',clientY:'+(start.y+size)+'})');
   const end=JSON.parse(t.run('JSON.stringify(editors['+page+'].scene.groups[0])'));
   assert.equal(end.x,start.x);assert.equal(end.y,start.y);assert.equal(end.w,160);assert.equal(end.h,160);
@@ -110,4 +110,52 @@ test('custom satellite and radar uploads restore independently and survive save/
  assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').custom"),true);
  t.nodes.undo.click();assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').custom"),true);
  await t.nodes.save1.click();assert.ok(t.calls.downloads.at(-1).endsWith('_01_edited.png'));
+});
+
+test('Ctrl selection copies, moves and deletes a set with one undo and keeps text input native',async()=>{
+ const t=setup();t.nodes.edit.click();
+ t.run("editors[1].scene.groups=[{id:'a',src:'one',x:650,y:300,w:100,h:100},{id:'b',src:'two',x:900,y:450,w:120,h:80}]");
+ t.run("editors[1].pointerDown({clientX:700,clientY:350,pointerId:1,preventDefault(){}});editors[1].pointerDown({clientX:950,clientY:490,ctrlKey:true,pointerId:1,preventDefault(){}})");
+ assert.equal(t.run('editors[1].selection().length'),2);
+ let intercepted=0;const key=(key,ctrlKey=true,input=false)=>t.calls.events.keydown({key,ctrlKey,preventDefault(){intercepted++},target:{closest(){return input?{}:null}}});
+ key('c');key('v');await new Promise(r=>setImmediate(r));
+ assert.equal(t.run('editors[1].scene.groups.length'),4);
+ assert.equal(t.run('editors[1].scene.groups[3].x-editors[1].scene.groups[2].x'),250);
+ assert.equal(t.run('editors[1].selection().length'),2);
+ t.run("editors[1].pointerDown({clientX:724,clientY:374,pointerId:1,preventDefault(){}});editors[1].pointerMove({clientX:774,clientY:404})");
+ assert.equal(t.run('editors[1].scene.groups[3].x-editors[1].scene.groups[2].x'),250);
+ assert.equal(t.run('editors[1].scene.groups[3].y-editors[1].scene.groups[2].y'),150);
+ key('Delete',false);assert.equal(t.run('editors[1].scene.groups.length'),2);
+ key('z');assert.equal(t.run('editors[1].scene.groups.length'),4);
+ const before=intercepted;key('c',true,true);key('Delete',false,true);assert.equal(intercepted,before);
+});
+test('automatic and edited publication labels use identical original font and size',()=>{
+ const t=setup();t.run("editors[1].scene.labels=[{x:1880,y:63,text:'발표시점: 07시 기준',size:24,bold:true,color:'black',anchor:'rm'}];editors[1].draw()");
+ const auto=t.calls.texts.find(x=>x.text==='발표시점: 07시 기준');
+ t.run("editors[1].scene.publicationText='발표시점: 09시 기준';editors[1].draw()");
+ const edited=t.calls.texts.find(x=>x.text==='발표시점: 09시 기준');
+ assert.equal(auto.font,edited.font);assert.match(auto.font,/700 24px.*Malgun Gothic/);
+});
+
+test('all label overrides persist, undo, and forecast dates render red',()=>{
+ const t=setup();t.run("editors[1].scene.labels=[{x:880,y:176,text:'오늘예보(11/4, 수)',size:29.3333,bold:true,color:'#00235b',anchor:'mm'},{x:1880,y:1053,text:'출처',size:23,color:'black',anchor:'rm'}];editors[1].remember();editors[1].setLabel(1,'출처 수정');editors[1].draw()");
+ assert.equal(t.run('editors[1].labelValue(1)'),'출처 수정');
+ assert.ok(t.calls.texts.some(x=>x.text==='(11/4, 수)'&&x.color==='#e60012'));
+ assert.ok(t.calls.texts.some(x=>x.text==='오늘예보'&&x.color==='#00235b'));
+ t.nodes.saveLayout.click();assert.ok([...t.saved.values()].some(x=>JSON.parse(x).labelOverrides?.[1]==='출처 수정'));
+ t.nodes.undo.click();assert.equal(t.run('editors[1].labelValue(1)'),'출처');
+});
+test('PDF serializer builds exactly one 16:9 page with valid xref offsets',async()=>{
+ const t=setup();const pdf=await t.run('reportPDF(new Uint8Array([255,216,255,217])).text()');
+ assert.match(pdf,/\/MediaBox \[0 0 1920 1080\]/);assert.match(pdf,/\/Count 1/);
+ const offset=Number(pdf.match(/startxref\n(\d+)/)[1]);assert.equal(pdf.slice(offset,offset+4),'xref');
+});
+test('four allowed text colors support partial ranges, undo and annotation persistence',()=>{
+ const t=setup();assert.equal(t.run('TEXT_COLORS.length'),4);
+ assert.equal(t.run("JSON.stringify(applyTextColor([], 'abcd',1,3,'#e60012'))"),'[null,"#e60012","#e60012"]');
+ assert.equal(t.run("JSON.stringify(applyTextColor([], 'abcd',1,3,'purple'))"),'[]');
+ t.nodes.textInput.value='기온 설명';t.nodes.addText.click();t.run("editors[1].colorText('#666666')");
+ assert.ok(t.run("editors[1].scene.texts[0].colors.every(c=>c==='#666666')"));t.nodes.saveLayout.click();
+ assert.ok([...t.saved.values()].some(s=>JSON.parse(s).texts?.[0]?.colors?.[0]==='#666666'));
+ t.nodes.undo.click();assert.equal(t.run('editors[1].scene.texts[0].colors'),undefined);
 });

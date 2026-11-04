@@ -1,5 +1,7 @@
 from energy_layout import *
-from energy_publication import publication_label
+def publication_label(at):
+ stamp=dt.datetime.fromisoformat(at).astimezone(dt.timezone(dt.timedelta(hours=9)))
+ return f"발표시점: {stamp:%Y.%m.%d}.({'월화수목금토일'[stamp.weekday()]}) {stamp:%H}시 기준"
 import sys,base64,datetime as dt
 data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 OUT=Path(sys.argv[2]);OUT.mkdir(parents=True,exist_ok=True)
@@ -10,6 +12,21 @@ cloud=[state('cloudy')];raincloud=[state('cloudy','rain','가끔'),state()]
 original_group=group
 BACKGROUND=False
 editor={}
+TEXT_OPS=[]
+def text(im,xy,s,size=28,color='black',anchor='mm',bold=False):
+ TEXT_OPS.append(dict(x=xy[0],y=xy[1],text=s,size=size,color=color,anchor=anchor,bold=bold))
+ if not BACKGROUND: paint_text(im,TEXT_OPS[-1])
+def paint_text(im,t):
+ d=ImageDraw.Draw(im);s=t['text'];size=t['size'];color=t['color'];anchor=t['anchor'];x,y=t['x'],t['y'];bold=t['bold']
+ if s.startswith(('오늘예보','내일예보')):
+  head,tail=s[:4],s[4:];f=font(round(size));a=d.textlength(head,font=f);b=d.textlength(tail,font=f)
+  d.text((x-(a+b)/2,y),head,font=f,fill=color,anchor='lm',stroke_width=1)
+  d.text((x-(a+b)/2+a,y),tail,font=f,fill=RED,anchor='lm',stroke_width=1)
+ elif s=='전국가중기온(전일대비 증감)':
+  tail='(전일대비 증감)';f=font(27);w=d.textlength(tail,font=f)
+  d.text((x,y),tail,font=f,fill=color,anchor='rm',stroke_width=1)
+  d.text((x-w,y),'전국가중기온',font=font(29),fill=color,anchor='rm',stroke_width=1)
+ else:d.text((x,y),s,font=font(round(size)),fill=color,anchor=anchor,stroke_width=1 if bold else 0)
 def uri(path):
  return 'data:image/png;base64,'+base64.b64encode(Path(path).read_bytes()).decode()
 def group(im,states,cx,cy,maxwidth=500,size=100,tag=''):
@@ -23,30 +40,23 @@ def group(im,states,cx,cy,maxwidth=500,size=100,tag=''):
   editor.setdefault('groups',[]).append({'id':tag,'x':bbox[0],'y':bbox[1],'w':bbox[2]-bbox[0],'h':bbox[3]-bbox[1],'src':'data:image/png;base64,'+base64.b64encode(b.getvalue()).decode()})
  if not BACKGROUND:im.paste(layer,(0,0),layer)
 def spaced_text(im,xy,s,size=24,color='black',anchor='mm',spacing=1.3):
- d=ImageDraw.Draw(im)
- widths=[d.textlength(ch,font=font(size)) for ch in s]
- total=sum(widths)+spacing*max(0,len(s)-1)
- x,y=xy
- if anchor[0]=='r':x-=total
- elif anchor[0]=='m':x-=total/2
- for ch,w in zip(s,widths):
-  d.text((x,y),ch,font=font(size),fill=color,anchor='lm',stroke_width=1)
-  x+=w+spacing
+ text(im,xy,s,size,color,anchor,True)
 def base():
  im=Image.new('RGB',(1920,1080),'white');d=ImageDraw.Draw(im);d.rectangle((0,0,1920,87),fill=GOLD)
- text(im,(960,44),'KPX 에너지기상정보',49,bold=True)
- text(im,(1880,49),publication_label(data['publication_kst']),24,anchor='rm',bold=True)
+ text(im,(958.9,48.88),'KPX 에너지기상예보',42.6667,bold=True)
+ text(im,(1880,63),publication_label(data['publication_kst']),24,anchor='rm',bold=True)
  return im
 def maplabel(im,xy,s,size=28,color='black',bold=False):
  box=ImageDraw.Draw(im).textbbox(xy,s,font=font(size),anchor='mm',stroke_width=1 if bold else 0)
  ImageDraw.Draw(im).rectangle((box[0]-6,box[1]-4,box[2]+6,box[3]+4),fill='white')
  text(im,xy,s,size,color,bold=bold)
 def footer(im,left):
- text(im,(38,1053),left,19,'#555555',anchor='lm')
- spaced_text(im,(1880,1053),'※ 본 자료는 기상청 자료를 이용해 제작되었습니다.',23,anchor='rm',spacing=1.2)
+ # Original template has no methodology note in the footer.
+ spaced_text(im,(1880,1053),'*본 자료는 기상청의 자료를 이용해 제작되었습니다.',23,anchor='rm',spacing=1.2)
 def render_page1(background=False):
- global BACKGROUND,editor
+ global BACKGROUND,editor,TEXT_OPS
  BACKGROUND=background
+ TEXT_OPS=[]
  editor={'groups':[],'boundaries':[],'panels':[]}
  im=base();d=ImageDraw.Draw(im)
  for name,y,title,width in [('satellite',151,'위성영상',150),('radar',622,'강수현황(레이더)',240)]:
@@ -72,9 +82,9 @@ def render_page1(background=False):
   pts=[tuple((1-t)**3*p0+3*(1-t)**2*t*p1+3*(1-t)*t*t*p2+t**3*p3) for t in np.linspace(0,1,150)]
   smoothline(im,pts,'#3c6090',5)
  for idx,x in enumerate([550,1236]):
-  day=dates[idx];title=f"{['오늘예보','내일예보'][idx]} ({day.month}/{day.day}, {'월화수목금토일'[day.weekday()]})"
+  day=dates[idx];title=f"{['오늘예보','내일예보'][idx]}({day.month}/{day.day}, {'월화수목금토일'[day.weekday()]})"
   d.rounded_rectangle((x,174,x+660,1024),radius=40,outline=GRAY,width=5)
-  d.rectangle((x+100,152,x+560,202),fill='white');text(im,(x+330,176),title,35,NAVY,bold=True)
+  d.rectangle((x+155,152,x+505,202),fill='white');text(im,(x+330,176),title,29.3333,NAVY,bold=True)
   paste(im,ASSETS/'maps/korea_outline.png',(x+43,260,574,626))
   if data.get('status')=='approved_snapshot':
    if idx==0:
@@ -95,7 +105,7 @@ def render_page1(background=False):
   rec=records[idx];prev=previous if idx==0 else records[0]
   d.rectangle((x+110,894,x+637,1008),fill='white')
   right=x+630
-  spaced_text(im,(right,928),'전국가중 최고 / 최저기온 (전일대비, ℃)',25,anchor='rm',spacing=1.3)
+  text(im,(right,907),'전국가중기온(전일대비 증감)',29.3333,anchor='rm',bold=True)
   spans=[(f"{rec['max']:.1f}",43,RED),(f"({rec['max']-prev['max']:+.1f})",29,RED),(' / ',36,'black'),(f"{rec['min']:.1f}",43,BLUE),(f"({rec['min']-prev['min']:+.1f})",29,BLUE)]
   widths=[d.textlength(label,font=font(size))+2 for label,size,color in spans]
   left=right-sum(widths)
@@ -104,6 +114,7 @@ def render_page1(background=False):
    left+=width
  
  footer(im,'전일대비: 전일 관측 최고·최저 기준 · 기온은 소수 첫째 자리로 반올림 후 계산')
+ editor['labels']=list(TEXT_OPS)
  return im
 render_page1(True).save(OUT/'background.webp',lossless=True)
 render_page1(False).save(OUT/'01.webp',lossless=True)
@@ -113,6 +124,7 @@ editor['palette']={p.stem:uri(p) for p in (ASSETS/'icons').glob('*.png')}
 (OUT/'editor.json').write_text(json.dumps(editor,ensure_ascii=False),encoding='utf-8')
 # Page 2
 BACKGROUND=True
+TEXT_OPS=[]
 editor={'groups':[],'boundaries':[],'panels':[]}
 im=base();d=ImageDraw.Draw(im);d.rounded_rectangle((27,107,1884,1028),radius=33,outline=GRAY,width=5)
 x0=184;x1=1840;cw=(x1-x0)/9;xs=np.array([x0+(i+.5)*cw for i in range(9)])
@@ -158,22 +170,21 @@ for i,r in enumerate(records):
   lab='이상저온' if cold else '이상고온';d.rectangle((xs[i]-64,top-18,xs[i]+64,top+18),fill='white');text(im,(xs[i],top),lab,24,color,bold=True)
   flags.append({'date':r['date'],'type':lab,'variables':kinds})
 # Four-item legend, reserved above the plotted curves at the upper right.
-d.rounded_rectangle((1220,460,1835,551),radius=10,fill='white',outline='#dddddd',width=1)
-for x,y,color,label,band in [(1240,482,'#fbe3d3','최고기온 평년범위',True),(1540,482,'#dceaf7','최저기온 평년범위',True),(1240,525,BLUE,'최저기온',False),(1540,525,RED,'최고기온',False)]:
+# Single-row legend matching the original chart.
+for x,y,color,label,band in [(975,482,'#fbe3d3','최고기온평년범위',True),(1240,482,'#dceaf7','최저기온평년범위',True),(1505,482,BLUE,'최저기온',False),(1670,482,RED,'최고기온',False)]:
  if band:d.rectangle((x,y-8,x+34,y+8),fill=color)
  else:
   d.line((x,y,x+34,y),fill=color,width=4);d.ellipse((x+13,y-4,x+21,y+4),fill=color)
  text(im,(x+44,y),label,22,'#444444',anchor='lm')
-text(im,(1150,482),'단위: ℃',22,'#666666')
 text(im,(1000,975),'평년범위: 일평년 평균 ± 0.43σ  |  이상저온 < P10 · 이상고온 > P90 (1991~2020)',20,'#555555')
-footer(im,'전국가중기온: 회사 8개 지점 가중치 적용')
+footer(im,'')
 im.save(OUT/'background2.webp',lossless=True)
-editor.update(background='background2.webp',width=1920,height=1080,revision=1,
+editor.update(labels=list(TEXT_OPS),background='background2.webp',width=1920,height=1080,revision=1,
               edit_bounds={'x':188,'y':234,'w':1648,'h':210},
               palette={p.stem:uri(p) for p in (ASSETS/'icons').glob('*.png')})
 (OUT/'editor2.json').write_text(json.dumps(editor,ensure_ascii=False),encoding='utf-8')
 for g in editor['groups']:
  layer=Image.open(io.BytesIO(base64.b64decode(g['src'].split(',',1)[1]))).convert('RGBA')
  im.paste(layer,(g['x'],g['y']),layer)
+for label in editor['labels']:paint_text(im,label)
 im.save(OUT/'02.webp',lossless=True)
-
