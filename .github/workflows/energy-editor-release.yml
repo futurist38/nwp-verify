@@ -6,6 +6,7 @@ on:
       - site/energy-weather.*
       - site/energy-editor.css
       - site/inline-edit.js
+      - site/energy-shared*.js
       - energy_runtime/energy_render.py
       - tools/release_energy_editor.py
       - imagery-service/editor.browser.cjs
@@ -37,7 +38,12 @@ jobs:
       - name: Test report and editor logic
         run: |
           python -m unittest discover -s energy_runtime -p 'test_*.py' -v
-          node --test imagery-service/editor.test.cjs
+          node --test imagery-service/editor.test.cjs imagery-service/shared-store.test.cjs
+          python imagery-service/test_cloud_sync.py
+      - name: Verify live shared storage permissions
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: python tools/verify_energy_supabase.py
       - name: Validate real browser and publish approved editor
         env:
           NODE_PATH: /tmp/energy-browser/node_modules
@@ -47,11 +53,17 @@ jobs:
           for attempt in 1 2 3; do
             python tools/release_energy_editor.py prepare
             node imagery-service/editor.browser.cjs
+            node imagery-service/shared.browser.cjs
             if python tools/release_energy_editor.py publish; then exit 0; fi
           done
           exit 1
+      - name: Verify cloud sync
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: python tools/sync_energy_supabase.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: energy-editor-validation
           path: energy-browser-results/
+

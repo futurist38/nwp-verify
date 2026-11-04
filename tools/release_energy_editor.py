@@ -2,7 +2,7 @@
 import base64,json,os,shutil,subprocess,sys,tempfile,zipfile
 from pathlib import Path
 ROOT=Path.cwd();STAGE=ROOT/'energy_editor_stage';STATE=ROOT/'energy_editor_release_state.json'
-FRONT=['energy-weather.html','energy-weather.js','energy-editor.css','inline-edit.js']
+FRONT=['energy-weather.html','energy-weather.js','energy-editor.css','inline-edit.js','energy-shared.js','energy-shared-ui.js']
 def git(*args,**kwargs):return subprocess.check_output(['git',*args],**kwargs)
 def ref():
  git('fetch','--depth=1','origin','site-data');return git('rev-parse','FETCH_HEAD').decode().strip()
@@ -43,3 +43,4 @@ def publish():
 if __name__=='__main__':
  if sys.argv[1]=='prepare':prepare()
  else:raise SystemExit(publish())
+

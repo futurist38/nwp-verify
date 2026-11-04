@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{try{const r=await reportFetch('energy/index.json'"));
+const raw=fs.readFileSync(__dirname+'/../site/energy-weather.js','utf8');const source=raw.slice(0,raw.lastIndexOf("(async()=>{if(document.readyState"));
 function setup(fetcher){
  const calls={events:{},exports:0,draws:[],downloads:[],texts:[],rects:[]},nodes={},saved=new Map();let created=0;
  function makeCanvas(id){const ctx=new Proxy({measureText(text){return {width:[...text].length*32};},fillText(text){calls.texts.push({canvas:id,text,color:this.fillStyle,font:this.font});},fillRect(){calls.rects.push({canvas:id,kind:'fill',color:this.fillStyle});},strokeRect(){calls.rects.push({canvas:id,kind:'stroke',color:this.strokeStyle});},drawImage(im,...rest){calls.draws.push({canvas:id,source:im.id||im._src,...rest});}},{get:(obj,k)=>obj[k]??(()=>{})});return {id,style:{},hidden:true,width:1920,height:1080,getContext:()=>ctx,focus(){},addEventListener(){},setPointerCapture(){},getBoundingClientRect:()=>({left:0,top:0,width:1920,height:1080}),toDataURL:()=> 'data:image/png;base64,AA',toBlob(cb){calls.exports++;cb(new Blob(['PNG'],{type:'image/png'}));}};}
@@ -175,3 +175,4 @@ test('reset restores deleted original sprites and removes only this page saved e
   await t.run(ed+".load(el('date').value,'v',loadToken)");assert.equal(t.run(ed+'.scene.groups.length'),1);assert.equal(t.run(ed+'.scene.labelOverrides'),undefined);
  }
 });
+

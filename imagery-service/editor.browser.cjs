@@ -4,6 +4,7 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
  try{
   for(let i=0;i<50;i++){try{await fetch('http://127.0.0.1:8765/energy/index.json');break;}catch{await new Promise(r=>setTimeout(r,100));}}
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1600,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.route('**/energy-shared-ui.js*',route=>route.fulfill({body:'',contentType:'application/javascript'}));
   await page.goto('http://127.0.0.1:8765/energy-weather.html');await page.waitForFunction(()=>!document.getElementById('edit').disabled);await page.click('#edit');
   assert.ok(await page.locator('#paletteGrid button').count()>10);
   const locate=async(index)=>{const t=await page.evaluate(i=>editors[1].scene.labels[i],index),b=await page.locator('#editorCanvas').boundingBox();return {x:b.x+t.x*b.width/1920-10,y:b.y+t.y*b.height/1080};};
@@ -30,5 +31,6 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
 
 

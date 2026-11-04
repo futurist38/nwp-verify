@@ -9,7 +9,7 @@ const editorSymbols={arrow_right:'data:image/svg+xml;charset=utf-8,'+encodeURICo
 editorSymbols.parentheses='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="150" height="100" viewBox="0 0 150 100"><path d="M20 4 C2 26 2 74 20 96 M130 4 C148 26 148 74 130 96" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg>');
 const imageryEndpoint=document.querySelector('meta[name=energy-imagery-endpoint]')?.content.trim().replace(/\/$/,'')||'';
 let index,loadToken=0,refreshing=false;
-function image(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=window.ENERGY_PREVIEW?.images?.[src.split('?')[0]]||src;});}
+function image(src){return new Promise((resolve,reject)=>{const im=new Image();if(/^https?:/.test(src))im.crossOrigin='anonymous';im.onload=()=>resolve(im);im.onerror=reject;im.src=window.ENERGY_PREVIEW?.images?.[src.split('?')[0]]||src;});}
 // Keep the opposite corner fixed, preserving aspect ratio and page edit bounds.
 function resizedGroupRect(start,corner,x,y,bounds,maxWidth=800){
  const east=corner.includes('e'),south=corner.includes('s');
@@ -363,9 +363,10 @@ async function show(){
  const token=++loadToken,day=el('date').value;if(!/^\d{8}$/.test(day))return;for(const ed of Object.values(editors))ed.clear();refreshControls();
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');el('status').textContent=`${format(day)} 자료입니다. `+(index.automatic_generation?'매일 오전 7시 기준 자동 생성 · ':'자동 생성 연결 중 · ')+(day!==today?'오늘 자료가 아니므로 날짜를 확인해 주세요.':'');
  const version=encodeURIComponent(index.updated_kst||'two-page-icons-1');for(const n of [1,2]){el('page'+n).src=window.ENERGY_PREVIEW?.images?.[`energy/${day}/0${n}.webp`]||`energy/${day}/0${n}.webp?v=${version}`;el('save'+n).hidden=false;}el('report').hidden=false;el('print').disabled=false;
- await Promise.all(Object.values(editors).map(ed=>ed.load(day,version,token)));if(token===loadToken){refreshControls();for(const ed of Object.values(editors)){el('figure'+ed.page).classList.add('report-preview-only');ed.node('palettePanel').hidden=true;ed.node('imageSettings').hidden=true;}if(window.ENERGY_PREVIEW){el('status').textContent='검토용 시안 · 2026-11-04 저장 자료 · 편집 내용은 운영 페이지에 반영되지 않습니다.';editors[1].node('edit').click();}}
+ await Promise.all(Object.values(editors).map(ed=>ed.load(day,version,token)));if(token===loadToken)await window.energyShared?.load();if(token===loadToken){refreshControls();for(const ed of Object.values(editors)){el('figure'+ed.page).classList.add('report-preview-only');ed.node('palettePanel').hidden=true;ed.node('imageSettings').hidden=true;}if(window.ENERGY_PREVIEW){el('status').textContent='검토용 시안 · 2026-11-04 저장 자료 · 편집 내용은 운영 페이지에 반영되지 않습니다.';editors[1].node('edit').click();}}
 }
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
-(async()=>{try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+(async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
 

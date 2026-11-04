@@ -39,3 +39,8 @@ jobs:
           git config user.name nwp-bot
           git config user.email actions@users.noreply.github.com
           python energy_runtime/publish_energy.py
+
+      - name: Sync generated report and clean expired cloud images
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: python tools/sync_energy_supabase.py
