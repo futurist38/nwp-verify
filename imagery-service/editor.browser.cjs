@@ -16,6 +16,9 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   fs.mkdirSync('energy-browser-results',{recursive:true});const event=page.waitForEvent('download');await page.click('#pdf');const download=await event;await download.saveAs('energy-browser-results/report.pdf');
   await page.pdf({path:'energy-browser-results/print.pdf',preferCSSPageSize:true,printBackground:true});
   execFileSync('python',['-c',"import fitz; a=fitz.open('energy-browser-results/report.pdf');b=fitz.open('energy-browser-results/print.pdf');assert len(a)==len(b)==1;assert abs(a[0].rect.width/a[0].rect.height-16/9)<.001;assert abs(b[0].rect.width/b[0].rect.height-16/9)<.01;print('PDF and browser print: one 16:9 page')"],{stdio:'inherit'});
+  const bothEvent=page.waitForEvent('download');await page.click('#pdfAll');await (await bothEvent).saveAs('energy-browser-results/both.pdf');
+  execFileSync('python',['-c',"import fitz;d=fitz.open('energy-browser-results/both.pdf');a=fitz.open('energy-browser-results/report.pdf');assert len(d)==2;assert all(abs(p.rect.width/p.rect.height-16/9)<.001 for p in d);assert d[1].get_pixmap().samples==a[0].get_pixmap().samples;assert d[0].get_pixmap().samples!=d[1].get_pixmap().samples;print('Two-page PDF: page order and current edits verified')"],{stdio:'inherit'});
   await page.screenshot({path:'energy-browser-results/page2.png',fullPage:true});assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
+

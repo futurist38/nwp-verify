@@ -17,10 +17,36 @@ Object.assign(ReportEditor.prototype,{
 const previousPanels=ReportEditor.prototype.drawPanels;
 ReportEditor.prototype.drawPanels=function(){if(!this.scene.labels)return previousPanels.call(this);const c=this.ctx;c.save();for(const p of this.scene.panels||[]){const top=p.id==='satellite'?202:659;if(p.updated){const im=this.sprites.get(p.src);if(im){c.fillStyle='white';c.fillRect(65,top,435,365);const scale=Math.min((p.custom?435:365)/im.width,365/im.height),w=im.width*scale,h=im.height*scale;c.drawImage(im,282-w/2,top+(365-h)/2,w,h);}}}c.restore();this.drawLabels();};
 // A one-page PDF uses the report's own 16:9 dimensions, without browser UI or trailing whitespace.
-function reportPDF(jpeg,w=1920,h=1080){const enc=new TextEncoder(),parts=[],offsets=[0];let length=0;const add=v=>{const b=typeof v==='string'?enc.encode(v):v;parts.push(b);length+=b.length;};add('%PDF-1.4\n');const obj=(n,s)=>{offsets[n]=length;add(n+' 0 obj\n'+s+'\nendobj\n');};obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');obj(3,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);offsets[4]=length;add(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);add(jpeg);add('\nendstream\nendobj\n');const stream=`q ${w} 0 0 ${h} 0 0 cm /Im0 Do Q`;obj(5,`<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}\nendstream`);const start=length;add('xref\n0 6\n0000000000 65535 f \n');for(let n=1;n<=5;n++)add(String(offsets[n]).padStart(10,'0')+' 00000 n \n');add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`);return new Blob(parts,{type:'application/pdf'});}
+function reportPDF(jpeg,w=1920,h=1080){return reportPDFPages([jpeg],w,h);}
+function reportPDFPages(pages,w=1920,h=1080){
+ if(!pages.length)throw Error('No report pages');
+ const enc=new TextEncoder(),parts=[],offsets=[0];let length=0;
+ const add=v=>{const bytes=typeof v==='string'?enc.encode(v):v;parts.push(bytes);length+=bytes.length;};
+ const obj=(n,body)=>{offsets[n]=length;add(n+' 0 obj\n'+body+'\nendobj\n');};
+ add('%PDF-1.4\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+ obj(2,`<< /Type /Pages /Kids [${pages.map((_,i)=>(3+i*3)+' 0 R').join(' ')}] /Count ${pages.length} >>`);
+ pages.forEach((jpeg,i)=>{
+  const page=3+i*3,img=page+1,content=page+2;
+  obj(page,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im0 ${img} 0 R >> >> /Contents ${content} 0 R >>`);
+  offsets[img]=length;add(`${img} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);add(jpeg);add('\nendstream\nendobj\n');
+  const stream=`q ${w} 0 0 ${h} 0 0 cm /Im0 Do Q`;obj(content,`<< /Length ${enc.encode(stream).length} >>\nstream\n${stream}\nendstream`);
+ });
+ const start=length,count=3+pages.length*3;add(`xref\n0 ${count}\n0000000000 65535 f \n`);
+ for(let n=1;n<count;n++)add(String(offsets[n]).padStart(10,'0')+' 00000 n \n');
+ add(`trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`);return new Blob(parts,{type:'application/pdf'});
+}
 function currentReport(){return Object.values(editors).find(ed=>!el('figure'+ed.page).hidden);}
 for(const ed of Object.values(editors))ed.canvas.addEventListener('dblclick',e=>ed.startInline(e));
-el('pdf').onclick=async()=>{const ed=currentReport();if(!ed?.scene)return;ed.finishInline?.(true);try{ed.draw(false);const jpeg=Uint8Array.from(atob(ed.canvas.toDataURL('image/jpeg',.98).split(',')[1]),c=>c.charCodeAt(0)),url=URL.createObjectURL(reportPDF(jpeg));const a=document.createElement('a');a.href=url;a.download=`KPX_weather_${ed.day}_0${ed.page}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}finally{ed.draw();}};
+function saveReportPDF(all=false){
+ const selected=all?[editors[1],editors[2]]:[currentReport()];
+ if(selected.some(ed=>!ed?.scene)){el('status').textContent='보고서를 모두 불러온 뒤 다시 저장해 주세요.';return;}
+ try{
+  const pages=selected.map(ed=>{ed.finishInline?.(true);ed.draw(false);return Uint8Array.from(atob(ed.canvas.toDataURL('image/jpeg',.98).split(',')[1]),c=>c.charCodeAt(0));});
+  const url=URL.createObjectURL(reportPDFPages(pages)),a=document.createElement('a');a.href=url;a.download=`KPX_weather_${selected[0].day}_${all?'01-02':'0'+selected[0].page}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+ }catch{el('status').textContent='PDF를 저장하지 못했습니다. 다시 시도해 주세요.';}finally{selected.forEach(ed=>ed.draw());}
+}
+el('pdf').onclick=()=>saveReportPDF(false);
+el('pdfAll').onclick=()=>saveReportPDF(true);
 window.addEventListener('beforeprint',()=>{for(const ed of Object.values(editors)){ed.finishInline?.(true);el('figure'+ed.page).classList.toggle('print-current',!el('figure'+ed.page).hidden);ed.draw(false);}});
 
 ReportEditor.prototype.updateColorTools=function(){const enabled=!!this.inlineState||this.selection().length===1&&this.selected?.type==='text';for(const b of this.colorButtons||[])b.disabled=!enabled;};
@@ -32,3 +58,4 @@ for(const ed of Object.values(editors)){
  const controls=ed.controls.bind(ed);ed.controls=function(){controls();this.updateColorTools();};
 }
 ReportEditor.prototype.drawText=function(g){const c=this.ctx,m=this.textMetrics(g.text);c.save();c.translate(g.x,g.y);c.scale(g.w/m.w,g.h/m.h);c.fillStyle='#ffffff';c.fillRect(0,0,m.w,m.h);c.strokeStyle='#000000';c.lineWidth=3;c.setLineDash([]);c.strokeRect(1.5,1.5,m.w-3,m.h-3);let offset=0;for(const [i,line] of m.lines.entries()){drawReportText(c,line,{x:m.w/2,y:12+44*(i+.5),size:32,bold:true,anchor:'mm',color:'#0653b8'},(g.colors||[]).slice(offset,offset+line.length));offset+=line.length+1;}c.restore();};
+
