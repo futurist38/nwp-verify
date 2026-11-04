@@ -68,7 +68,7 @@
   const edit=ed.node('edit').onclick;ed.node('edit').onclick=async()=>{if(st(ed)?.busy)return;if(ed.editing){edit();return;}try{if(await unlock())edit();}catch(e){unlocked=0;note(ed,message(e));}};
   ed.node('saveLayout').textContent='공유 저장';ed.node('saveLayout').onclick=()=>save(ed);
   const reset=ed.node('reset').onclick;ed.node('reset').onclick=()=>{reset();note(ed,'자동 배치로 초기화했습니다. 모두에게 반영하려면 공유 저장을 눌러 주세요.');};
-  const reload=document.createElement('button');reload.type='button';reload.textContent='공유본 다시 불러오기';reload.onclick=async()=>{if(st(ed)?.busy)return;if(ed.editing&&!window.confirm('현재 화면 대신 최신 공유본을 불러올까요?'))return;await load(ed);};
+  const reload=document.createElement('button');reload.type='button';reload.className='shared-reload';reload.textContent='공유본 다시 불러오기';reload.onclick=async()=>{if(st(ed)?.busy)return;if(ed.editing&&!window.confirm('현재 화면 대신 최신 공유본을 불러올까요?'))return;await load(ed);};
   ed.node('editStatus').before(reload);
   const local=document.createElement('button');local.type='button';local.textContent='이 브라우저 저장본 불러오기';local.onclick=async()=>{if(st(ed)?.busy||!ed.scene)return;try{if(!await unlock())return;const raw=JSON.parse(localStorage.getItem(ed.storageKey()));if(!raw){note(ed,'이 브라우저에 저장된 편집이 없습니다.');return;}const scene={...clone(ed.original),...raw,palette:clone(ed.original.palette),labels:clone(ed.original.labels||[])};await apply(ed,scene,ed.day,loadToken);note(ed,'브라우저 저장본을 불러왔습니다. 확인 후 공유 저장을 눌러 주세요.');}catch{note(ed,'브라우저 저장본을 불러오지 못했습니다.');}};
   ed.node('editorControls').append(local);

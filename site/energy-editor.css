@@ -3,3 +3,6 @@
 @media print{@page{size:320mm 180mm;margin:0}html,body{width:320mm;height:180mm;margin:0;padding:0;background:white}main,#report{width:320mm;max-width:none;margin:0;padding:0}.report-figure{display:none!important;break-after:auto!important}.report-figure.print-current{display:block!important;width:320mm;height:180mm;margin:0}.editor-body,.canvas-stage{display:block!important;padding:0!important;border:0!important;border-radius:0!important;width:320mm;height:180mm;overflow:hidden}.canvas-stage canvas{width:320mm!important;height:180mm!important;box-shadow:none!important}.inline-report-text{display:none!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 
 .text-color-tools{display:flex;align-items:center;gap:5px;font-size:12px}.text-color-tools button{padding:4px 7px}
+
+
+@media print{.shared-reload{display:none!important}}
