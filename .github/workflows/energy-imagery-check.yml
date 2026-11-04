@@ -18,6 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm install --prefix /tmp/energy-sql @electric-sql/pglite@0.3.14 --ignore-scripts --no-audit --no-fund
       - run: node --test imagery-service/*.test.*
+        env:
+          NODE_PATH: /tmp/energy-sql/node_modules
       - name: Public imagery preflight without credentials
         run: node imagery-service/live-check.mjs
