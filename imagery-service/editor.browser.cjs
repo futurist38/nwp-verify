@@ -18,7 +18,17 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   execFileSync('python',['-c',"import fitz; a=fitz.open('energy-browser-results/report.pdf');b=fitz.open('energy-browser-results/print.pdf');assert len(a)==len(b)==1;assert abs(a[0].rect.width/a[0].rect.height-16/9)<.001;assert abs(b[0].rect.width/b[0].rect.height-16/9)<.01;print('PDF and browser print: one 16:9 page')"],{stdio:'inherit'});
   const bothEvent=page.waitForEvent('download');await page.click('#pdfAll');await (await bothEvent).saveAs('energy-browser-results/both.pdf');
   execFileSync('python',['-c',"import fitz;d=fitz.open('energy-browser-results/both.pdf');a=fitz.open('energy-browser-results/report.pdf');assert len(d)==2;assert all(abs(p.rect.width/p.rect.height-16/9)<.001 for p in d);assert d[1].get_pixmap().samples==a[0].get_pixmap().samples;assert d[0].get_pixmap().samples!=d[1].get_pixmap().samples;print('Two-page PDF: page order and current edits verified')"],{stdio:'inherit'});
-  await page.screenshot({path:'energy-browser-results/page2.png',fullPage:true});assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
+  await page.screenshot({path:'energy-browser-results/page2.png',fullPage:true});await page.evaluate(()=>{for(const ed of Object.values(editors)){ed.scene.groups=[];ed.scene.labelOverrides={0:'reset regression'};localStorage.setItem(ed.storageKey(),JSON.stringify(ed.scene));}});
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('edit').disabled&&!document.getElementById('edit2').disabled);
+  for(const n of [1,2]){
+   await page.click('[data-page="'+n+'"]');await page.click(n===1?'#edit':'#edit2');await page.click(n===1?'#reset':'#reset2');
+   assert.ok(await page.evaluate(n=>{const ed=editors[n];return ed.scene.groups.length===ed.original.groups.length&&ed.scene.groups.every(g=>ed.sprites.has(g.src))&&localStorage.getItem(ed.storageKey())===null&&!ed.scene.labelOverrides;},n));
+  }
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('edit').disabled&&!document.getElementById('edit2').disabled);
+  assert.ok(await page.evaluate(()=>Object.values(editors).every(ed=>ed.scene.groups.length===ed.original.groups.length&&!ed.scene.labelOverrides)));
+  console.log('Reset restores original sprites and survives reload on both pages');
+  assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
 

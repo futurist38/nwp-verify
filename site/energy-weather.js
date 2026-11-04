@@ -30,7 +30,7 @@ class ReportEditor {
   this.node('edit').onclick=()=>{if(!this.scene)return;this.editing=!this.editing;this.node('editorControls').hidden=!this.editing;this.node('edit').textContent=this.editing?`${page}페이지 편집 닫기`:this.title();this.draw();};
   this.setupReportFields();
   this.node('undo').onclick=()=>{if(this.history.length){this.scene=this.history.pop();this.selected=null;this.changed=true;this.controls();this.draw();}};
-  this.node('reset').onclick=()=>{if(!this.scene)return;this.remember();this.scene=clone(this.original);this.selected=null;this.controls();this.draw();};
+  this.node('reset').onclick=()=>{if(!this.scene)return;this.finishInline?.(true);this.remember();this.scene=clone(this.original);this.setSelection([]);this.drag=null;this.controls();this.draw();try{localStorage.removeItem(this.storageKey());this.node('editStatus').textContent='이 페이지를 자동 배치로 초기화했습니다. 저장된 수정 내용도 지웠습니다.';}catch{this.node('editStatus').textContent='화면은 초기화했지만 브라우저 저장 내용을 지우지 못했습니다. 편집 저장을 눌러 주세요.';}};
   this.node('remove').onclick=()=>{if(!this.selected)return;this.remember();this.objects(this.selected.type).splice(this.selected.index,1);this.selected=null;this.controls();this.draw();};
   this.node('size').onchange=e=>this.resize(Number(e.target.value)/100);
   this.node('addText').onclick=()=>this.editText(false);
@@ -203,7 +203,7 @@ class ReportEditor {
    try{const saved=JSON.parse(localStorage.getItem(this.storageKey()));if(saved&&Array.isArray(saved.groups)&&Array.isArray(saved.boundaries)&&saved.groups.every(g=>['x','y','w','h'].every(k=>Number.isFinite(g[k]))&&g.w>0&&g.h>0&&typeof g.src==='string')){this.scene=saved;this.scene.palette=clone(data.palette);this.scene.labels=data.labels?clone(data.labels):undefined;this.changed=true;}}catch{}
    this.scene.texts=(Array.isArray(this.scene.texts)?this.scene.texts:[]).filter(g=>g&&typeof g.text==='string'&&g.text.trim()&&g.text.length<=200&&['x','y','w','h'].every(k=>Number.isFinite(g[k]))&&g.w>0&&g.h>0);this.scene.texts.forEach(g=>this.constrain(g,'text'));
    this.scene.panels=this.scene.panels||clone(data.panels||[]);if(this.page===2){this.scene.boundaries=[];this.scene.panels=[];this.scene.groups.forEach(g=>this.constrain(g));}
-   await Promise.all([...this.scene.groups,...this.scene.panels.filter(p=>p.updated)].map(g=>this.sprite(g.src)));if(token!==loadToken)return;
+   await Promise.all([...this.original.groups,...this.scene.groups,...this.scene.panels.filter(p=>p.updated)].map(g=>this.sprite(g.src)));if(token!==loadToken)return;
    this.node('iconChoice').replaceChildren();for(const name of Object.keys(this.scene.palette)){const option=document.createElement('option');option.value=name;option.textContent=labels[name]||name;this.node('iconChoice').append(option);}
    this.node('edit').disabled=false;this.node('editStatus').textContent=this.page===2?'아이콘·화살표·글상자를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동합니다. 주석 문구를 입력하고 글상자 삽입을 누르면 페이지 어디에나 주석을 놓을 수 있습니다.':'아이콘·화살표·글상자를 선택한 뒤 모서리의 보라색 네모를 끌어 크기를 조절하세요. 객체를 끌면 이동하고, 경계선은 보라색 조절점으로 수정합니다. 주석은 문구를 입력하고 글상자 삽입을 누르세요.';this.controls();this.draw();
   }catch{if(token===loadToken){this.scene=null;this.node('editStatus').textContent='이 날짜의 편집 정보를 불러오지 못했습니다.';}}
@@ -368,3 +368,4 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
