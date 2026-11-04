@@ -30,6 +30,8 @@ on:
       - 'site/app.js'
       - 'config.py'
       - 'build_site.py'
+      - 'site_assets.py'
+      - 'tests/test_site_assets.py'
       - 'plot_kmafcst.py'
       - 'kma_midfcst.py'
       - 'tests/test_wonju.py'
@@ -149,6 +151,7 @@ jobs:
 
       - name: 예보 비교 검증
         run: |
+          python -m unittest discover -s tests -p 'test_site_assets.py'
           python -m unittest discover -s tests -p 'test_forecast_compare.py'
           node --test tests/forecast_compare.test.cjs tests/overview.test.cjs tests/obs_resources.test.cjs
           python -m unittest discover -s tests -p 'test_wonju.py'

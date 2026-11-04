@@ -762,9 +762,10 @@ def main():
     os.makedirs(args.site_dir, exist_ok=True)
     from energy_archive import publish_energy
     publish_energy(args.site_dir)
-    # 정적 파일
-    for fn in os.listdir(SITE_SRC):
-        shutil.copy2(os.path.join(SITE_SRC, fn), args.site_dir)
+    # Preserve the validated energy editor restored from the latest site-data.
+    # Hourly/daily jobs can carry an older checkout than the editor release.
+    from site_assets import copy_static_assets
+    copy_static_assets(SITE_SRC, args.site_dir)
     open(os.path.join(args.site_dir, ".nojekyll"), "w").close()
 
     # GK2A: 시각·원본 주소만 갱신한다. 영상은 사용자 브라우저가 기상청에서 직접 표시.

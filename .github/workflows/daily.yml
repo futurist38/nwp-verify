@@ -97,6 +97,7 @@ jobs:
 
       - name: 일사량 지도·게시 검증
         run: |
+          python -m unittest discover -s tests -p 'test_site_assets.py'
           python -m unittest discover -s tests -p 'test_solar_radiation.py'
           node --test tests/solar_maps.test.cjs
 
