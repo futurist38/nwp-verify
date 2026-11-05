@@ -201,7 +201,7 @@ test('source lookup updates thumbnails before explicit application',async()=>{
  const t=setup();const value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
  t.run(`window.energyShared={imagery:async(id,tm)=>({id,requestedTime:'${value}:00+09:00',time:'${value}:00+09:00',src:'data:image/png;base64,AA',title:'위성영상'})}`);
  const before=t.run('JSON.stringify(editors[1].scene)');await t.run(`editors[1].querySource('satellite','${value}')`);
- assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run("editors[1].queriedSources.satellite.time"),value+':00+09:00');assert.equal(t.run('editors[1].sourceButtons.length'),5);
+ assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run("editors[1].queriedSources.satellite.time"),value+':00+09:00');assert.equal(t.run('editors[1].sourceButtons.length'),6);
  assert.ok(t.nodes.sourceQueryTime);assert.equal(t.nodes['sourceTime-satellite'],undefined);
  await t.run("editors[1].applyPanelSource({...editors[1].queriedSources.satellite,label:'위성'})");assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').time"),value+':00+09:00');t.nodes.undo.click();assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
 });
@@ -219,13 +219,13 @@ test('one shared query sends the same KST time to every source and preserves fai
  const t=setup(),value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
  t.run(`var sourceCalls=[];editors[1].querySource=async(id,time)=>{sourceCalls.push([id,time]);return id!=='pm10';}`);
  const before=t.run('JSON.stringify(editors[1].scene)');await t.run(`editors[1].queryAllSources('${value}')`);
- assert.deepEqual(JSON.parse(t.run('JSON.stringify(sourceCalls)')),[['satellite',value],['radar',value],['warning',value],['pm10',value]]);
- assert.equal(t.run('editors[1].sourceQueryTime'),value);assert.equal(t.nodes.sourceQueryTime.value,value);assert.match(t.run('editors[1].sourceQueryMessage'),/3\/4/);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+ assert.deepEqual(JSON.parse(t.run('JSON.stringify(sourceCalls)')),[['satellite',value],['radar',value],['warning',value],['pm10',value],['fog',value]]);
+ assert.equal(t.run('editors[1].sourceQueryTime'),value);assert.equal(t.nodes.sourceQueryTime.value,value);assert.match(t.run('editors[1].sourceQueryMessage'),/4\/5/);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
 });
 test('common lookup cannot repeat while pending or finish on a different report',async()=>{
  const t=setup(),value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
  t.run('var sourceCalls=0,resolvers=[];editors[1].querySource=()=>{sourceCalls++;return new Promise(r=>resolvers.push(r));}');
- const pending=t.run(`editors[1].queryAllSources('${value}')`);await t.run(`editors[1].queryAllSources('${value}')`);assert.equal(t.run('sourceCalls'),4);assert.equal(t.nodes.sourceQueryTime.disabled,true);
+ const pending=t.run(`editors[1].queryAllSources('${value}')`);await t.run(`editors[1].queryAllSources('${value}')`);assert.equal(t.run('sourceCalls'),5);assert.equal(t.nodes.sourceQueryTime.disabled,true);
  t.run('loadToken++;editors[1].clear();resolvers.forEach(r=>r(true))');await pending;assert.equal(t.run('editors[1].sourceQueryMessage'),'');assert.equal(t.run('editors[1].sourceBatch'),null);
 });
 
@@ -250,5 +250,14 @@ test('separate panel selections can finish independently and last selection wins
  await t.run('Promise.all([upper,lower])');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'upper');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').src"),'lower');
  t.run("var slow=editors[1].applyPanelSource({id:'satellite',src:'slow'},'satellite');var fast=editors[1].applyPanelSource({id:'satellite',src:'fast'},'satellite');pendingImages.fast({});pendingImages.slow({});");
  await t.run('Promise.all([slow,fast])');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'fast');
+});
+test('fog lookup rounds to its observed time and applies to lower panel without changing upper satellite',async()=>{
+ const t=setup(),day=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,10),value=day+'T07:07';
+ t.run(`window.energyShared={imagery:async(id)=>({id,requestedTime:'${value}:00+09:00',time:'${day}T07:00:00+09:00',src:'data:image/png;base64,AA',title:'안개(위성)'})}`);
+ await t.run(`editors[1].querySource('fog','${value}')`);
+ assert.equal(t.run('editors[1].queriedSources.fog.time'),day+'T07:00:00+09:00');
+ await t.run("editors[1].sourceButtons.find(entry=>entry[1].id==='fog')[0].click()");
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').titleText"),'안개(위성)');
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'old-satellite');
 });
 

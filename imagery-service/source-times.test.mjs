@@ -9,13 +9,21 @@ test('KST query validates calendar, past range and each source cadence',()=>{
  assert.throws(()=>requestTime('forest_fire','202611040700',now));
  assert.throws(()=>requestTime('radar','202611041700',now));
  assert.throws(()=>requestTime('pm10','202609010700',now));
- for(const [kind,expected] of [['satellite','202611040706'],['radar','202611040705'],['warning','202611040707'],['pm10','202611040700']])assert.equal(requestTime(kind,'202611040707',now).at,parseTime(expected));
+ for(const [kind,expected] of [['satellite','202611040706'],['radar','202611040705'],['warning','202611040707'],['pm10','202611040700'],['fog','202611040700']])assert.equal(requestTime(kind,'202611040707',now).at,parseTime(expected));
 });
 test('satellite time comes from KST metadata while image filename remains UTC',()=>{
  const row={tm:'202611040900',url:'/w/repositary/image/sat/gk2a/KO/gk2a_ami_le1b_rgb-s-daynight_ko020lc_202611040000.png'};
  assert.equal(satelliteFrame([row],parseTime(row.tm)).ms,parseTime(row.tm));
  assert.equal(satelliteFrame([row],parseTime('202611040902')),null);
  assert.equal(satelliteFrame([{...row,url:'https://invalid.example/image.png'}],parseTime(row.tm)),null);
+});
+test('fog uses ten-minute KST frames and rejects RGB images or missing requested frames',()=>{
+ const row={tm:'202611050700',url:'/w/repositary/image/sat/gk2a/KO/gk2a_ami_le2_fog_ko020lc_202611042200.png'},at=parseTime(row.tm);
+ assert.equal(requestTime('fog','202611050707',at+3600000).at,at);
+ assert.equal(satelliteFrame([row],at,'fog').ms,at);
+ assert.equal(satelliteFrame([row],at),null);
+ assert.equal(satelliteFrame([row],at+600000,'fog'),null);
+ assert.equal(satelliteFrame([{...row,url:row.url.replace('le2_fog','le1b_rgb-s-daynight')}],at,'fog'),null);
 });
 test('warning selects only preceding published notices and keeps effective times separate',()=>{
  const html='<option value="pwn:202611030100:9"><option value="met:202611030200:13"><option value="met:202611030000:12">';
@@ -39,3 +47,4 @@ test('request handler rejects unsupported methods/origins and missing auth befor
  assert.equal((await handle(new Request('https://example.test',{method:'POST',headers:{Origin:'https://elsewhere.example'}}),{})).status,403);
  assert.equal((await handle(new Request('https://example.test',{method:'POST'}),{})).status,401);
 });
+

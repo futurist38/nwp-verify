@@ -320,7 +320,7 @@ Object.assign(ReportEditor.prototype,{
   const queryStatus=document.createElement('p');queryStatus.className='source-query-summary';queryStatus.setAttribute('role','status');queryStatus.textContent=this.sourceQueryMessage||'각 썸네일에는 실제 관측·발표 시각이 표시됩니다.';
   query.append(field,fetchButton,queryStatus);box.append(query);
   const grid=document.createElement('div');grid.className='source-grid';box.append(grid);
-  for(const [id,label,provider,interval] of [['satellite','위성','기상청','2분 간격'],['radar','레이더','기상청','5분 간격'],['warning','특보현황','기상청','지정 시각 이전 최신 발표'],['pm10','미세먼지(PM10)','기상청 황사 관측망','1시간 평균']]){
+  for(const [id,label,provider,interval] of [['satellite','위성','기상청','2분 간격'],['radar','레이더','기상청','5분 간격'],['warning','특보현황','기상청','지정 시각 이전 최신 발표'],['pm10','미세먼지(PM10)','기상청 황사 관측망','1시간 평균'],['fog','안개(위성)','기상청 천리안2A호','10분 간격 · 위성 안개 탐지']]){
    const saved=['satellite','radar'].includes(id)?this.original.panels?.find(p=>p.id===id):this.extraSources?.find(p=>p.id===id);
    const source={id,label,provider,title:id==='radar'?'강수현황(레이더)':id==='satellite'?'위성영상':label,reason:this.sourcesLoading?'불러오는 중…':this.sourcesError||'이 날짜에 저장된 자료가 없습니다.',...saved,...this.queriedSources?.[id]};source.label=label;
    const option=document.createElement('article');option.className='source-option';
@@ -369,11 +369,11 @@ Object.assign(ReportEditor.prototype,{
   if(this.page!==1||!this.scene||this.sourceBatch)return;
   const requested=Date.parse(value+':00+09:00'),now=Date.now();
   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)||!Number.isFinite(requested)||requested>now||requested<now-30*86400000){this.sourceQueryMessage='최근 30일 이내의 과거 시각을 입력하세요.';this.buildSourceChoices();return;}
-  const batch={value,original:this.original,token:loadToken};this.sourceBatch=batch;this.sourceQueryTime=value;this.sourceQueryMessage='같은 시각으로 위성·레이더·특보·미세먼지를 불러오고 있습니다.';this.buildSourceChoices();
-  const results=await Promise.allSettled(['satellite','radar','warning','pm10'].map(id=>this.querySource(id,value)));
+  const batch={value,original:this.original,token:loadToken};this.sourceBatch=batch;this.sourceQueryTime=value;this.sourceQueryMessage='같은 시각으로 위성·레이더·특보·미세먼지·안개를 불러오고 있습니다.';this.buildSourceChoices();
+  const results=await Promise.allSettled(['satellite','radar','warning','pm10','fog'].map(id=>this.querySource(id,value)));
   if(this.sourceBatch!==batch||this.original!==batch.original||loadToken!==batch.token)return;
   this.sourceBatch=null;const count=results.filter(r=>r.status==='fulfilled'&&r.value===true).length;
-  this.sourceQueryMessage=count===4?'네 자료를 불러왔습니다. 실제 자료 시각을 확인하고 썸네일을 눌러 적용하세요.':`${count}/4개 자료를 불러왔습니다. 실패한 자료는 이전 썸네일과 실제 시각을 유지합니다.`;this.buildSourceChoices();
+  this.sourceQueryMessage=count===5?'다섯 자료를 불러왔습니다. 실제 자료 시각을 확인하고 썸네일을 눌러 적용하세요.':`${count}/5개 자료를 불러왔습니다. 실패한 자료는 이전 썸네일과 실제 시각을 유지합니다.`;this.buildSourceChoices();
  },
  async querySource(id,value){
   if(this.page!==1||!this.scene)return;
@@ -385,7 +385,7 @@ Object.assign(ReportEditor.prototype,{
   try{
    if(!window.energyShared?.imagery)throw Error('not_connected');
    const result=await window.energyShared.imagery(id,value.replace(/\D/g,''));const actual=Date.parse(result?.time);
-   if(result?.id!==id||Date.parse(result.requestedTime)!==requested||!Number.isFinite(actual)||actual>requested||actual<requested-(id==='warning'?30*86400000:id==='pm10'?3600000:id==='satellite'?120000:300000))throw Error('invalid');
+   if(result?.id!==id||Date.parse(result.requestedTime)!==requested||!Number.isFinite(actual)||actual>requested||actual<requested-(id==='warning'?30*86400000:id==='pm10'?3600000:id==='satellite'?120000:id==='fog'?600000:300000))throw Error('invalid');
    const src=id==='pm10'?await this.renderPM10(result.map,result.time):id==='radar'?await this.renderRadar(result.src,result.time):result.src;
    if(typeof src!=='string'||src.length>7000000||!/^data:image\/png;base64,/.test(src))throw Error('image');
    const full=await image(src);if(full.width<200||full.height<200||full.width>2200||full.height>2200)throw Error('dimensions');
@@ -422,7 +422,7 @@ Object.assign(ReportEditor.prototype,{
    if(!response.ok)throw Error('sources');const data=await response.json();
    if(data.day!==day||!Array.isArray(data.sources))throw Error('date');
    if(token!==loadToken||this.day!==day||original!==this.original)return;
-   this.extraSources=data.sources.filter(s=>['warning','pm10'].includes(s.id)).map(s=>({...s,src:s.available&&/^data:image\/(png|jpeg|webp);base64,/.test(s.src||'')?s.src:null}));
+   this.extraSources=data.sources.filter(s=>['warning','pm10','fog'].includes(s.id)).map(s=>({...s,src:s.available&&/^data:image\/(png|jpeg|webp);base64,/.test(s.src||'')?s.src:null}));
   }catch{if(token!==loadToken||this.day!==day||original!==this.original)return;this.sourcesError='이 날짜의 저장 자료를 불러오지 못했습니다.';}
   if(token!==loadToken||this.day!==day||original!==this.original)return;this.sourcesLoading=false;this.buildSourceChoices();
  },

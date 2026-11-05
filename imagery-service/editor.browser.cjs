@@ -8,7 +8,7 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   await page.goto('http://127.0.0.1:8765/energy-weather.html');await page.waitForFunction(()=>!document.getElementById('edit').disabled);await page.click('#edit');
   assert.ok(await page.locator('#paletteGrid button').count()>10);
   await page.waitForFunction(()=>!editors[1].sourcesLoading);
-  assert.equal(await page.locator('.source-card').count(),4);
+  assert.equal(await page.locator('.source-card').count(),5);
   assert.ok(await page.locator('.source-card img').count()>=2);
   assert.equal(await page.locator('.source-query input[type=datetime-local]').count(),1);
   assert.equal(await page.getByText('산불위험지수',{exact:true}).count(),0);

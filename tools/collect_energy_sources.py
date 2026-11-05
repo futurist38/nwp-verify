@@ -26,6 +26,7 @@ PM10_PAGE = KMA + '/w/hazard/dust/dust-obs/values.do'
 META = {
     'warning': {'label': '특보현황', 'title': '특보현황', 'provider': '기상청', 'page_url': WARNING_PAGE},
     'pm10': {'label': '미세먼지(PM10)', 'title': '미세먼지(PM10)', 'provider': '기상청 황사 관측망', 'page_url': PM10_PAGE},
+    'fog': {'label': '안개(위성)', 'title': '안개(위성)', 'provider': '기상청 천리안2A호', 'page_url': KMA + '/w/weather/satellite/gk2a.do'},
 }
 
 
@@ -126,6 +127,26 @@ def pm10(now):
     return {'src': data_uri(im), 'time': stamp.isoformat(), 'source_url': PM10_PAGE}
 
 
+def fog(now):
+    at = now.replace(minute=now.minute // 10 * 10, second=0, microsecond=0)
+    query = urlencode({'mapType': 'img', 'tm': at.strftime('%Y.%m.%d.%H:%M'), 'itv': '0.5',
+                       'leaflet': '0', 'kmap': '0', 'area': 'ko020lc', 'data': 'fog'})
+    rows = json.loads(text(KMA + '/w/wnuri-img/rest/sat/images/gk2a.do?' + query))
+    candidates = []
+    for row in rows:
+        stamp = dt.datetime.strptime(row['tm'], '%Y%m%d%H%M').replace(tzinfo=KST)
+        url = urljoin(KMA, row['url'])
+        parsed = urlparse(url)
+        if (parsed.scheme == 'https' and parsed.hostname == 'www.weather.go.kr' and not parsed.query and not parsed.fragment
+                and re.fullmatch(r'/w/repositary/image/sat/gk2a/KO/gk2a_ami_le2_fog_ko020lc_\d{12}\.png', parsed.path)
+                and stamp.date() == now.date() and dt.timedelta(0) <= at - stamp <= dt.timedelta(minutes=30)):
+            candidates.append((stamp, url))
+    if not candidates:
+        raise ValueError('Fog image unavailable')
+    stamp, url = max(candidates)
+    return {'src': data_uri(decoded_image(read(url))), 'time': stamp.isoformat(), 'source_url': url}
+
+
 def collect(day, now=None):
     now = now or dt.datetime.now(KST)
     def one(kind):
@@ -159,3 +180,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -24,9 +24,9 @@ class SourceTests(unittest.TestCase):
 
     def test_one_failure_does_not_block_other_sources(self):
         now = dt.datetime(2026, 11, 4, 7, tzinfo=sources.KST)
-        with patch.object(sources, 'warning', return_value={'src': 'warning-image', 'time': now.isoformat()}), patch.object(sources, 'pm10', side_effect=ValueError('stale')):
+        with patch.object(sources, 'warning', return_value={'src': 'warning-image', 'time': now.isoformat()}), patch.object(sources, 'pm10', side_effect=ValueError('stale')), patch.object(sources, 'fog', return_value={'src': 'fog-image', 'time': now.isoformat()}):
             result = sources.collect('20261104', now)
-        self.assertEqual([s['available'] for s in result['sources']], [True, False])
+        self.assertEqual([s['available'] for s in result['sources']], [True, False, True])
         self.assertNotIn('src', result['sources'][1])
 
     def test_archived_date_never_receives_current_images(self):
@@ -35,7 +35,21 @@ class SourceTests(unittest.TestCase):
             result = sources.collect('20261103', now)
         self.assertTrue(all(not s['available'] for s in result['sources']))
 
+    def test_fog_selects_recent_earlier_frame_and_preserves_kst(self):
+        import json
+        now = dt.datetime(2026, 11, 5, 7, 7, tzinfo=sources.KST)
+        row = {'tm': '202611050700', 'url': '/w/repositary/image/sat/gk2a/KO/gk2a_ami_le2_fog_ko020lc_202611042200.png'}
+        rows = [row, {**row, 'tm': '202611050710'}, {**row, 'tm': '202611050640', 'url': 'https://invalid.example/fog.png'}]
+        with patch.object(sources, 'text', return_value=json.dumps(rows)), patch.object(sources, 'read', return_value=b'png') as read, patch.object(sources, 'decoded_image'), patch.object(sources, 'data_uri', return_value='fog-image'):
+            result = sources.fog(now)
+            self.assertEqual(result['time'], '2026-11-05T07:00:00+09:00')
+            read.assert_called_once_with(sources.KMA + row['url'])
+        with patch.object(sources, 'text', return_value=json.dumps([{**row, 'tm': '202611050600'}])):
+            with self.assertRaises(ValueError):
+                sources.fog(now)
+
 
 
 if __name__ == '__main__':
     unittest.main()
+

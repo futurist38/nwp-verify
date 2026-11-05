@@ -13,10 +13,10 @@ export function parseTime(tm) {
   return ms;
 }
 export function requestTime(kind, value, now = Date.now()) {
-  if (!['satellite', 'radar', 'warning', 'pm10'].includes(kind)) throw Error('kind');
+  if (!['satellite', 'radar', 'warning', 'pm10', 'fog'].includes(kind)) throw Error('kind');
   const ms = parseTime(value);
   if (ms > now || ms < now - 30 * DAY) throw Error('range');
-  const interval = {satellite: 2, radar: 5, warning: 1, pm10: 60}[kind] * 60000;
+  const interval = {satellite: 2, radar: 5, warning: 1, pm10: 60, fog: 10}[kind] * 60000;
   return {requested: ms, at: Math.floor(ms / interval) * interval};
 }
 export function pngData(bytes) {
@@ -43,10 +43,11 @@ async function cached(key, fn, age = 120000) {
   const task = (async () => {try {const value = await fn();if(cache.size>=32)cache.delete(cache.keys().next().value);cache.set(key,{value,until:Date.now()+age});return value;}finally{pending.delete(key);}})();
   pending.set(key,task);return task;
 }
-export function satelliteFrame(rows, at) {
+export function satelliteFrame(rows, at, kind = 'satellite') {
   if (!Array.isArray(rows)) throw Error('frames');
+  const pattern = kind === 'fog' ? /^\/w\/repositary\/image\/sat\/gk2a\/KO\/gk2a_ami_le2_fog_ko020lc_\d{12}\.png$/ : /^\/w\/repositary\/image\/sat\/gk2a\/KO\/gk2a_ami_le1b_rgb-s-daynight_ko020lc_\d{12}\.png$/;
   // KMA row.tm is KST, whereas the image filename is UTC. Never infer KST from the filename.
-  return rows.map(r => {try {const ms=parseTime(r.tm),url=new URL(r.url,WEATHER);if(url.origin!==WEATHER||!/^\/w\/repositary\/image\/sat\/gk2a\/KO\/gk2a_ami_le1b_rgb-s-daynight_ko020lc_\d{12}\.png$/.test(url.pathname)||url.search||url.hash)return null;return {ms,url:url.href};}catch{return null;}}).filter(r=>r&&r.ms===at)[0] || null;
+  return rows.map(r => {try {const ms=parseTime(r.tm),url=new URL(r.url,WEATHER);if(url.origin!==WEATHER||!pattern.test(url.pathname)||url.search||url.hash)return null;return {ms,url:url.href};}catch{return null;}}).filter(r=>r&&r.ms===at)[0] || null;
 }
 export function warningChoices(markup, at) {
   return [...markup.matchAll(/<option\b[^>]*value="(met:(\d{12}):(\d+))"/g)].map(m=>({id:m[1],ms:parseTime(m[2]),serial:m[3]})).filter(r=>r.ms<=at).sort((a,b)=>b.ms-a.ms);
@@ -78,11 +79,11 @@ export function pm10Rows(markup, at) {
 export async function loadSource(kind, tm, now=Date.now()) {
   const {requested,at}=requestTime(kind,tm,now),signal=AbortSignal.timeout(45000);
   const common={id:kind,requestedTime:isoKST(requested),time:isoKST(at),provider:kind==='pm10'?'기상청 황사 관측망':'기상청'};
-  if(kind==='satellite'){
-    const query=new URLSearchParams({mapType:'img',tm:isoKST(at).slice(0,16).replaceAll('-','.').replace('T','.'),itv:'0.5',leaflet:'0',kmap:'0',area:'ko020lc',data:'rgb-s-daynight'});
+  if(kind==='satellite'||kind==='fog'){
+    const query=new URLSearchParams({mapType:'img',tm:isoKST(at).slice(0,16).replaceAll('-','.').replace('T','.'),itv:'0.5',leaflet:'0',kmap:'0',area:'ko020lc',data:kind==='fog'?'fog':'rgb-s-daynight'});
     const rows=JSON.parse(await text(WEATHER+'/w/wnuri-img/rest/sat/images/gk2a.do?'+query,signal));
-    const frame=satelliteFrame(rows,at);if(!frame)throw Error('unavailable');
-    return {...common,title:'위성영상',src:pngData(await get(frame.url,signal))};
+    const frame=satelliteFrame(rows,at,kind);if(!frame)throw Error('unavailable');
+    return {...common,title:kind==='fog'?'안개(위성)':'위성영상',src:pngData(await get(frame.url,signal))};
   }
   if(kind==='radar'){
     const query=new URLSearchParams({mapType:'img',tm:isoKST(at).slice(0,16).replaceAll('-','.').replace('T','.'),itv:'5',leaflet:'0',kmap:'0',area:'KWK',data:'pop'});
@@ -134,3 +135,4 @@ if(typeof Deno!=='undefined'){
   const keys=JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')||'{}');
   Deno.serve(req=>handle(req,{url:Deno.env.get('SUPABASE_URL'),key:keys.default||Object.values(keys)[0]||Deno.env.get('SUPABASE_ANON_KEY')}));
 }
+
