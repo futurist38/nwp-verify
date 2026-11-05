@@ -157,7 +157,7 @@ class ReportEditor {
  syncReportFields(){
   if(!this.scene)return;this.node('publicationText').value=this.scene.publicationText||this.scene.labels?.find(t=>t.text.startsWith('발표시점:'))?.text||'';
   if(this.page===1){for(const id of ['satellite','radar']){const p=this.scene.panels?.find(p=>p.id===id);this.node(id+'Time').value=p?.timeText||'';}this.node('radarTitle').value=this.scene.panels?.find(p=>p.id==='radar')?.titleText||'';}
-  for(const [button,source] of this.sourceButtons||[])button.setAttribute('aria-pressed',String(this.scene.panels?.find(p=>p.id==='radar')?.src===source.src&&Boolean(source.src)));
+  for(const [button,source,target='radar'] of this.sourceButtons||[])button.setAttribute('aria-pressed',String(this.scene.panels?.find(p=>p.id===target)?.src===source.src&&Boolean(source.src)));
  }
  async uploadPanel(kind,input){
   if(!['satellite','radar'].includes(kind))return;
@@ -308,8 +308,8 @@ Object.assign(ReportEditor.prototype,{
   if(this.page!==1||!this.original)return;
   let box=this.node('sourceChoices');if(box)box.remove();
   box=document.createElement('section');box.id='sourceChoices';box.className='source-choices';this.sourceButtons=[];
-  const title=document.createElement('h3');title.textContent='왼쪽 아래 자료 선택';box.append(title);
-  const hint=document.createElement('p');hint.className='source-hint';hint.textContent='조회 시각을 한 번 지정하면 모든 자료를 함께 불러옵니다. 썸네일을 눌러 적용하세요. 최근 30일 이내 제공 자료만 조회할 수 있습니다.';box.append(hint);
+  const title=document.createElement('h3');title.textContent='위성영상 · 왼쪽 아래 자료 선택';box.append(title);
+  const hint=document.createElement('p');hint.className='source-hint';hint.textContent='공통 조회 시각으로 자료를 불러온 뒤, 위성 카드의 ‘위쪽 위성영상 교체’를 누르면 위성영상과 관측시각이 바뀝니다. 썸네일을 누르면 왼쪽 아래에 적용됩니다. 최근 30일 이내 제공 자료만 조회할 수 있습니다.';box.append(hint);
   const query=document.createElement('div');query.className='source-query';
   const field=document.createElement('label');field.textContent='조회 시각 (KST)';
   const input=document.createElement('input');input.id='sourceQueryTime';input.type='datetime-local';input.step='60';input.setAttribute('aria-label','공통 조회 시각 (KST)');
@@ -332,6 +332,10 @@ Object.assign(ReportEditor.prototype,{
    const status=document.createElement('span');status.className='source-time';status.textContent=source.time?this.sourceStamp(source):source.reason||'';
    const origin=document.createElement('span');origin.className='source-provider';origin.textContent=provider;
    button.append(preview,name,status,origin);button.disabled=!source.src;button.onclick=()=>this.applyPanelSource(source);option.append(button);this.sourceButtons.push([button,source]);
+   if(id==='satellite'){
+    const replace=document.createElement('button');replace.type='button';replace.className='source-replace-satellite';replace.textContent='위쪽 위성영상 교체';replace.disabled=!source.src;replace.setAttribute('aria-pressed','false');replace.onclick=()=>this.applyPanelSource(source,'satellite');option.append(replace);this.sourceButtons.push([replace,source,'satellite']);
+    const failed=preview.onerror;preview.onerror=()=>{failed?.();replace.disabled=true;};
+   }
    const detail=document.createElement('p');detail.className='source-query-status';detail.setAttribute('role','status');detail.textContent=this.sourceStates[id]?.message||interval;
    option.append(detail);grid.append(option);
   }
@@ -398,15 +402,18 @@ Object.assign(ReportEditor.prototype,{
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(time));const value=type=>parts.find(p=>p.type===type)?.value;
   return `${value('month')}-${value('day')} ${value('hour')}:${value('minute')} KST`;
  },
- async applyPanelSource(source){
-  if(!this.scene||!source.src)return;const active=this.scene,token=loadToken,request=this.panelSourceRequest=(this.panelSourceRequest||0)+1;
+ async applyPanelSource(source,target='radar'){
+  if(!this.scene||!source.src||!['satellite','radar'].includes(target)||(target==='satellite'&&source.id!=='satellite'))return;
+  this.panelSourceRequests??={};const active=this.scene,token=loadToken,request=this.panelSourceRequests[target]=(this.panelSourceRequests[target]||0)+1;
   try{
-   await this.sprite(source.src);if(token!==loadToken||active!==this.scene||request!==this.panelSourceRequest)return;
+   await this.sprite(source.src);if(token!==loadToken||active!==this.scene||request!==this.panelSourceRequests[target])return;
    this.remember();this.scene.panels=this.scene.panels||[];
-   const panel={id:'radar',src:source.src,time:source.time||'',updated:true,custom:false,titleText:source.title||source.label,timeText:this.sourceStamp(source),sourceId:source.id,provider:source.provider||'기상청'};
-   const i=this.scene.panels.findIndex(p=>p.id==='radar');if(i<0)this.scene.panels.push(panel);else this.scene.panels[i]=panel;
-   this.controls();this.draw();this.node('editStatus').textContent=source.label+'를 왼쪽 아래에 적용했습니다. 편집 저장으로 보관할 수 있습니다.';
-  }catch{if(token===loadToken&&active===this.scene&&request===this.panelSourceRequest)this.node('editStatus').textContent='이미지를 불러오지 못했습니다. 다시 선택해 주세요.';}
+   const panel={id:target,src:source.src,time:source.time||'',updated:true,custom:false,titleText:source.title||source.label,timeText:this.sourceStamp(source),sourceId:source.id,provider:source.provider||'기상청'};
+   const i=this.scene.panels.findIndex(p=>p.id===target);if(i<0)this.scene.panels.push(panel);else this.scene.panels[i]=panel;
+   // Inline title/time edits must not hide the newly selected image's metadata.
+   for(const [index,label] of (this.scene.labels||[]).entries())if(label.y===(target==='satellite'?169:640)&&['mm','rm'].includes(label.anchor))delete this.scene.labelOverrides?.[index];
+   this.controls();this.draw();this.node('editStatus').textContent=source.label+(target==='satellite'?'를 위쪽 위성영역에 관측시각과 함께 적용했습니다.':'를 왼쪽 아래에 적용했습니다.')+' 편집 저장으로 보관할 수 있습니다.';
+  }catch{if(token===loadToken&&active===this.scene&&request===this.panelSourceRequests[target])this.node('editStatus').textContent='이미지를 불러오지 못했습니다. 다시 선택해 주세요.';}
  },
  async loadSourceChoices(day,version,token){
   this.extraSources=[];this.sourcesError='';this.sourcesLoading=true;this.buildSourceChoices();const original=this.original;
@@ -472,6 +479,7 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
 
 
 

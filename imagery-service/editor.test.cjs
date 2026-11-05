@@ -201,7 +201,7 @@ test('source lookup updates thumbnails before explicit application',async()=>{
  const t=setup();const value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
  t.run(`window.energyShared={imagery:async(id,tm)=>({id,requestedTime:'${value}:00+09:00',time:'${value}:00+09:00',src:'data:image/png;base64,AA',title:'위성영상'})}`);
  const before=t.run('JSON.stringify(editors[1].scene)');await t.run(`editors[1].querySource('satellite','${value}')`);
- assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run("editors[1].queriedSources.satellite.time"),value+':00+09:00');assert.equal(t.run('editors[1].sourceButtons.length'),4);
+ assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);assert.equal(t.run("editors[1].queriedSources.satellite.time"),value+':00+09:00');assert.equal(t.run('editors[1].sourceButtons.length'),5);
  assert.ok(t.nodes.sourceQueryTime);assert.equal(t.nodes['sourceTime-satellite'],undefined);
  await t.run("editors[1].applyPanelSource({...editors[1].queriedSources.satellite,label:'위성'})");assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').time"),value+':00+09:00');t.nodes.undo.click();assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
 });
@@ -228,3 +228,27 @@ test('common lookup cannot repeat while pending or finish on a different report'
  const pending=t.run(`editors[1].queryAllSources('${value}')`);await t.run(`editors[1].queryAllSources('${value}')`);assert.equal(t.run('sourceCalls'),4);assert.equal(t.nodes.sourceQueryTime.disabled,true);
  t.run('loadToken++;editors[1].clear();resolvers.forEach(r=>r(true))');await pending;assert.equal(t.run('editors[1].sourceQueryMessage'),'');assert.equal(t.run('editors[1].sourceBatch'),null);
 });
+
+test('queried satellite replaces the upper panel with its time, preserves lower panel, saves and undoes',async()=>{
+ const t=setup(),value=new Date(Date.now()-86400000+9*3600000).toISOString().slice(0,13)+':00';
+ t.run("editors[1].scene.labels=[{y:169,anchor:'mm',text:'위성영상'},{y:169,anchor:'rm',text:'07:00 KST'},{y:640,anchor:'rm',text:'아래 시각'}];editors[1].scene.labelOverrides={0:'수동 제목',1:'수동 시각',2:'유지할 시각'}");
+ const before=t.run('JSON.stringify(editors[1].scene)'),other=t.run('JSON.stringify(editors[2].scene)');
+ t.run(`window.energyShared={imagery:async(id)=>({id,requestedTime:'${value}:00+09:00',time:'${value}:00+09:00',src:'data:image/png;base64,AA',title:'위성영상'})}`);
+ await t.run(`editors[1].querySource('satellite','${value}')`);assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+ await t.run("editors[1].sourceButtons.find(entry=>entry[2]==='satellite')[0].click()");
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').time"),value+':00+09:00');
+ assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').src"),'old-radar');
+ assert.equal(t.run('editors[1].labelValue(0)'),'위성영상');assert.match(t.run('editors[1].labelValue(1)'),/KST/);assert.equal(t.run('editors[1].labelValue(2)'),'유지할 시각');
+ assert.equal(t.run('JSON.stringify(editors[2].scene)'),other);
+ t.nodes.saveLayout.click();assert.equal(JSON.parse([...t.saved.values()][0]).panels.find(p=>p.id==='satellite').time,value+':00+09:00');
+ await t.run('editors[1].download(true)');assert.equal(t.calls.exports,1);
+ t.nodes.undo.click();assert.equal(t.run('JSON.stringify(editors[1].scene)'),before);
+});
+test('separate panel selections can finish independently and last selection wins within a panel',async()=>{
+ const t=setup();
+ t.run("var pendingImages={};editors[1].sprite=src=>new Promise(r=>pendingImages[src]=r);var upper=editors[1].applyPanelSource({id:'satellite',label:'위성',src:'upper'},'satellite');var lower=editors[1].applyPanelSource({id:'warning',label:'특보',src:'lower'});pendingImages.lower({});pendingImages.upper({});");
+ await t.run('Promise.all([upper,lower])');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'upper');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='radar').src"),'lower');
+ t.run("var slow=editors[1].applyPanelSource({id:'satellite',src:'slow'},'satellite');var fast=editors[1].applyPanelSource({id:'satellite',src:'fast'},'satellite');pendingImages.fast({});pendingImages.slow({});");
+ await t.run('Promise.all([slow,fast])');assert.equal(t.run("editors[1].scene.panels.find(p=>p.id==='satellite').src"),'fast');
+});
+

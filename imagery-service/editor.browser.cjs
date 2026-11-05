@@ -18,6 +18,15 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   await page.waitForFunction(()=>editors[1].scene.panels.find(p=>p.id==='radar').titleText==='위성영상');
   assert.ok(await page.evaluate(()=>editors[1].canvas.toDataURL('image/png').startsWith('data:image/png;')));
   await page.click('#undo');assert.equal(await page.evaluate(()=>JSON.stringify(editors[1].scene.panels)),panelsBefore);
+  const lowerBefore=await page.evaluate(()=>JSON.stringify(editors[1].scene.panels.find(p=>p.id==='radar')));
+  await page.evaluate(()=>{const ed=editors[1],source=ed.original.panels.find(p=>p.id==='satellite');ed.queriedSources.satellite={...source,time:'2026-11-04T08:30:00+09:00',title:'위성영상'};for(const [i,t] of ed.scene.labels.entries())if(t.y===169&&t.anchor==='rm')ed.setLabel(i,'이전 시각');ed.buildSourceChoices();});
+  await page.getByRole('button',{name:'위쪽 위성영상 교체',exact:true}).click();
+  await page.waitForFunction(()=>editors[1].scene.panels.find(p=>p.id==='satellite').time==='2026-11-04T08:30:00+09:00');
+  assert.equal(await page.evaluate(()=>JSON.stringify(editors[1].scene.panels.find(p=>p.id==='radar'))),lowerBefore);
+  assert.equal(await page.getByRole('button',{name:'위쪽 위성영상 교체',exact:true}).getAttribute('aria-pressed'),'true');
+  assert.ok(await page.evaluate(()=>{const ed=editors[1],i=ed.scene.labels.findIndex(t=>t.y===169&&t.anchor==='rm');return ed.labelValue(i).includes('08:30');}));
+  await page.click('#saveLayout');await page.reload();await page.waitForFunction(()=>!document.getElementById('edit').disabled);
+  assert.equal(await page.evaluate(()=>editors[1].scene.panels.find(p=>p.id==='satellite').time),'2026-11-04T08:30:00+09:00');await page.click('#edit');
   const locate=async(index)=>{const t=await page.evaluate(i=>editors[1].scene.labels[i],index),b=await page.locator('#editorCanvas').boundingBox();return {x:b.x+t.x*b.width/1920-10,y:b.y+t.y*b.height/1080};};
   const title=await locate(0);await page.mouse.dblclick(title.x,title.y);const input=page.locator('.inline-report-text');await input.fill('KPX 검토 완료');await input.evaluate(e=>e.setSelectionRange(4,6));await page.getByRole('button',{name:'빨강',exact:true}).first().click();await input.press('Enter');
   assert.equal(await page.evaluate(()=>editors[1].labelValue(0)),'KPX 검토 완료');assert.equal(await page.evaluate(()=>editors[1].scene.labelColors[0][4]),'#e60012');assert.equal(await page.evaluate(()=>editors[1].scene.labelColors[0][0]||null),null);
@@ -42,6 +51,7 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
 
 
 
