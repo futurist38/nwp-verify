@@ -102,3 +102,16 @@ R2 deletion follows the successful Git publication.
   model images between measurements.
 - Browser checks: Nov 4 ordinary panels offered one run per model; Nov 6 kept
   multiple runs. All three models loaded at 925/850/700/500/300 hPa.
+
+- The next scheduled [hourly run 42735732637](https://github.com/futurist38/nwp-verify/actions/runs/42735732637)
+  also succeeded. Its archive tree was byte-for-byte identical to the new NWP
+  archive (`fbc96b4301bbd0942eda8283ac627765ae8e9e2e`), proving the subsequent
+  observation publish preserved all newly encoded model images. Persistence
+  saved the additional nowcast record without overwriting the documentation.
+- The intermediate model Pages deployment was superseded by that newer hourly
+  publication. The final combined [Pages deployment 42736990084](https://github.com/futurist38/nwp-verify/actions/runs/42736990084)
+  succeeded at 10:39 KST, with a 702,991,049-byte compressed artifact.
+- At this 10:39 KST verification point, the full [daily run 42735202733](https://github.com/futurist38/nwp-verify/actions/runs/42735202733)
+  had completed model collection and its first publication; its existing second
+  phase (upper/observation/verification collection) was still running. No full
+  daily-run success is asserted by this rollout record.
