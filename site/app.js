@@ -729,7 +729,8 @@ function renderRunSel() {
   const models = compare ? cmpModels() : [state.model];
   $("runSel").innerHTML = models.map((m) => {
     const e = entry().models[m];
-    const runs = Object.keys(e.runs).sort().reverse();
+    const runs = runsWith(m, state.panel).reverse();
+    if (!runs.length) return "";
     if (runs.length < 2 && !compare) return "";
     const cur = runOf(m);
     const tag = (r) => e.runs[r].panels.some((p) => PANEL_ORDER.includes(p)) ? "" : " (지상·상층만)";
@@ -751,7 +752,6 @@ function renderRunSel() {
 }
 function renderPanelBtns() {
   const compare = state.model === CMP;
-  renderRunSel();
   let panels, uppers;
   // 버튼은 그 날짜·모델의 '어느 런에든 있는' 패널 전부 — 런마다 패널 구성이 달라서(06/18z 는 지상·상층 전용)
   // 런 하나만 보면 버튼이 사라진다. 그림은 runOf 가 패널 있는 런을 고른다.
@@ -768,6 +768,7 @@ function renderPanelBtns() {
   }
   const all = panels.concat(uppers);
   if (!all.includes(state.panel)) state.panel = all[0];
+  renderRunSel();
   const btn = (p) => `<button data-p="${p}" class="${p === state.panel ? "on" : ""}">${PANEL_LABEL[p] || p}</button>`;
   $("panelBtns").innerHTML = panels.map(btn).join("");
   $("panelBtns").closest(".grp").hidden = !panels.length;   // 그 런에 일반 패널이 없으면 칸을 숨긴다

@@ -21,11 +21,14 @@ import json
 import os
 import re
 import shutil
+from pathlib import Path
 
 import pandas as pd
 
 from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN, DISPLAY_CITIES, DISABLED_UPPER_LEVELS
 from solar_radiation import is_solar_step
+from model_image_retention import (retained_model_keys, prune_model_images, today_kst,
+                                   MODEL_IMAGE_DAYS, ALL_RUN_DAYS)
 
 KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
@@ -43,7 +46,7 @@ LOCAL_DAYS_UPPER = 3   # 925~200 상층: 이 날수 안이면 site-data 에도 �
 
 def local_cuts() -> tuple[str, str]:
     """(지도·지상장 창 시작일, 925~200 상층 창 시작일) YYYYMMDD — publish_site.sh 의 복원·정리와 manifest 가 같은 값을 쓴다."""
-    today = dt.date.today()
+    today = today_kst()
     return ((today - dt.timedelta(days=LOCAL_DAYS_MAPS - 1)).strftime("%Y%m%d"),
             (today - dt.timedelta(days=LOCAL_DAYS_UPPER - 1)).strftime("%Y%m%d"))
 OBS_MAX_DAYS = 21      # 관측 지도 보존 일수 (1h×3변수 = 일 63장이라 별도 제한)
@@ -117,7 +120,9 @@ def copy_outputs(site_dir: str):
     for d in glob.glob(os.path.join(arch, "????????")):
         ymd = os.path.basename(d)
         if ymd < cutoff:
-            shutil.rmtree(d)
+            # Keep numerical city_upper JSON even after image retention expires.
+            for image in glob.glob(os.path.join(d, "*.png")) + glob.glob(os.path.join(d, "*.webp")):
+                os.remove(image)
             removed += 1
             continue
         if ymd < cutoff_obs:
@@ -689,9 +694,16 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         manifest["img_base"] = os.environ["IMG_BASE"].rstrip("/")
         cm, cu = local_cuts()          # 이 날짜부터는 site-data 에도 있다(뷰어가 R2 대신 사이트 자체 경로를 쓴다)
         manifest["local_cut"] = {"maps": cm, "upper": cu}
+    # Apply the same policy to the union, including stale R2 listings after a
+    # failed deletion. Old runs must not return to the selector on the next job.
+    retained = retained_model_keys(f"{day}/{name}" for day, names in files.items() for name in names)
+    manifest["model_image_retention"] = {"days": MODEL_IMAGE_DAYS, "all_runs_days": ALL_RUN_DAYS,
+                                         "timezone": "Asia/Seoul"}
     for ymd in sorted(files):
         entry = {"models": {}, "meteograms": [], "daily_json": None, "obs": {}}
         for fn in sorted(files[ymd]):
+            if f"{ymd}/{fn}" not in retained:
+                continue
             if is_disabled_upper_image(fn):
                 continue  # Also suppress retired levels from a stale/failed R2 listing.
             mo = OBS_RE.match(fn)
@@ -816,6 +828,9 @@ def main():
         print(f"[site] 브리핑 묶음 실패(계속): {e}")
     prune_kmafcst(args.site_dir)
     prune_disabled_upper(args.site_dir)
+    listing = os.environ.get("R2_LISTING")
+    remote_keys = Path(listing).read_text(encoding="utf-8").splitlines() if listing and os.path.exists(listing) else []
+    prune_model_images(args.site_dir, remote_keys)
     to_webp(args.site_dir)          # 반드시 manifest 생성 전에
     build_manifest(args.site_dir, nc)
     print(f"[site] 완료: {args.site_dir}")

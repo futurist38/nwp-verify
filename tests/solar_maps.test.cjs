@@ -72,3 +72,14 @@ test('solar button is available and its note is hidden again for temperature', (
   run('state.panel = "t2m"; renderChart = () => {}; renderPanelBtns()');
   assert.equal($('solarNote').hidden, true);
 });
+
+test('run selector only lists runs that retain the selected panel; upper runs remain available', () => {
+  const model = modelEntry('2026110512', [3]);
+  model.runs['2026110500'] = {steps: [24], panels: ['p500'], psteps: {p500: [24]}};
+  const {run, $} = app({GFS: model}, 'GFS');
+  run('renderRunSel()');
+  assert.equal($('runSel').innerHTML, ''); // one retained ordinary run
+  run('state.panel = "p500"; renderRunSel()');
+  assert.equal(run('runOf("GFS")'), '2026110500');
+  assert.equal(run('JSON.stringify(runsWith("GFS", "dswrf"))'), '["2026110512"]');
+});

@@ -36,6 +36,10 @@ on:
       - 'kma_midfcst.py'
       - 'tests/test_wonju.py'
       - '.github/workflows/obs-hourly.yml'
+      - 'model_image_retention.py'
+      - 'tools/publish_site.sh'
+      - 'tools/site_storage.py'
+      - 'tools/persist_verification.py'
       - 'tests/overview.test.cjs'
       - 'tests/obs_resources.test.cjs'
       - 'forecast_compare.py'
@@ -138,7 +142,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: 검증 의존성
-        run: pip install pandas numpy matplotlib requests truststore
+        run: pip install pandas numpy matplotlib requests truststore scipy
       - name: 예보 비교 검증
         run: |
           python -m unittest discover -s tests -p 'test_site_assets.py'
@@ -146,7 +150,9 @@ jobs:
           node --test tests/forecast_compare.test.cjs tests/overview.test.cjs tests/obs_resources.test.cjs
           python -m unittest discover -s tests -p 'test_wonju.py'
           python -m unittest discover -s tests -p 'test_satellite_catalog.py'
-          node --test tests/satellite.test.cjs
+          node --test tests/satellite.test.cjs tests/solar_maps.test.cjs
+          python -m unittest discover -s tests -p 'test_model_retention.py'
+          python -m unittest discover -s tests -p 'test_persist_verification.py'
 
 
   obs:
@@ -230,48 +236,11 @@ jobs:
           if [ -z "$KAKAO_REFRESH_TOKEN" ]; then echo "::notice::KAKAO 시크릿 없음 — 발송 생략"; exit 0; fi
           timeout 120 python kakao_send.py || echo "::warning::카톡 발송 실패 — 계속"
 
-      # 추석 추적 캐시·발송 마커 커밋 — 나우캐스트 단계와 무관하게 항상 (마커가 안 남으면 같은 카드를 매시 재발송한다)
-      - name: 추석 추적 캐시 커밋
-        continue-on-error: true
+      # One additive transaction, after publication. No shared-CSV rebase.
+      - name: 관측·예보·나우캐스트 기록 보관
+        id: persist
+        if: always() && !cancelled()
         run: |
-          git add verification/chuseok 2>/dev/null || true
-          if ! git diff --cached --quiet; then
-            git commit -m "추석 예보 추적 $(date '+%Y-%m-%d %H:%M KST')"
-            ok=0
-            for i in 1 2 3; do
-              git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && ok=1 && break
-              echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
-            done
-            [ "$ok" = 1 ] || echo "::error::추석 캐시 push 실패 — 다음 실행에서 카드가 재발송될 수 있음"
-          fi
-
-      - name: 예보 비교 기록 보관
-        continue-on-error: true
-        run: |
-          git add verification/forecast_compare
-          if [ -d verification/midland ]; then git add verification/midland; fi
-          if ! git diff --cached --quiet; then
-            git commit -m "예보 비교 아카이브 $(date '+%Y-%m-%d %H:%M KST')"
-            ok=0
-            for i in 1 2 3; do
-              git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && ok=1 && break
-              echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
-            done
-            [ "$ok" = 1 ] || { echo "::error::예보 비교 아카이브 보관 실패"; exit 1; }
-          fi
-
-      # 검증 CSV 커밋은 사이트 발행 뒤에 — 실패해도 관측/나우캐스트 표출은 이미 배포됨.
-      # (2026-08-25: 이 단계가 앞에 있다가 실패해 관측 갱신이 4시간 멈춤. 작업트리에
-      #  obs·kmafcst 캐시 변경이 남아 있어 rebase가 거부됨 → autostash 필수)
-      - name: 나우캐스트 검증 CSV 커밋
-        if: steps.ncw.outputs.ok == 'true'
-        continue-on-error: true
-        run: |
-          git add verification/nowcast 2>/dev/null || true
-          if ! git diff --cached --quiet; then
-            git commit -m "nowcast 검증 $(date '+%Y-%m-%d %H:%M KST')"
-            for i in 1 2 3; do
-              git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && break
-              echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
-            done
-          fi
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          python tools/persist_verification.py --message "hourly verification $(date '+%Y-%m-%d %H:%M KST') [skip ci]" verification/obs verification/kmafcst verification/forecast_compare verification/midland verification/nowcast verification/chuseok

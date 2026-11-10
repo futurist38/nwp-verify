@@ -14,6 +14,10 @@ on:
       - solar_radiation.py
       - plot_charts.py
       - tests/test_solar_radiation.py
+      - .github/workflows/daily.yml
+      - model_image_retention.py
+      - tools/persist_verification.py
+      - tools/benchmark_webp.py
 
 permissions:
   contents: write
@@ -100,6 +104,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_site_assets.py'
           python -m unittest discover -s tests -p 'test_solar_radiation.py'
           node --test tests/solar_maps.test.cjs
+          python -m unittest discover -s tests -p 'test_model_retention.py'
+          python -m unittest discover -s tests -p 'test_persist_verification.py'
 
       # 단계마다 `timeout` 을 건다 (2026-09-06). 어느 한 수신이 API 사정으로 늘어져도
       # 나머지와 발행은 제 시간에 나가야 한다. 9/5 실측: 예보변화 단계 하나가 70분을
@@ -144,20 +150,36 @@ jobs:
           # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청) — 되살리려면 아래 주석만 풀면 된다.
           # python send_summary.py   || echo "::warning::메일 실패 — 계속"
 
+      - name: 원본 PNG WebP 품질 비교
+        continue-on-error: true
+        if: github.event_name == 'push'
+        run: |
+          pip install -q scikit-image
+          python tools/benchmark_webp.py
+
+      - name: 원본·압축·가독성 비교 기록
+        if: always() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webp-original-png-comparison
+          path: webp-benchmark/
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: 검증 누적을 main에 커밋
+        id: persist
+        continue-on-error: true
         run: |
           git config user.name "nwp-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add verification/
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m "verification: $(date '+%Y-%m-%d %H:%M KST') [skip ci]"
-          # obs-hourly 도 main 에 커밋한다 — 밀리면 rebase 후 재시도
-          for i in 1 2 3; do
-            git -c rebase.autoStash=true pull -q --rebase origin main && git push -q origin main && exit 0
-            echo "::warning::main push 충돌 — 재시도 $i"; sleep 5
-          done
-          echo "::error::main push 실패"; exit 1
+          python tools/persist_verification.py --message "verification: $(date '+%Y-%m-%d %H:%M KST') [skip ci]" verification/
 
       - name: 2차 발행 — 검증·관측·예보변화
         run: tools/publish_site.sh "site verif $(date '+%Y-%m-%d %H:%M KST')"
 
+
+      - name: 검증 보관 실패 표시
+        if: always() && steps.persist.outcome == 'failure'
+        run: |
+          echo "::error::검증 보관 실패 — 사이트 발행과 별도로 재시도 필요"
+          exit 1

@@ -19,13 +19,24 @@ IDX="$(pwd)/.git/site-index"
 git config user.name  >/dev/null 2>&1 || git config user.name "nwp-bot"
 git config user.email >/dev/null 2>&1 || git config user.email "actions@users.noreply.github.com"
 for i in 1 2 3 4 5 6; do
-  mkdir -p "$SITE"
+  # A fresh staging directory prevents deleted files from surviving a lease retry.
+  python - "$SITE" <<'PYSAFE'
+from pathlib import Path
+import shutil, sys
+p = Path(sys.argv[1]).resolve()
+root = Path.cwd().resolve()
+if p == root or root not in p.parents or p == root / '.git':
+    raise SystemExit('SITE_DIR must be a generated subdirectory of the checkout')
+if p.exists():
+    shutil.rmtree(p)
+p.mkdir(parents=True)
+PYSAFE
   BASE=""
   if git fetch -q origin site-data 2>/dev/null; then
     BASE=$(git rev-parse FETCH_HEAD)
-    git --work-tree="$SITE" checkout -q FETCH_HEAD -- .
-    git reset -q                       # 인덱스 원복 (--work-tree checkout 이 인덱스를 바꿈)
+    git archive FETCH_HEAD | tar -x -C "$SITE"
   fi
+  python tools/site_storage.py measure --site-dir "$SITE" --label "before attempt $i"
   # ── Cloudflare R2 (2026-09-08): 그림은 R2, site-data 는 JSON·나우캐스트만. R2_BUCKET 이 비면 예전 방식 그대로 ──
   if [ -n "${R2_BUCKET:-}" ]; then
     # NO_CHECK_BUCKET: 버킷 한정 토큰은 버킷 목록·생성 권한이 없어 rclone 의 버킷 확인이 403 으로 실패한다.
@@ -33,39 +44,15 @@ for i in 1 2 3 4 5 6; do
     export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true \
            RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
            RCLONE_CONFIG_R2_ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}" RCLONE_CONFIG_R2_ACL=private
-    # 보존 정리 — build_site.py 의 로컬 정리와 같은 규칙(날짜 폴더명 기준): MAX_DAYS 지나면 폴더째,
-    # UPPER_MAX_DAYS 지나면 상층(p925~p200)만. 업로드 시각(modtime)으로 고르면 객체마다 HEAD 요청이라 폴더명으로 판정.
-    # tr -d '\r': 윈도우 python 은 파이프에도 CRLF 를 쓴다 — 로컬 시험에서 "7\r" 이 들어가 숫자 비교가 깨졌다(2026-09-09)
-    read -r MAXD UPD < <({ python -c "import build_site as b; print(b.MAX_DAYS, b.UPPER_MAX_DAYS)" 2>/dev/null || echo "14 7"; } | tr -d '\r')
-    CUT=$(date -u -d "-${MAXD} days" +%Y%m%d); CUT_UP=$(date -u -d "-${UPD} days" +%Y%m%d)
-    for d in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
-      [[ "$d" =~ ^[0-9]{8}$ ]] || continue
-      if [ "$d" -lt "$CUT" ]; then
-        { rclone purge "r2:${R2_BUCKET}/archive/$d" -q && echo "[publish] R2 정리: $d 폴더 삭제"; } || true
-      elif [ "$d" -lt "$CUT_UP" ]; then
-        rclone delete "r2:${R2_BUCKET}/archive/$d" --include "*_f???_p[0-9][0-9][0-9].webp" -q || true
-      fi
-    done
     rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
-      || { echo "::warning::[publish] R2 목록 조회 실패 — 이번 manifest 는 러너 산출만 반영"; : > .r2_listing; }
-    # User-requested retirement: exact dated map keys only, selected from the
-    # current listing. Preserve other levels, JSON data and all renderer code.
-    python - <<'PY'
-from build_site import is_disabled_upper_key
-with open('.r2_listing', encoding='utf-8') as source, open('.r2_disabled', 'w', encoding='utf-8') as output:
-    for line in source:
-        key = line.strip()
-        if is_disabled_upper_key(key):
-            output.write(key + '\n')
-PY
-    if [ -s .r2_disabled ]; then
-      echo "[publish] R2 retired upper maps: $(wc -l < .r2_disabled) files; size before deletion:"
-      rclone size "r2:${R2_BUCKET}/archive" --files-from-raw .r2_disabled --json \
-        || echo "::warning::[publish] retired map size unavailable"
-      rclone delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_disabled -q \
-        && echo "[publish] R2 retired upper maps deleted" \
-        || echo "::warning::[publish] R2 retired upper cleanup failed — hidden locally, retry on next publish"
+      || { echo "::warning::[publish] R2 목록 조회 실패 — 로컬 복원본 유지"; : > .r2_listing; }
+    python tools/site_storage.py plan --site-dir "$SITE"
+    if [ -s .r2_plan.delete ]; then
+      rclone delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_plan.delete -q \
+        || echo "::warning::[publish] R2 정리 실패 — 해당 지도는 복원/manifest에서 제외, 다음 실행에 재시도"
     fi
+    # Even failed deletions are excluded from both the manifest and restoration.
+    cp .r2_plan.keep .r2_listing
     export R2_LISTING="$(pwd)/.r2_listing" IMG_BASE="${R2_PUBLIC_URL:-}"
     echo "[publish] R2 목록 $(wc -l < .r2_listing)개, 접두어 ${IMG_BASE:-없음}"
   fi
@@ -82,30 +69,21 @@ PY
     # (지도·지상장 LOCAL_DAYS_MAPS일, 925~200 상층 LOCAL_DAYS_UPPER일 — manifest.local_cut 과 같은 값). 창 밖은 지우고 창 안은 R2 에서
     # 채운다(첫 전환·복구 때 내려받고 평소엔 목록 비교만). 업로드가 실패했으면 아무것도 지우지 않는다.
     if [ "$UP_OK" = 1 ]; then
-      read -r CUT_LM CUT_LU < <(python -c "import build_site as b; print(*b.local_cuts())" | tr -d '\r')
+      python tools/site_storage.py trim-local --site-dir "$SITE"
+      # Recompute exact restore keys with the newly built local inventory.
+      python tools/site_storage.py plan --site-dir "$SITE"
       mkdir -p "$SITE/archive"
-      for d in "$SITE"/archive/????????; do
-        [ -d "$d" ] || continue; n=$(basename "$d")
-        if [ "$n" -lt "$CUT_LM" ]; then rm -rf "$d"
-        elif [ "$n" -lt "$CUT_LU" ]; then
-          find "$d" -type f -name '*_f???_p[0-9][0-9][0-9].webp' -delete
-        fi
-      done
-      {
-        # Never restore a retired map even if remote deletion failed.
-        python -c 'from config import DISABLED_UPPER_LEVELS; [print(f"- *_f???_p{level}.{ext}") for level in sorted(DISABLED_UPPER_LEVELS) for ext in ("webp", "png")]'
-        for n in $(rclone lsf --dirs-only "r2:${R2_BUCKET}/archive" 2>/dev/null | tr -d /); do
-          [[ "$n" =~ ^[0-9]{8}$ ]] && [ "$n" -ge "$CUT_LM" ] || continue
-          if [ "$n" -lt "$CUT_LU" ]; then echo "- /$n/*_f???_p[0-9][0-9][0-9].webp"; fi
-          echo "+ /$n/**"
-        done
-        echo "- **"
-      } > .r2_filter
-      rclone copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --filter-from .r2_filter --size-only --transfers 32 --checkers 32 -q \
-        && echo "[publish] site-data 창 유지: 지도·지상장 ≥$CUT_LM, 상층 ≥$CUT_LU — $(find "$SITE/archive" -type f | wc -l)장" \
-        || echo "::warning::[publish] R2→site-data 창 복원 실패 — 뷰어가 R2 로 대체 시도한다"
+      rclone copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --files-from-raw .r2_plan.restore --size-only --transfers 32 --checkers 32 -q \
+        && echo "[publish] R2→site-data retained image window restored" \
+        || echo "::warning::[publish] R2→site-data 복원 실패 — 기존 로컬 지도 유지"
+      python - "$SITE" <<'PYPRUNE'
+from model_image_retention import prune_model_images
+import sys
+prune_model_images(sys.argv[1])
+PYPRUNE
     fi
   fi
+  python tools/site_storage.py measure --site-dir "$SITE" --label "after attempt $i"
   rm -f "$IDX"
   GIT_INDEX_FILE="$IDX" git --work-tree="$SITE" add -A
   TREE=$(GIT_INDEX_FILE="$IDX" git write-tree)
