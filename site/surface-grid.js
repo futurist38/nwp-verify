@@ -5,7 +5,8 @@
   const RAIN = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80];
   const RAIN_COLORS = ['#d4ecff', '#a6d4ff', '#6fb6ff', '#3d8ef0', '#1f5fd0', '#7a3fd0', '#c02fb0', '#e0207a', '#ff4040', '#7a0000'];
   const SOLAR_COLORS = ['#f1f4f6', '#b7dce0', '#5db8c0', '#e9df88', '#f8b74e', '#ee7736', '#c5352d'];
-  // Demand-forecasting cities; separate labels around the capital region.
+  // 수요예측용 8도시: 서울·수원·인천·대전·광주·부산·대구·원주.
+  // Keep this map list separate from the broader forecast-card city list.
   const CITY_MARKERS = [
     ['서울', 126.966, 37.571, 6, -16],
     ['수원', 126.983, 37.25746, -6, 18],
