@@ -5,16 +5,16 @@
   const RAIN = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80];
   const RAIN_COLORS = ['#d4ecff', '#a6d4ff', '#6fb6ff', '#3d8ef0', '#1f5fd0', '#7a3fd0', '#c02fb0', '#e0207a', '#ff4040', '#7a0000'];
   const SOLAR_COLORS = ['#f1f4f6', '#b7dce0', '#5db8c0', '#e9df88', '#f8b74e', '#ee7736', '#c5352d'];
-  // Eight major cities; opposite label offsets separate nearby coastal cities.
+  // Demand-forecasting cities; separate labels around the capital region.
   const CITY_MARKERS = [
-    ['서울', 126.966, 37.571, 6, -10],
-    ['인천', 126.625, 37.478, -6, 10],
-    ['대전', 127.372, 36.372, 6, -5],
+    ['서울', 126.966, 37.571, 6, -16],
+    ['수원', 126.983, 37.25746, -6, 18],
+    ['인천', 126.625, 37.478, -6, 0],
+    ['대전', 127.372, 36.372, 6, -2],
     ['광주', 126.891, 35.173, -6, 10],
-    ['대구', 128.653, 35.878, -6, 9],
     ['부산', 129.032, 35.105, 6, 11],
-    ['울산', 129.320, 35.560, 6, -9],
-    ['제주', 126.530, 33.514, 6, -7]
+    ['대구', 128.653, 35.878, -6, 9],
+    ['원주', 127.94659, 37.33749, 6, -2]
   ];
   const CACHE_LIMIT = 18;
   const cache = new Map(), pending = new Map(), observers = new Set();
