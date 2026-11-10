@@ -19,3 +19,6 @@ verification/fcstdiff/
 .r2_listing
 .r2_filter
 .r2_disabled
+
+.r2_plan.*
+.r2_pending_delete

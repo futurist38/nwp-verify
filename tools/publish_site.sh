@@ -52,10 +52,9 @@ PYSAFE
     r2 lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
       || { echo "::warning::[publish] R2 목록 조회 실패 — 로컬 복원본 유지"; : > .r2_listing; }
     python tools/site_storage.py plan --site-dir "$SITE"
-    if [ -s .r2_plan.delete ]; then
-      r2 delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_plan.delete -q \
-        || echo "::warning::[publish] R2 정리 실패 — 해당 지도는 복원/manifest에서 제외, 다음 실행에 재시도"
-    fi
+    # Exclude obsolete keys now; physical R2 deletion follows successful Pages
+    # publication so a one-time large cleanup cannot hold fresh observations.
+    cp .r2_plan.delete .r2_pending_delete
     # Even failed deletions are excluded from both the manifest and restoration.
     cp .r2_plan.keep .r2_listing
     export R2_LISTING="$(pwd)/.r2_listing" IMG_BASE="${R2_PUBLIC_URL:-}"
@@ -98,7 +97,13 @@ PYPRUNE
   fi
   # BASE 가 비면 '브랜치가 아직 없다' 는 전제 — 처음 발행할 때만 해당
   if git push -q --force-with-lease="refs/heads/site-data:${BASE}" origin "$COMMIT:refs/heads/site-data"; then
-    echo "[publish] site-data 발행 완료 (시도 $i, 기준 ${BASE:0:7})"; exit 0
+    echo "[publish] site-data 발행 완료 (시도 $i, 기준 ${BASE:0:7})"
+    if [ -n "${R2_BUCKET:-}" ] && [ -s .r2_pending_delete ]; then
+      r2 delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_pending_delete --checkers 32 -q \
+        && echo "[publish] R2 obsolete images deleted" \
+        || echo "::warning::[publish] R2 정리 지연 — 게시/복원 목록에서는 제외됨, 다음 실행에 재시도"
+    fi
+    exit 0
   fi
   echo "::warning::[publish] site-data 가 그 사이 바뀜 — 재시도 $i"
   sleep $((RANDOM % 20 + 5))

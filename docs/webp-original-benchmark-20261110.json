@@ -1,0 +1,976 @@
+{
+  "night_f024": {
+    "comparison": "direct original PNG to WebP; SSIM reference is PNG",
+    "summary": [
+      {
+        "quality": 82,
+        "method": 4,
+        "images": 15,
+        "bytes": 988234,
+        "saving_vs_82_4_pct": 0.0,
+        "ssim_png_mean": 0.973534,
+        "ssim_png_min": 0.958029,
+        "encode_seconds": 0.702
+      },
+      {
+        "quality": 82,
+        "method": 6,
+        "images": 15,
+        "bytes": 971736,
+        "saving_vs_82_4_pct": 1.67,
+        "ssim_png_mean": 0.97326,
+        "ssim_png_min": 0.958209,
+        "encode_seconds": 1.364
+      },
+      {
+        "quality": 78,
+        "method": 6,
+        "images": 15,
+        "bytes": 878504,
+        "saving_vs_82_4_pct": 11.1,
+        "ssim_png_mean": 0.970299,
+        "ssim_png_min": 0.954543,
+        "encode_seconds": 1.325
+      }
+    ],
+    "images": [
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 97552,
+        "seconds": 0.0817,
+        "ssim_png": 0.969308
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 95720,
+        "seconds": 0.1161,
+        "ssim_png": 0.968435
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 85684,
+        "seconds": 0.1123,
+        "ssim_png": 0.964144
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 102922,
+        "seconds": 0.0542,
+        "ssim_png": 0.960463
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 101102,
+        "seconds": 0.1169,
+        "ssim_png": 0.958542
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f024_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 91820,
+        "seconds": 0.113,
+        "ssim_png": 0.955488
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 53120,
+        "seconds": 0.0333,
+        "ssim_png": 0.981431
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 52384,
+        "seconds": 0.0722,
+        "ssim_png": 0.981188
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 47528,
+        "seconds": 0.0709,
+        "ssim_png": 0.97846
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 48766,
+        "seconds": 0.055,
+        "ssim_png": 0.995222
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 48284,
+        "seconds": 0.097,
+        "ssim_png": 0.995278
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 44242,
+        "seconds": 0.0947,
+        "ssim_png": 0.99369
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 38200,
+        "seconds": 0.0314,
+        "ssim_png": 0.958029
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 37396,
+        "seconds": 0.0626,
+        "ssim_png": 0.958209
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f024_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 33600,
+        "seconds": 0.0609,
+        "ssim_png": 0.954543
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 86562,
+        "seconds": 0.0525,
+        "ssim_png": 0.970882
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 85008,
+        "seconds": 0.1069,
+        "ssim_png": 0.970219
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 76470,
+        "seconds": 0.1037,
+        "ssim_png": 0.967066
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 104514,
+        "seconds": 0.0541,
+        "ssim_png": 0.958089
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 102664,
+        "seconds": 0.1183,
+        "ssim_png": 0.958333
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f024_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 92852,
+        "seconds": 0.1137,
+        "ssim_png": 0.955437
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 49680,
+        "seconds": 0.0324,
+        "ssim_png": 0.982488
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 49038,
+        "seconds": 0.0686,
+        "ssim_png": 0.982244
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 44160,
+        "seconds": 0.0674,
+        "ssim_png": 0.979665
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 48550,
+        "seconds": 0.0548,
+        "ssim_png": 0.995231
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 48012,
+        "seconds": 0.0973,
+        "ssim_png": 0.995201
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 44002,
+        "seconds": 0.0943,
+        "ssim_png": 0.993783
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 36198,
+        "seconds": 0.0304,
+        "ssim_png": 0.958752
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 35322,
+        "seconds": 0.0593,
+        "ssim_png": 0.958458
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f024_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 31762,
+        "seconds": 0.0578,
+        "ssim_png": 0.956251
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 83720,
+        "seconds": 0.0505,
+        "ssim_png": 0.970775
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 82364,
+        "seconds": 0.1053,
+        "ssim_png": 0.970664
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 74016,
+        "seconds": 0.1024,
+        "ssim_png": 0.965765
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 102986,
+        "seconds": 0.0538,
+        "ssim_png": 0.960702
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 101192,
+        "seconds": 0.1177,
+        "ssim_png": 0.959901
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f024_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 91382,
+        "seconds": 0.1132,
+        "ssim_png": 0.95466
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 50418,
+        "seconds": 0.0326,
+        "ssim_png": 0.983674
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 49796,
+        "seconds": 0.0693,
+        "ssim_png": 0.983892
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 44870,
+        "seconds": 0.0681,
+        "ssim_png": 0.981425
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 48114,
+        "seconds": 0.0543,
+        "ssim_png": 0.995054
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 47498,
+        "seconds": 0.0959,
+        "ssim_png": 0.995119
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 44024,
+        "seconds": 0.0942,
+        "ssim_png": 0.993823
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 36932,
+        "seconds": 0.0308,
+        "ssim_png": 0.962905
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 35956,
+        "seconds": 0.061,
+        "ssim_png": 0.963222
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f024_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 32092,
+        "seconds": 0.0589,
+        "ssim_png": 0.960282
+      }
+    ]
+  },
+  "day_f012": {
+    "comparison": "direct original PNG to WebP; SSIM reference is PNG",
+    "summary": [
+      {
+        "quality": 82,
+        "method": 4,
+        "images": 15,
+        "bytes": 1042518,
+        "saving_vs_82_4_pct": 0.0,
+        "ssim_png_mean": 0.969012,
+        "ssim_png_min": 0.951248,
+        "encode_seconds": 0.732
+      },
+      {
+        "quality": 82,
+        "method": 6,
+        "images": 15,
+        "bytes": 1026930,
+        "saving_vs_82_4_pct": 1.5,
+        "ssim_png_mean": 0.968762,
+        "ssim_png_min": 0.951923,
+        "encode_seconds": 1.397
+      },
+      {
+        "quality": 78,
+        "method": 6,
+        "images": 15,
+        "bytes": 924112,
+        "saving_vs_82_4_pct": 11.36,
+        "ssim_png_mean": 0.96568,
+        "ssim_png_min": 0.948061,
+        "encode_seconds": 1.353
+      }
+    ],
+    "images": [
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 97646,
+        "seconds": 0.0811,
+        "ssim_png": 0.969422
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 96054,
+        "seconds": 0.1148,
+        "ssim_png": 0.968954
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_sfc.png",
+        "model": "ecmwf",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 86160,
+        "seconds": 0.1102,
+        "ssim_png": 0.96505
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 104462,
+        "seconds": 0.0543,
+        "ssim_png": 0.958596
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 103032,
+        "seconds": 0.1171,
+        "ssim_png": 0.958585
+      },
+      {
+        "source": "output/20261110/upper/ecmwf_2026110918_f012_p500.png",
+        "model": "ecmwf",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 93750,
+        "seconds": 0.1136,
+        "ssim_png": 0.955498
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 47492,
+        "seconds": 0.0322,
+        "ssim_png": 0.981099
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 46900,
+        "seconds": 0.0662,
+        "ssim_png": 0.980895
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_t2m.png",
+        "model": "ecmwf",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 42290,
+        "seconds": 0.0644,
+        "ssim_png": 0.977969
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 64890,
+        "seconds": 0.0639,
+        "ssim_png": 0.977731
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 64030,
+        "seconds": 0.1101,
+        "ssim_png": 0.977539
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_dswrf.png",
+        "model": "ecmwf",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 56932,
+        "seconds": 0.1061,
+        "ssim_png": 0.975123
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 38612,
+        "seconds": 0.0316,
+        "ssim_png": 0.951248
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 37940,
+        "seconds": 0.0625,
+        "ssim_png": 0.951923
+      },
+      {
+        "source": "output/20261110/maps_ecmwf/ecmwf_2026110918_f012_tcc.png",
+        "model": "ecmwf",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 34096,
+        "seconds": 0.0609,
+        "ssim_png": 0.948061
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 91294,
+        "seconds": 0.0517,
+        "ssim_png": 0.970517
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 89772,
+        "seconds": 0.1088,
+        "ssim_png": 0.970055
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_sfc.png",
+        "model": "gfs",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 80940,
+        "seconds": 0.1057,
+        "ssim_png": 0.966738
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 105562,
+        "seconds": 0.0545,
+        "ssim_png": 0.961172
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 103784,
+        "seconds": 0.1186,
+        "ssim_png": 0.960698
+      },
+      {
+        "source": "output/20261110/upper/gfs_2026110918_f012_p500.png",
+        "model": "gfs",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 93728,
+        "seconds": 0.1138,
+        "ssim_png": 0.957425
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 46630,
+        "seconds": 0.032,
+        "ssim_png": 0.982018
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 46004,
+        "seconds": 0.0648,
+        "ssim_png": 0.98199
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_t2m.png",
+        "model": "gfs",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 41558,
+        "seconds": 0.0639,
+        "ssim_png": 0.97922
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 66154,
+        "seconds": 0.065,
+        "ssim_png": 0.978985
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 65412,
+        "seconds": 0.1118,
+        "ssim_png": 0.978777
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_dswrf.png",
+        "model": "gfs",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 58580,
+        "seconds": 0.1075,
+        "ssim_png": 0.976478
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 37894,
+        "seconds": 0.031,
+        "ssim_png": 0.957522
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 37056,
+        "seconds": 0.0613,
+        "ssim_png": 0.957215
+      },
+      {
+        "source": "output/20261110/maps_gfs/gfs_2026110918_f012_tcc.png",
+        "model": "gfs",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 33320,
+        "seconds": 0.0596,
+        "ssim_png": 0.954468
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 83940,
+        "seconds": 0.0506,
+        "ssim_png": 0.969423
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 82942,
+        "seconds": 0.1043,
+        "ssim_png": 0.969009
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_sfc.png",
+        "model": "kim",
+        "panel": "sfc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 74318,
+        "seconds": 0.1013,
+        "ssim_png": 0.965007
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 82,
+        "method": 4,
+        "bytes": 104672,
+        "seconds": 0.0541,
+        "ssim_png": 0.959503
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 82,
+        "method": 6,
+        "bytes": 102922,
+        "seconds": 0.1178,
+        "ssim_png": 0.958685
+      },
+      {
+        "source": "output/20261110/upper/kim_2026110918_f012_p500.png",
+        "model": "kim",
+        "panel": "p500",
+        "quality": 78,
+        "method": 6,
+        "bytes": 92834,
+        "seconds": 0.1132,
+        "ssim_png": 0.955667
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 4,
+        "bytes": 48208,
+        "seconds": 0.0321,
+        "ssim_png": 0.984917
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 82,
+        "method": 6,
+        "bytes": 47542,
+        "seconds": 0.0663,
+        "ssim_png": 0.984762
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_t2m.png",
+        "model": "kim",
+        "panel": "t2m",
+        "quality": 78,
+        "method": 6,
+        "bytes": 42924,
+        "seconds": 0.0651,
+        "ssim_png": 0.98254
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 4,
+        "bytes": 66502,
+        "seconds": 0.0662,
+        "ssim_png": 0.976832
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 82,
+        "method": 6,
+        "bytes": 65782,
+        "seconds": 0.1117,
+        "ssim_png": 0.976843
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_dswrf.png",
+        "model": "kim",
+        "panel": "dswrf",
+        "quality": 78,
+        "method": 6,
+        "bytes": 58786,
+        "seconds": 0.1076,
+        "ssim_png": 0.974087
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 4,
+        "bytes": 38560,
+        "seconds": 0.0313,
+        "ssim_png": 0.95619
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 82,
+        "method": 6,
+        "bytes": 37758,
+        "seconds": 0.0613,
+        "ssim_png": 0.955493
+      },
+      {
+        "source": "output/20261110/maps_kim/kim_2026110918_f012_tcc.png",
+        "model": "kim",
+        "panel": "tcc",
+        "quality": 78,
+        "method": 6,
+        "bytes": 33896,
+        "seconds": 0.0597,
+        "ssim_png": 0.951862
+      }
+    ]
+  }
+}

@@ -154,6 +154,8 @@ jobs:
           node --test tests/satellite.test.cjs tests/solar_maps.test.cjs
           python -m unittest discover -s tests -p 'test_model_retention.py'
           python -m unittest discover -s tests -p 'test_persist_verification.py'
+          python -m unittest discover -s tests -p 'test_webp_publication.py'
+          python -m unittest discover -s tests -p 'test_publish_site.py'
 
 
   obs:

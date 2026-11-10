@@ -16,6 +16,8 @@ on:
       - tests/test_solar_radiation.py
       - model_image_retention.py
       - tools/benchmark_webp.py
+      - build_site.py
+      - .github/workflows/daily.yml
 
 permissions:
   contents: write
@@ -27,7 +29,8 @@ permissions:
 # build_site.py 의 무회귀 가드가 막는다.
 concurrency:
   group: daily-nwp
-  cancel-in-progress: false
+  # A code update replaces an older publisher; ordinary scheduled runs queue.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
   TZ: Asia/Seoul            # 중요: 스크립트의 '오늘/어제/내일'이 전부 KST 기준
@@ -104,6 +107,8 @@ jobs:
           node --test tests/solar_maps.test.cjs
           python -m unittest discover -s tests -p 'test_model_retention.py'
           python -m unittest discover -s tests -p 'test_persist_verification.py'
+          python -m unittest discover -s tests -p 'test_webp_publication.py'
+          python -m unittest discover -s tests -p 'test_publish_site.py'
 
       # 단계마다 `timeout` 을 건다 (2026-09-06). 어느 한 수신이 API 사정으로 늘어져도
       # 나머지와 발행은 제 시간에 나가야 한다. 9/5 실측: 예보변화 단계 하나가 70분을

@@ -28,7 +28,7 @@ import pandas as pd
 from config import BASE_DIR, OUT_DIR, VERIF_DIR, CITY_OBS_STN, DISPLAY_CITIES, DISABLED_UPPER_LEVELS
 from solar_radiation import is_solar_step
 from model_image_retention import (retained_model_keys, prune_model_images, today_kst,
-                                   MODEL_IMAGE_DAYS, ALL_RUN_DAYS)
+                                   MODEL_IMAGE_DAYS, ALL_RUN_DAYS, MODEL_IMAGE_RE)
 
 KMAFCST_DATES: list[str] = []
 METEO_DATES: list[str] = []
@@ -643,6 +643,11 @@ def prune_kmafcst(site_dir: str):
         print(f"[site] 이미지 정리: {n}장 삭제(예보-관측·관측·미티오그램은 데이터 표출로 대체)")
 
 
+# Direct PNG samples reviewed on 2026-11-10; nowcast keeps its old settings.
+MODEL_WEBP_QUALITY = 78
+MODEL_WEBP_METHOD = 6
+
+
 def to_webp(site_dir: str):
     """아카이브 이미지를 WebP로 변환 — PNG 대비 약 1/5 (실측: 모델지도 290KB→54KB).
 
@@ -656,12 +661,22 @@ def to_webp(site_dir: str):
             webp = png[:-4] + ".webp"
             try:
                 before = os.path.getsize(png)
-                Image.open(png).convert("RGB").save(webp, format="WEBP",
-                                                    quality=82, method=4)
+                archive = Path(site_dir) / "archive"
+                path = Path(png)
+                is_model = path.is_relative_to(archive) and MODEL_IMAGE_RE.fullmatch(path.relative_to(archive).as_posix())
+                quality, method = ((MODEL_WEBP_QUALITY, MODEL_WEBP_METHOD) if is_model else (82, 4))
+                temp = webp + ".tmp"
+                with Image.open(png) as source:
+                    source.convert("RGB").save(temp, format="WEBP", quality=quality, method=method)
+                os.replace(temp, webp)
                 saved += before - os.path.getsize(webp)
                 os.remove(png)
                 n += 1
             except Exception as e:
+                try:
+                    Path(webp + ".tmp").unlink(missing_ok=True)
+                except OSError:
+                    pass
                 print(f"[site] WebP 변환 실패 {os.path.basename(png)}: {e}")
     if n:
         print(f"[site] WebP 변환 {n}장 — {saved / 2**20:.0f}MB 절감")
