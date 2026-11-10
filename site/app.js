@@ -795,7 +795,25 @@ function imgPathFor(model, stepH) {
   const run = runOf(model);
   return `${IMG(state.date, state.panel)}archive/${state.date}/${model.toLowerCase()}_${run}_f${String(stepH).padStart(3, "0")}_${state.panel}.webp`;
 }
+function surfaceMapHTML(model, stepH, entry) {
+  const meta = entry.grids?.[state.panel]?.[String(stepH)];
+  const label = `${model} ${PANEL_LABEL[state.panel]}`;
+  if (meta) return `<div class="surface-grid" data-grid-model="${model}" data-grid-step="${stepH}" role="group" aria-label="${label}">지도 자료를 불러오는 중…</div>`;
+  return `<img src="${imgPathFor(model, stepH)}" alt="${label}" loading="lazy" onerror="imgFallback(this)">`;
+}
+function mountSurfaceMaps() {
+  if (typeof window === "undefined" || !window.SurfaceGrid) return;
+  const panel = state.panel;
+  $("chartStack").querySelectorAll("[data-grid-model]").forEach(node => {
+    const model = node.dataset.gridModel, step = +node.dataset.gridStep, entry = runEntry(model);
+    const meta = window.SurfaceGrid.descriptor(entry, panel, step);
+    window.SurfaceGrid.render(node, meta, panel, `${model} ${PANEL_LABEL[panel]} · ${validKST(entry.run, step)}`);
+    const steps = panelSteps(entry), next = steps[steps.indexOf(step) + 1];
+    window.SurfaceGrid.preload(window.SurfaceGrid.descriptor(entry, panel, next));
+  });
+}
 function renderChart() {
+  if (typeof window !== "undefined") window.SurfaceGrid?.clear();
   $("stepSlider").value = state.stepIdx;
   if (state.model === CMP) {
     const ts = cmpSteps();
@@ -816,8 +834,9 @@ function renderChart() {
       if (!panelSteps(e).includes(stepH) || !e.panels.includes(state.panel)) return "";
       return `<div class="cmp-item">`
            + `<div class="cmp-name">${m} <span>(런 ${fmtRun(e.run)} +${stepH}h)</span></div>`
-           + `<img src="${imgPathFor(m, stepH)}" alt="${m} ${PANEL_LABEL[state.panel]}${state.panel === 'dswrf' ? ' ' + solarPeriodLabel(t) : ''}" loading="lazy" onerror="imgFallback(this)"></div>`;
+           + surfaceMapHTML(m, stepH, e) + `</div>`;
     }).join("");
+    mountSurfaceMaps();
     return;
   }
   const e = runEntry(state.model);
@@ -832,7 +851,9 @@ function renderChart() {
   $("stepLabel").textContent = state.panel === "dswrf"
     ? `+${step}h → ${solarPeriodLabel(t)} — 런 ${fmtRun(e.run)}`
     : `+${step}h → 유효 ${validKST(e.run, step)} (${relNow(t)}) — 런 ${fmtRun(e.run)}`;
-  $("chartStack").innerHTML = `<img id="chartImg" src="${imgPathFor(state.model, step)}" alt="${state.model} ${PANEL_LABEL[state.panel]}${state.panel === 'dswrf' ? ' ' + solarPeriodLabel(t) : ''}" onerror="imgFallback(this)">`;
+  $("chartStack").innerHTML = surfaceMapHTML(state.model, step, e);
+  mountSurfaceMaps();
+  if (e.grids?.[state.panel]?.[String(step)]) return;
   [state.stepIdx - 1, state.stepIdx + 1].forEach((i) => {
     if (i >= 0 && i < steps.length) new Image().src = imgPathFor(state.model, steps[i]);
   });

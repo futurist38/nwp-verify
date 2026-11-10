@@ -624,6 +624,8 @@ def main():
     p.add_argument("--ecmwf", default=None, help="ECMWF GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--gfs", default=None, help="GFS GRIB 경로 (생략 시 data/ 최신)")
     p.add_argument("--kim", default=None, help="KIM 경로 — NC npz 또는 GRIB (생략 시 data/ 최신 npz→grib2)")
+    p.add_argument("--surface-grids", action="store_true",
+                   help="변수별 PNG 대신 압축 격자자료를 출력 (상층 지도는 별도 유지)")
     p.add_argument("--cloud3-only", action="store_true",
                    help="3층운량 지도만 다시 생성 (도시 CSV·미티오그램은 갱신하지 않음)")
     args = p.parse_args()
@@ -654,26 +656,31 @@ def main():
     out_dir = os.path.join(OUT_DIR, today)
     os.makedirs(out_dir, exist_ok=True)
 
+    def publish_surface(model, data, folder):
+        if args.surface_grids:
+            from surface_grid import export_surface_grid
+            export_surface_grid(model, data, out_dir,
+                                panels={"cloud3"} if args.cloud3_only else None)
+        else:
+            plot_maps(model, data, folder, panels={"cloud3"} if args.cloud3_only else None)
+
     frames = []
     if ec_path:
         print(f"[판독] ECMWF: {ec_path}")
         ec = load_ecmwf(ec_path)
-        plot_maps("ECMWF", ec, os.path.join(out_dir, "maps_ecmwf"),
-                  panels={"cloud3"} if args.cloud3_only else None)
+        publish_surface("ECMWF", ec, os.path.join(out_dir, "maps_ecmwf"))
         if not args.cloud3_only:
             frames.append(city_series("ECMWF", ec))
     if gfs_path:
         print(f"[판독] GFS: {gfs_path}")
         gf = load_gfs(gfs_path)
-        plot_maps("GFS", gf, os.path.join(out_dir, "maps_gfs"),
-                  panels={"cloud3"} if args.cloud3_only else None)
+        publish_surface("GFS", gf, os.path.join(out_dir, "maps_gfs"))
         if not args.cloud3_only:
             frames.append(city_series("GFS", gf))
     if kim_path:
         print(f"[판독] KIM: {kim_path}")
         km = load_kim(kim_path)
-        plot_maps("KIM", km, os.path.join(out_dir, "maps_kim"),
-                  panels={"cloud3"} if args.cloud3_only else None)
+        publish_surface("KIM", km, os.path.join(out_dir, "maps_kim"))
         if not args.cloud3_only:
             frames.append(city_series("KIM", km))
 

@@ -760,6 +760,9 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         if entry["models"] or entry["meteograms"] or entry["obs"] or entry.get("satsw"):
             manifest["dates"][ymd] = entry
 
+    from surface_grid import merge_surface_manifest
+    merge_surface_manifest(manifest, site_dir)
+
     manifest["cases"] = sorted(
         os.path.basename(p) for p in
         glob.glob(os.path.join(site_dir, "verif", "cases", "*.md")))
@@ -841,6 +844,8 @@ def main():
         export_briefing.export(args.site_dir)
     except Exception as e:
         print(f"[site] 브리핑 묶음 실패(계속): {e}")
+    from surface_grid import publish_surface_grids
+    publish_surface_grids(args.site_dir, OUT_DIR)
     prune_kmafcst(args.site_dir)
     prune_disabled_upper(args.site_dir)
     listing = os.environ.get("R2_LISTING")
