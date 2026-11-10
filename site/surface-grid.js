@@ -5,6 +5,17 @@
   const RAIN = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80];
   const RAIN_COLORS = ['#d4ecff', '#a6d4ff', '#6fb6ff', '#3d8ef0', '#1f5fd0', '#7a3fd0', '#c02fb0', '#e0207a', '#ff4040', '#7a0000'];
   const SOLAR_COLORS = ['#f1f4f6', '#b7dce0', '#5db8c0', '#e9df88', '#f8b74e', '#ee7736', '#c5352d'];
+  // Eight major cities; opposite label offsets separate nearby coastal cities.
+  const CITY_MARKERS = [
+    ['서울', 126.966, 37.571, 6, -10],
+    ['인천', 126.625, 37.478, -6, 10],
+    ['대전', 127.372, 36.372, 6, -5],
+    ['광주', 126.891, 35.173, -6, 10],
+    ['대구', 128.653, 35.878, -6, 9],
+    ['부산', 129.032, 35.105, 6, 11],
+    ['울산', 129.320, 35.560, 6, -9],
+    ['제주', 126.530, 33.514, 6, -7]
+  ];
   const CACHE_LIMIT = 18;
   const cache = new Map(), pending = new Map(), observers = new Set();
   let assetsPromise;
@@ -152,8 +163,13 @@
     const path = d3.geoPath(p, ctx); ctx.strokeStyle = line; ctx.globalAlpha = .85;
     for (const feature of geography.features) { ctx.beginPath(); path(feature); ctx.lineWidth = feature.properties?.kind === 'coastline' ? .85 : .6; ctx.stroke(); }
     ctx.globalAlpha = 1; ctx.fillStyle = line; ctx.font = '12px sans-serif';
-    for (const [name, lon, lat] of [['서울', 126.966, 37.571], ['광주', 126.891, 35.173], ['부산', 129.032, 35.105], ['제주', 126.530, 33.514]]) {
-      const xy = p([lon, lat]); ctx.beginPath(); ctx.arc(...xy, 2, 0, Math.PI * 2); ctx.fill(); ctx.fillText(name, xy[0] + 5, xy[1] - 5);
+    ctx.strokeStyle = panel === 'tcc' ? 'rgba(0,0,0,.85)' : 'rgba(255,255,255,.9)';
+    ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.textBaseline = 'middle';
+    for (const [name, lon, lat, offsetX, offsetY] of CITY_MARKERS) {
+      const xy = p([lon, lat]); ctx.beginPath(); ctx.arc(...xy, 2, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
+      ctx.textAlign = offsetX < 0 ? 'right' : 'left';
+      ctx.strokeText(name, xy[0] + offsetX, xy[1] + offsetY);
+      ctx.fillText(name, xy[0] + offsetX, xy[1] + offsetY);
     }
     ctx.restore(); ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1; ctx.strokeRect(nw[0], nw[1], se[0] - nw[0], se[1] - nw[1]);
     return {projection: p, width, height, milliseconds: performance.now() - start};
@@ -250,3 +266,4 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else host.SurfaceGrid = api;
 })(typeof window === 'undefined' ? globalThis : window);
+
