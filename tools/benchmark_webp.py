@@ -21,7 +21,7 @@ def benchmark(source, output):
     rows=[]
     for model in ['ecmwf','gfs','kim']:
         for panel in ['sfc','p500','t2m','dswrf','tcc']:
-            matches=sorted(source.glob(f'????????/*/{model}_*_f024_{panel}.png'))
+            matches=sorted(source.glob(f'????????/*/{model}_*_f012_{panel}.png'))
             if not matches:
                 print(f'[webp] missing original: {model}/{panel}');continue
             path=matches[-1]
