@@ -35,12 +35,12 @@ METEO_DATES: list[str] = []
 OBS_DATES: list[str] = []
 FD_DATES: list[str] = []
 HAS_MIDFCST = False    # export_midfcst 결과 (manifest 용)
-MAX_DAYS = 14          # 모델 지도 보존 일수 (2026-09-08 사용자: 2주면 충분. 하루 ~40MB)
+MAX_DAYS = 14          # 기존 JSON·기타 이미지 창; 일반 모델 지도는 MODEL_IMAGE_DAYS 별도 적용
 UPPER_MAX_DAYS = 7     # 고도별 기압장(925~200) 보존 일수 (하루 ~90MB — 2026-09-08 사용자: 7일, 그림 크기 유지)
-UPPER_PANELS = {"p925", "p850", "p700", "p500", "p300", "p200"}   # sfc(지상장)는 일반 지도와 같이 MAX_DAYS
+UPPER_PANELS = {"p925", "p850", "p700", "p500", "p300", "p200"}   # sfc(지상장)는 MODEL_IMAGE_DAYS 적용
 # 그림이 R2 에 있어도 최근 창은 site-data(github.io)에 같이 둔다 — 회사망이 r2.dev 를 막는다(2026-09-09 실측).
 # 하루 최대 170MB(지상·상층 127 + 지도 42) → 지도 7일 + 지상·상층 3일 ≈ 700MB 로 Pages 1GB 안. 뷰어는 manifest.local_cut 으로 판단.
-LOCAL_DAYS_MAPS = 7    # 일반 지도·위성 일사·지상장(sfc — 2026-09-08 결정대로 지도와 같은 취급): 이 날수 안이면 site-data 에도 있다
+LOCAL_DAYS_MAPS = MODEL_IMAGE_DAYS  # 일반 지도·위성 일사·지상장(sfc — 2026-09-08 결정대로 지도와 같은 취급): 이 날수 안이면 site-data 에도 있다
 LOCAL_DAYS_UPPER = 3   # 925~200 상층: 이 날수 안이면 site-data 에도 있다
 
 

@@ -142,7 +142,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: 검증 의존성
-        run: pip install pandas numpy matplotlib requests truststore scipy
+        run: pip install pandas numpy matplotlib requests truststore scipy pyproj
       - name: 예보 비교 검증
         run: |
           python -m unittest discover -s tests -p 'test_site_assets.py'

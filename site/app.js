@@ -1242,6 +1242,6 @@ function renderFresh() {
   renderToday();
   if (vdates.length) renderVerifDaily();
   $("genInfo").textContent =
-    `마지막 갱신(UTC): ${MF.generated_utc} · 지도 보존 ${MF.max_days}일`;
+    `마지막 갱신(UTC): ${MF.generated_utc} · 일반 지도 보존 ${MF.model_image_retention?.days || MF.max_days}일`;
 })();
 
