@@ -11,7 +11,8 @@
 어제 11시 발표의 모레 커버리지 8h vs 오늘 11시 발표 24h) — 둘 다 공정한 비교가 안 된다.
 
 지점: ASOS 97곳의 위경도를 동네예보 격자로 변환해 사용(관측 지도와 같은 지점망이라
-     두 탭의 그림을 겹쳐 읽을 수 있다). 발표분은 불변이라 캐시하면 하루 97회만 호출.
+     두 탭의 그림을 겹쳐 읽을 수 있다). 하루 첫 수집은 최대 97×2건이며, 같은 비교 짝은
+     다음 실행에서도 캐시를 재사용한다. 비어 있거나 불완전한 지점만 다시 조회한다.
 
 산출: output/YYYYMMDD/fcstdiff/fcstdiff_{tmx|tmn}_d{1,2}.png
 캐시: verification/fcstdiff/{발표YYYYMMDDHH}.json
@@ -34,10 +35,10 @@ import sslfix  # noqa: F401
 import mapviz
 from kma_vilage import auth_key, fetch, latlon_to_grid
 from config import OUT_DIR, VERIF_DIR, CITY_OBS_STN
+from fcstdiff_cache import clean_series, complete, read_cache, write_cache, expired_cache_path
 
 CACHE_DIR = os.path.join(VERIF_DIR, "fcstdiff")
 STN_CSV = os.path.join(VERIF_DIR, "obs", "stations.csv")
-CACHE_KEEP_DAYS = 4     # 어제·오늘만 쓰므로 그 이상은 버림(발표당 ~130KB)
 PREV_HOUR, NOW_HOUR = 17, 5   # 어제 17시 발표 → 오늘 05시 발표 (사용자 확정 짝)
 MIN_HOURS = 20          # 대상일 커버리지가 이보다 적으면 그 날은 비교하지 않음
 TARGET_DAYS = [1]       # 내일만 — 아래 주석 참조
@@ -62,14 +63,19 @@ def stations() -> pd.DataFrame:
     return df
 
 
-def load_issue(bdt: str, stns: pd.DataFrame, key: str) -> dict:
-    """{STN: {'YYYYMMDDHH': 기온}} — 캐시에 없는 지점만 호출."""
+def load_issue(bdt: str, stns: pd.DataFrame, key=None, *, target_days, cache_only=False) -> dict:
+    """{STN: {'YYYYMMDDHH': 기온}} — 대상일 24시간이 없는 지점만 호출."""
+    start = time.monotonic()
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = os.path.join(CACHE_DIR, f"{bdt}.json")
-    cache = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
-    n_new = 0
+    cache = read_cache(path)
+    reused = attempted = received = 0
     for r in stns.itertuples():
-        if str(r.STN) in cache:
+        station = str(r.STN)
+        if complete(cache.get(station, {}), target_days):
+            reused += 1
+            continue
+        if cache_only:
             continue
         # 시간 상한 (2026-09-06): API허브가 막히는 날 지점마다 재시도 3회×60초를 다 쓰면
         # 97지점 × 2발표가 70분을 넘겨 daily 전체가 100분 상한에 취소됐다(9/5 실측).
@@ -77,24 +83,33 @@ def load_issue(bdt: str, stns: pd.DataFrame, key: str) -> dict:
         if DEADLINE and time.monotonic() > DEADLINE:
             print(f"[예보변화] {bdt}: 시간 상한 도달 — 남은 지점은 다음 실행에")
             break
+        if key is None:
+            key = auth_key()  # 캐시가 완전하면 API 키도 읽지 않는다.
+        attempted += 1
         try:
-            cache[str(r.STN)] = fetch(r.nx, r.ny, bdt, key)["TMP"]
-            n_new += 1
+            fresh = clean_series(fetch(r.nx, r.ny, bdt, key).get("TMP"))
+            if not fresh:
+                raise ValueError("유효한 시간별 기온 없음")
         except Exception as e:
-            print(f"[예보변화] {bdt} STN{r.STN} 수신 실패: {e}")
-    if n_new:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-        print(f"[예보변화] {bdt}: 신규 {n_new}지점 수신 → {path}")
+            detail = str(e).replace(key, "***") if key else str(e)
+            print(f"[예보변화] {bdt} STN{r.STN} 수신 실패: {detail}")
+            continue
+        cache[station] = {**cache.get(station, {}), **fresh}
+        write_cache(path, cache)
+        received += 1
+    missing = sum(not complete(cache.get(str(r.STN), {}), target_days) for r in stns.itertuples())
+    print(f"[예보변화] {bdt}: 재사용 {reused}, 조회 {attempted}, 수신 {received}, "
+          f"미완료 {missing}지점, {time.monotonic() - start:.2f}초")
+    if cache_only and missing:
+        raise RuntimeError(f"{bdt}: 캐시 미완료 {missing}지점 (API 호출 없음)")
     return cache
 
 
 def prune_cache(today: dt.date):
     """오래된 발표 캐시 삭제 — 비교에 어제·오늘만 쓰므로 쌓아둘 이유가 없다."""
-    cut = f"{today - dt.timedelta(days=CACHE_KEEP_DAYS):%Y%m%d}"
     n = 0
     for f in os.listdir(CACHE_DIR) if os.path.isdir(CACHE_DIR) else []:
-        if f.endswith(".json") and f[:8] < cut:
+        if expired_cache_path(f"verification/fcstdiff/{f}", today):
             os.remove(os.path.join(CACHE_DIR, f))
             n += 1
     if n:
@@ -103,7 +118,7 @@ def prune_cache(today: dt.date):
 
 def daily_stat(series: dict, day: dt.date, fn) -> float | None:
     """해당 일자의 시간별 값에서 최고/최저. 커버리지 부족이면 None(추정 금지)."""
-    vals = [v for k, v in series.items() if k[:8] == f"{day:%Y%m%d}"]
+    vals = [v for k, v in clean_series(series).items() if k[:8] == f"{day:%Y%m%d}"]
     return float(fn(vals)) if len(vals) >= MIN_HOURS else None
 
 
@@ -152,6 +167,8 @@ def main():
                    help="PNG 생략 — 사이트가 지점값 JSON으로 직접 그린다(기본 운영 모드)")
     p.add_argument("--max-minutes", type=float, default=0.0,
                    help="단기예보 수신 시간 상한(분). 초과하면 받은 지점까지만 쓴다 (0=무제한)")
+    p.add_argument("--cache-only", action="store_true",
+                   help="API 호출 없이 캐시 완전성을 검사하고 표출 자료를 재생성")
     args = p.parse_args()
     if args.max_minutes > 0:
         global DEADLINE
@@ -170,8 +187,10 @@ def main():
     bdt_prev = f"{prev_t:%Y%m%d%H}"
     print(f"[예보변화] {bdt_prev}(어제 {PREV_HOUR}시) → {bdt_now}(오늘 {NOW_HOUR}시)")
 
-    key, stns = auth_key(), stations()
-    cur, prev = load_issue(bdt_now, stns, key), load_issue(bdt_prev, stns, key)
+    stns = stations()
+    target_days = [t.date() + dt.timedelta(days=lead) for lead in TARGET_DAYS]
+    cur = load_issue(bdt_now, stns, target_days=target_days, cache_only=args.cache_only)
+    prev = load_issue(bdt_prev, stns, target_days=target_days, cache_only=args.cache_only)
     if not cur or not prev:
         raise SystemExit("[예보변화] 발표 자료 부족 — 중단")
 
@@ -192,7 +211,7 @@ def main():
             df = pd.DataFrame(rows)
             # 표출은 사이트가 지점값으로 직접 (2026-08-27) — 지점 사이는 근거가 없는 구간
             export["vars"][var] = {str(int(r.STN)): round(r.d, 1)
-                                   for r in df.itertuples() if r.d is not None}
+                                   for r in df.itertuples() if pd.notna(r.d) and np.isfinite(r.d)}
             if not args.no_plot:
                 n += draw(df, var, day, lead, bdt_now, bdt_prev, out_dir)
     # 산출 폴더와 **검증 폴더(커밋 대상)** 양쪽에 — 러너는 매번 새로 시작하므로
@@ -202,7 +221,7 @@ def main():
     for path in (os.path.join(out_dir, "data.json"),
                  os.path.join(keep, f"{t.date():%Y%m%d}.json")):
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(export, f, ensure_ascii=False, separators=(",", ":"))
+            json.dump(export, f, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     prune_cache(t.date())
     print(f"[예보변화] 자료 저장 -> {out_dir}" + (f" (그림 {n}장)" if n else ""))
 

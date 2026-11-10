@@ -13,7 +13,7 @@ site_build/
 site_build*/
 dl/*
 !dl/*.ipynb
-verification/fcstdiff/
+verification/fcstdiff/*.tmp
 
 # publish_site.sh 가 R2 목록을 잠시 적는 파일 (2026-09-08)
 .r2_listing

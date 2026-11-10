@@ -1,4 +1,5 @@
 import csv
+import datetime as dt
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from tools.persist_verification import merge_file, persist
+from fcstdiff_cache import expired_cache_path, read_cache, write_cache
 
 
 def rows(data):
@@ -15,6 +17,47 @@ def rows(data):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_cache_survives_fresh_checkout_and_expiry_cannot_restore_old_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); remote=root/'remote.git'; local=root/'local'; fresh=root/'fresh'
+            def run(*args, cwd=root):
+                return subprocess.check_output(['git', *args], cwd=cwd, stderr=subprocess.DEVNULL)
+            run('init', '--bare', str(remote)); run('clone', str(remote), str(local))
+            run('checkout', '-b', 'main', cwd=local)
+            run('config', 'user.name', 'test', cwd=local); run('config', 'user.email', 'test@example.com', cwd=local)
+            # Use the real ignore rules: JSON inputs must reach persist's untracked discovery.
+            (local/'.gitignore').write_text((Path(__file__).resolve().parents[1]/'.gitignore').read_text())
+            old=local/'verification/fcstdiff/2026110605.json'
+            write_cache(old, {'1': {'2026110700': 0}})
+            history=local/'verification/fcstdiff_data/20261106.json'
+            history.parent.mkdir(parents=True); history.write_text('{"history":true}')
+            run('add', '.', cwd=local); run('commit', '-m', 'base', cwd=local); run('push', 'origin', 'main', cwd=local)
+            current=local/'verification/fcstdiff/2026111005.json'
+            values={f'20261111{h:02d}': h for h in range(24)}
+            write_cache(current, {'1': values})
+            write_cache(old, {'1': {'2026110700': 99}})  # stale runner must not resurrect an expired cache
+            history.unlink()  # the ordinary verification history still must not be deleted
+            import tools.persist_verification as module
+            previous=Path.cwd()
+            try:
+                os.chdir(local)
+                with patch.object(module, 'expired_cache_path', side_effect=lambda p: expired_cache_path(p, dt.date(2026,11,10))):
+                    persist(['verification/'], 'cache checkpoint')
+                run('clone', '-b', 'main', str(remote), str(fresh))
+                self.assertEqual(read_cache(fresh/current.relative_to(local)), {'1': values})
+                self.assertFalse((fresh/old.relative_to(local)).exists())
+                self.assertEqual((fresh/history.relative_to(local)).read_text(), '{"history":true}')
+                import plot_fcstdiff as maps
+                import pandas as pd
+                stns=pd.DataFrame([{'STN':1, 'nx':60, 'ny':127}])
+                with patch.object(maps, 'CACHE_DIR', str(fresh/'verification/fcstdiff')), \
+                        patch.object(maps, 'fetch', side_effect=AssertionError('network forbidden')), \
+                        patch.object(maps, 'auth_key', side_effect=AssertionError('key forbidden')):
+                    got=maps.load_issue('2026111005', stns, target_days=[dt.date(2026,11,11)], cache_only=True)
+                    self.assertEqual(got, {'1':values})
+            finally:
+                os.chdir(previous)
+
     def test_concurrent_rows_and_corrections_keep_remote_updates(self):
         base=b'TM,STN,TA\n2026-11-10 01:00:00,108,10\n'
         local=base+b'2026-11-10 02:00:00,108,12\n'

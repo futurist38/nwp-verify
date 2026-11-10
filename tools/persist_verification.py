@@ -12,8 +12,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fcstdiff_cache import expired_cache_path
 
 KEYS = {
     'obs': ('TM', 'STN'), 'forecast': ('model', 'run_utc', 'city', 'step_h'),
@@ -116,13 +120,18 @@ def persist(paths, message, attempts=6):
         p = Path(path)
         if p.is_absolute() or '..' in p.parts or not p.parts or p.parts[0] != 'verification':
             raise ValueError('Only relative verification/ paths are allowed')
+    # Raw forecast-change inputs are a bounded disposable cache. All other
+    # verification history retains the existing no-deletion merge policy.
+    prune_fcstdiff = any(Path(p).as_posix() in ('verification', 'verification/fcstdiff')
+                        or Path(p).as_posix().startswith('verification/fcstdiff/') for p in paths)
     head = git('rev-parse', 'HEAD').stdout.decode().strip()
     changed = git('diff', '--name-only', '-z', 'HEAD', '--', *paths).stdout
     untracked = git('ls-files', '--others', '--exclude-standard', '-z', '--', *paths).stdout
     names = sorted(set((changed + untracked).decode().strip('\0').split('\0')) - {''})
     snapshot = {name: (blob(head, name), Path(name).read_bytes()) for name in names if Path(name).is_file()}
-    snapshot = {p: pair for p, pair in snapshot.items() if pair[0] != pair[1]}
-    if not snapshot:
+    snapshot = {p: pair for p, pair in snapshot.items()
+                if pair[0] != pair[1] and not expired_cache_path(p)}
+    if not snapshot and not prune_fcstdiff:
         print('[persist] no generated changes'); return
     with tempfile.TemporaryDirectory(prefix='verification-index-') as tmp:
         env = dict(os.environ, GIT_INDEX_FILE=str(Path(tmp) / 'index'))
@@ -131,6 +140,13 @@ def persist(paths, message, attempts=6):
             parent = git('rev-parse', 'FETCH_HEAD').stdout.decode().strip()
             git('read-tree', parent, env=env)
             count = 0
+            if prune_fcstdiff:
+                cache_files = git('ls-tree', '-r', '--name-only', parent, '--',
+                                  'verification/fcstdiff/').stdout.decode().splitlines()
+                for path in cache_files:
+                    if expired_cache_path(path):
+                        git('update-index', '--force-remove', path, env=env)
+                        count += 1
             for path, (base, local) in snapshot.items():
                 remote = blob(parent, path)
                 result = merge_file(path, base, local, remote)
@@ -140,7 +156,7 @@ def persist(paths, message, attempts=6):
                 git('update-index', '--add', '--cacheinfo', '100644', sha, path, env=env)
                 count += 1
             if not count:
-                print('[persist] changes already present on main'); return
+                print('[persist] changes already present on main; cache retention checked'); return
             tree = git('write-tree', env=env).stdout.decode().strip()
             commit = git('commit-tree', tree, '-p', parent, '-m', message).stdout.decode().strip()
             result = git('push', '-q', 'origin', f'{commit}:refs/heads/main', check=False)

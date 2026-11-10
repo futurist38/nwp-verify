@@ -11,6 +11,12 @@ on:
   push:
     branches: [main]
     paths:
+      - .gitignore
+      - plot_fcstdiff.py
+      - fcstdiff_cache.py
+      - tools/persist_verification.py
+      - tests/test_fcstdiff_cache.py
+      - tests/test_persist_verification.py
       - surface_grid.py
       - site/surface-grid.js
       - site/surface-grid.css
@@ -114,6 +120,7 @@ jobs:
           node --test tests/surface_grid.test.cjs
           python -m unittest discover -s tests -p 'test_model_retention.py'
           python -m unittest discover -s tests -p 'test_persist_verification.py'
+          python -m unittest discover -s tests -p 'test_fcstdiff_cache.py'
           python -m unittest discover -s tests -p 'test_webp_publication.py'
           python -m unittest discover -s tests -p 'test_publish_site.py'
 
@@ -151,7 +158,21 @@ jobs:
           /usr/bin/time -f "[timing] verification_report: %e s" timeout 300 python verify.py report  || echo "::warning::report 실패/시간초과 — 계속"
           /usr/bin/time -f "[timing] observation_fetch: %e s" timeout 600 python plot_obsmap.py --no-plot || echo "::warning::관측 수신 실패/시간초과 — 계속"
           /usr/bin/time -f "[timing] forecast_observation: %e s" timeout 480 python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 캐시 실패/시간초과 — 계속"
+
+      - name: 예보변화 수집 — 완전한 캐시 재사용·누락만 조회
+        run: |
           /usr/bin/time -f "[timing] forecast_change_fetch: %e s" timeout 900 python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
+
+      - name: 예보변화 캐시 보관 — 다음 실행에서 재사용
+        id: fcstdiff_cache
+        continue-on-error: true
+        run: |
+          git config user.name "nwp-bot"
+          git config user.email "actions@users.noreply.github.com"
+          python tools/persist_verification.py --message "forecast-change cache: $(date '+%Y-%m-%d %H:%M KST') [skip ci]" verification/fcstdiff
+
+      - name: 2단계 후속 — 오차지도·중기예보·위성일사
+        run: |
           /usr/bin/time -f "[timing] verification_map: %e s" timeout 300 python plot_verifmap.py  || echo "::warning::오차지도 실패/시간초과 — 계속"
           # 2026-09-06 추가 — 중기예보 기온(하루 2회 발표, 10도시 10호출) · GK2A 위성 일사 일적산
           # (ECMWF 앙상블 fetch_ens.py 는 사용자 결정으로 보류 — 필요 시 여기에 한 줄 추가)
