@@ -69,3 +69,35 @@ change collection or hourly nowcast inference. Initial whole-job estimate is
 roughly 4–5 minutes saved, to be checked against the new `[timing]` log lines.
 Pages build/deployment is separate, typically 2–4 minutes in recent successful
 runs, with larger delays possible from queues or retries.
+
+## First production publication after migration
+
+[Run 42760431162](https://github.com/futurist38/nwp-verify/actions/runs/42760431162)
+completed surface acquisition/export in **3m15s** and its first publication in
+**2m59s** (6m14s combined, versus 9m46s for the baseline). Setup took 6m23s,
+including an unusually long 5m25s system-package step; do not attribute that
+setup delay to grid generation.
+
+The resulting 678 frames contain 8,997,004 bytes of compressed field payloads
+(plus small JSON indexes), compared with 25,798,974 bytes of previous latest
+surface images. This is approximately **65% less** across all models. The 86%
+matched-sample result above applies to GFS only, not all models.
+
+| Model | Published run (UTC) | Grid | Frames | Payload bytes |
+|---|---|---|---:|---:|
+| ECMWF | 2026-11-09 12 | 61 × 53 | 192 | 400,115 |
+| GFS | 2026-11-10 00 | 61 × 53 | 243 | 1,085,279 |
+| KIM | 2026-11-09 12 | 181 × 157 | 243 | 7,511,610 |
+
+The existing Pages tree before migration contained 782,313,966 bytes, of which
+8,435 variable-map images occupied 359,408,536 bytes (45.9%). These legacy
+images age out gradually under the existing seven-day retention. Upper charts
+are not included in that surface-image saving. A 25–28 minute normal whole-job
+estimate excludes unusual setup delays, queues and the separate Pages service;
+only the first-stage timings above are measured for the migrated run so far.
+
+The first grid publication's [Pages run 42761803329](https://github.com/futurist38/nwp-verify/actions/runs/42761803329)
+finished successfully at 05:25:19 UTC, 2m08s after publication triggered it.
+Production browser checks confirmed all available variable panels, common valid
+times across models, forecast-step navigation, cloud legends, and unchanged
+500hPa WebP charts for all three models. No native-cell display mode is exposed.
