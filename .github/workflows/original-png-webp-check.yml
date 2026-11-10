@@ -1,0 +1,37 @@
+name: original-png-webp-check
+on:
+  push:
+    branches: [analysis/webp-original-20261110]
+    paths: ['.github/workflows/original-png-webp-check.yml', 'tools/collect_webp_samples.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Seoul
+      PYTHONUNBUFFERED: '1'
+      KMA_AUTH_KEY: ${{ secrets.KMA_AUTH_KEY }}
+      KMA_INSTITUTION_AUTH_KEY: ${{ secrets.KMA_INSTITUTION_AUTH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-nanum
+          pip install -q -r requirements.txt scikit-image
+      - name: Collect only required real model fields and render original PNG
+        run: timeout 900 python tools/collect_webp_samples.py
+      - name: Compare PNG encodings
+        run: python tools/benchmark_webp.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-png-webp-comparison
+          path: webp-benchmark/
+          retention-days: 7
