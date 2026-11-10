@@ -66,7 +66,8 @@ permissions:
 
 concurrency:
   group: obs-hourly
-  cancel-in-progress: false
+  # A code fix supersedes older code; scheduled/dispatch runs still queue.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
   TZ: Asia/Seoul

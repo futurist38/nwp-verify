@@ -41,6 +41,12 @@ class PersistenceTests(unittest.TestCase):
             encode({'issue':{'Seoul':1,'Wonju':0}}),encode({'issue':{'Seoul':2,'Busan':4}})))
         self.assertEqual(got,{'issue':{'Seoul':2,'Wonju':0,'Busan':4}})
 
+    def test_remote_json_removal_and_local_addition_are_serializable(self):
+        encode=lambda obj:json.dumps(obj).encode()
+        got=json.loads(merge_file('verification/kmafcst/day.json', encode({'old':1,'shared':2}),
+            encode({'old':1,'shared':2,'new':0}), encode({'shared':3})))
+        self.assertEqual(got,{'shared':3,'new':0})
+
     def test_real_git_push_retries_with_concurrent_data_without_touching_checkout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);remote=root/'remote.git';local=root/'local';other=root/'other'

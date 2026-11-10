@@ -14,9 +14,7 @@ on:
       - solar_radiation.py
       - plot_charts.py
       - tests/test_solar_radiation.py
-      - .github/workflows/daily.yml
       - model_image_retention.py
-      - tools/persist_verification.py
       - tools/benchmark_webp.py
 
 permissions:

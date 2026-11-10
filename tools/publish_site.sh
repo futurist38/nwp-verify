@@ -18,6 +18,11 @@ IDX="$(pwd)/.git/site-index"
 # commit-tree 도 작성자 정보가 필요하다 — 이 스크립트가 잡의 첫 git 쓰기일 수 있으니 여기서
 git config user.name  >/dev/null 2>&1 || git config user.name "nwp-bot"
 git config user.email >/dev/null 2>&1 || git config user.email "actions@users.noreply.github.com"
+# A stalled remote must not consume the entire observation job. Failures keep
+# local images and are retried on the next publish.
+r2() {
+  timeout 300 rclone --contimeout 10s --timeout 60s --retries 2 --low-level-retries 2 "$@"
+}
 for i in 1 2 3 4 5 6; do
   # A fresh staging directory prevents deleted files from surviving a lease retry.
   python - "$SITE" <<'PYSAFE'
@@ -44,11 +49,11 @@ PYSAFE
     export RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true \
            RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
            RCLONE_CONFIG_R2_ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}" RCLONE_CONFIG_R2_ACL=private
-    rclone lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
+    r2 lsf -R --files-only "r2:${R2_BUCKET}/archive" > .r2_listing 2>/dev/null \
       || { echo "::warning::[publish] R2 목록 조회 실패 — 로컬 복원본 유지"; : > .r2_listing; }
     python tools/site_storage.py plan --site-dir "$SITE"
     if [ -s .r2_plan.delete ]; then
-      rclone delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_plan.delete -q \
+      r2 delete "r2:${R2_BUCKET}/archive" --files-from-raw .r2_plan.delete -q \
         || echo "::warning::[publish] R2 정리 실패 — 해당 지도는 복원/manifest에서 제외, 다음 실행에 재시도"
     fi
     # Even failed deletions are excluded from both the manifest and restoration.
@@ -61,7 +66,7 @@ PYSAFE
     UP_OK=1
     if [ -d "$SITE/archive" ]; then
       # 새 그림 업로드(있는 것은 건너뜀). --size-only: 그림은 한 번 만들면 안 바뀐다 — modtime 비교는 객체마다 HEAD 라 뺀다
-      rclone copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --size-only --transfers 32 --checkers 32 -q \
+      r2 copy "$SITE/archive" "r2:${R2_BUCKET}/archive" --size-only --transfers 32 --checkers 32 -q \
         && echo "[publish] archive → R2 업로드" \
         || { UP_OK=0; echo "::warning::[publish] R2 업로드 실패 — 이번엔 site-data 에 그림을 다 남긴다"; }
     fi
@@ -73,7 +78,7 @@ PYSAFE
       # Recompute exact restore keys with the newly built local inventory.
       python tools/site_storage.py plan --site-dir "$SITE"
       mkdir -p "$SITE/archive"
-      rclone copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --files-from-raw .r2_plan.restore --size-only --transfers 32 --checkers 32 -q \
+      r2 copy "r2:${R2_BUCKET}/archive" "$SITE/archive" --files-from-raw .r2_plan.restore --size-only --transfers 32 --checkers 32 -q \
         && echo "[publish] R2→site-data retained image window restored" \
         || echo "::warning::[publish] R2→site-data 복원 실패 — 기존 로컬 지도 유지"
       python - "$SITE" <<'PYPRUNE'

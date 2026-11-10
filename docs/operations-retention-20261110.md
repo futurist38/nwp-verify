@@ -2,6 +2,7 @@
 
 - Wonju export fixtures freeze their calendar at 2026-10-26. The hourly validation
   job reports failures independently; observations do not depend on that job.
+  Code pushes supersede older hourly runs; normal scheduled/dispatch runs queue.
 - Ordinary model images, including SFC, use KST archive calendar dates. Today is
   day 1: days 1–5 retain all runs; days 6–7 retain the latest run per date/model;
   day 8 onward is removed. Pressure-level maps keep the existing retention and
@@ -11,6 +12,7 @@
   a removed ordinary run. `tools/site_storage.py` writes exact image-key lists;
   numerical JSON/CSV is not a deletion target. The chart selector lists only runs
   containing the chosen panel, so preserved upper runs remain accessible.
+- R2 commands have a five-minute ceiling, a 60-second I/O timeout and two retries.
 - Publishing starts with a clean generated staging directory on each lease retry.
   Storage logs report total site, archive and nowcast bytes before and after.
 - `tools/persist_verification.py` uses a separate Git index and a fast-forward
@@ -26,7 +28,7 @@
   DSR/TCC, q82/m4, q82/m6, q78/m6, original-referenced SSIM, times and native-pixel
   crops. Existing lossy WebP images are not recompressed.
 
-Local validation: 63 Python tests + 51 JavaScript tests passed. New cases cover
+Local validation: 64 Python tests + 51 JavaScript tests passed. New cases cover
 KST date boundaries, independent model runs, stale R2 listings, numerical-data
 preservation, panel-specific selection, timestamp key normalization and a real
 Git push race preserving both writers' rows and the original working tree.

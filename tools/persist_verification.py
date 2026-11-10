@@ -47,8 +47,12 @@ def merge_value(base, local, remote):
         return local
     if isinstance(local, dict) and isinstance(remote, dict):
         base = base if isinstance(base, dict) else {}
-        return {k: merge_value(base.get(k, MISSING), local.get(k, MISSING), remote.get(k, MISSING))
-                for k in sorted(local.keys() | remote.keys())}
+        result = {}
+        for key in sorted(local.keys() | remote.keys()):
+            value = merge_value(base.get(key, MISSING), local.get(key, MISSING), remote.get(key, MISSING))
+            if value is not MISSING:
+                result[key] = value
+        return result
     return remote if populated(remote) else local
 
 
