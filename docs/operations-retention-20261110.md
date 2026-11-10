@@ -84,3 +84,21 @@ preservation, panel-specific selection, timestamp key normalization, a real
 Git push race preserving both writers' rows and the original working tree,
 PNG conversion failure recovery and a real shell publication proving physical
 R2 deletion follows the successful Git publication.
+
+## Final rollout checks
+
+- Final code: `3c541406526a27c1091c9b3294ed77364f4697cb`.
+- [Hourly run 42735202834](https://github.com/futurist38/nwp-verify/actions/runs/42735202834): all jobs succeeded; 10:00 KST observations present;
+  22,004 monthly ASOS rows saved. Verification persistence saved two files on
+  main in one attempt (`5fc3bd84`). The R2 plan found zero remaining obsolete
+  keys, and none of the 2,192 retired ordinary maps reappeared.
+- [Pages 42736056555](https://github.com/futurist38/nwp-verify/actions/runs/42736056555): success after the final hourly publisher.
+- The first NWP publication on `783b0f042f2b2bbbf0fe97debd705165cb4b9687`
+  replaced 678 regenerated model images: 29,087,804 B → 25,798,974 B, an 11.31%
+  reduction. All 678 kept the same paths; no other archive file was removed or
+  added in that comparison. Total archive after these additional model data
+  and new encodings was 660,625,774 B. This differs from the retention-only
+  baseline above because the ordinary pipeline also brought in 243 additional
+  model images between measurements.
+- Browser checks: Nov 4 ordinary panels offered one run per model; Nov 6 kept
+  multiple runs. All three models loaded at 925/850/700/500/300 hPa.
