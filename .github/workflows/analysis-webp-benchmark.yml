@@ -1,0 +1,81 @@
+name: analysis-webp-benchmark
+on:
+  push:
+    branches:
+      - analysis/webp-benchmark-20261110
+    paths:
+      - .github/workflows/analysis-webp-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image benchmark dependencies
+        run: pip install -q Pillow numpy scikit-image
+      - name: Read-only image benchmark (no deployment or commits)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import io, json, math, statistics, urllib.request
+          from collections import defaultdict
+          import numpy as np
+          from PIL import Image
+          from skimage.metrics import structural_similarity as ssim
+          models = ('ecmwf', 'gfs', 'kim')
+          panels = ('sfc', 'p500', 't2m', 'dswrf', 'tcc')
+          variants = ((82,6),(78,6),(72,6),(65,6))
+          results=[]
+          base='https://raw.githubusercontent.com/futurist38/nwp-verify/site-data/archive/20261109/'
+          for model in models:
+            for panel in panels:
+              name=f'{model}_2026110812_f012_{panel}.webp'
+              req=urllib.request.Request(base+name,headers={'User-Agent':'nwp-webp-benchmark'})
+              try:
+                payload=urllib.request.urlopen(req,timeout=35).read()
+                picture=Image.open(io.BytesIO(payload)).convert('RGB')
+              except Exception as e:
+                print('FETCH_ERROR',name,str(e))
+                continue
+              arr=np.asarray(picture)
+              gray=np.asarray(picture.convert('L'))
+              record={'file':name,'panel':panel,'model':model,'current':len(payload),'width':picture.width,'height':picture.height}
+              for q,method in variants:
+                buf=io.BytesIO()
+                picture.save(buf,format='WEBP',quality=q,method=method)
+                out=buf.getvalue()
+                decoded=Image.open(io.BytesIO(out)).convert('RGB')
+                dst=np.asarray(decoded)
+                mse=np.mean((arr.astype(np.float32)-dst.astype(np.float32))**2)
+                psnr=round(10*math.log10(255**2/mse),2) if mse else 99
+                sv=ssim(arr,dst,channel_axis=2,data_range=255)
+                gv=ssim(gray,np.asarray(decoded.convert('L')),data_range=255)
+                record[f'q{q}m{method}']={'bytes':len(out),'ratio':round(len(out)/len(payload),4),
+                    'psnr_db':psnr,'ssim_rgb':round(float(sv),5),'ssim_gray':round(float(gv),5)}
+              results.append(record)
+              print('FILE',json.dumps(record,ensure_ascii=False))
+          if len(results)<10: raise SystemExit(f'Insufficient benchmark images: {len(results)}')
+          print('SUMMARY_BEGIN')
+          print('SAMPLES',len(results),'BYTES',sum(r['current'] for r in results))
+          for p in panels:
+            r=[x for x in results if x['panel']==p]
+            print('PANEL',p,'n',len(r),'baseline_bytes',sum(x['current'] for x in r))
+            for q,method in variants:
+              k=f'q{q}m{method}'
+              print('  VARIANT',k,'size_ratio',round(sum(x[k]['bytes'] for x in r)/sum(x['current'] for x in r),4),
+                  'mean_rgb_ssim',round(statistics.mean(x[k]['ssim_rgb'] for x in r),5),
+                  'min_rgb_ssim',min(x[k]['ssim_rgb'] for x in r),
+                  'mean_psnr',round(statistics.mean(x[k]['psnr_db'] for x in r),2))
+          for q,method in variants:
+            k=f'q{q}m{method}'
+            print('OVERALL',k,'size_ratio',round(sum(x[k]['bytes'] for x in results)/sum(x['current'] for x in results),4),
+                'mean_rgb_ssim',round(statistics.mean(x[k]['ssim_rgb'] for x in results),5),
+                'min_rgb_ssim',min(x[k]['ssim_rgb'] for x in results),
+                'mean_psnr',round(statistics.mean(x[k]['psnr_db'] for x in results),2))
+          print('SUMMARY_END')
+          PY
