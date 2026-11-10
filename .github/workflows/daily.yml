@@ -15,6 +15,7 @@ on:
       - plot_fcstdiff.py
       - fcstdiff_cache.py
       - tools/persist_verification.py
+      - tools/restore_fcstdiff_cache.sh
       - tests/test_fcstdiff_cache.py
       - tests/test_persist_verification.py
       - surface_grid.py
@@ -161,6 +162,7 @@ jobs:
 
       - name: 예보변화 수집 — 완전한 캐시 재사용·누락만 조회
         run: |
+          bash tools/restore_fcstdiff_cache.sh
           /usr/bin/time -f "[timing] forecast_change_fetch: %e s" timeout 900 python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
 
       - name: 예보변화 캐시 보관 — 다음 실행에서 재사용

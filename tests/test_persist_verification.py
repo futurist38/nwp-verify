@@ -19,7 +19,7 @@ def rows(data):
 class PersistenceTests(unittest.TestCase):
     def test_cache_survives_fresh_checkout_and_expiry_cannot_restore_old_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp); remote=root/'remote.git'; local=root/'local'; fresh=root/'fresh'
+            root=Path(tmp); remote=root/'remote.git'; local=root/'local'; fresh=root/'fresh'; stale=root/'stale'
             def run(*args, cwd=root):
                 return subprocess.check_output(['git', *args], cwd=cwd, stderr=subprocess.DEVNULL)
             run('init', '--bare', str(remote)); run('clone', str(remote), str(local))
@@ -32,6 +32,8 @@ class PersistenceTests(unittest.TestCase):
             history=local/'verification/fcstdiff_data/20261106.json'
             history.parent.mkdir(parents=True); history.write_text('{"history":true}')
             run('add', '.', cwd=local); run('commit', '-m', 'base', cwd=local); run('push', 'origin', 'main', cwd=local)
+            run('clone', '-b', 'main', str(remote), str(stale))
+            stale_head=run('rev-parse', 'HEAD', cwd=stale)
             current=local/'verification/fcstdiff/2026111005.json'
             values={f'20261111{h:02d}': h for h in range(24)}
             write_cache(current, {'1': values})
@@ -47,10 +49,15 @@ class PersistenceTests(unittest.TestCase):
                 self.assertEqual(read_cache(fresh/current.relative_to(local)), {'1': values})
                 self.assertFalse((fresh/old.relative_to(local)).exists())
                 self.assertEqual((fresh/history.relative_to(local)).read_text(), '{"history":true}')
+                # Re-running the old commit must still restore inputs saved after that SHA.
+                restore=Path(__file__).resolve().parents[1]/'tools/restore_fcstdiff_cache.sh'
+                subprocess.check_call(['bash', str(restore)], cwd=stale)
+                self.assertEqual(run('rev-parse', 'HEAD', cwd=stale), stale_head)
+                self.assertEqual(read_cache(stale/current.relative_to(local)), {'1': values})
                 import plot_fcstdiff as maps
                 import pandas as pd
                 stns=pd.DataFrame([{'STN':1, 'nx':60, 'ny':127}])
-                with patch.object(maps, 'CACHE_DIR', str(fresh/'verification/fcstdiff')), \
+                with patch.object(maps, 'CACHE_DIR', str(stale/'verification/fcstdiff')), \
                         patch.object(maps, 'fetch', side_effect=AssertionError('network forbidden')), \
                         patch.object(maps, 'auth_key', side_effect=AssertionError('key forbidden')):
                     got=maps.load_issue('2026111005', stns, target_days=[dt.date(2026,11,11)], cache_only=True)
