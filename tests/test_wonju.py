@@ -15,6 +15,12 @@ from kma_vilage import latlon_to_grid
 import plot_kmafcst as short
 
 
+class FixtureDate(dt.date):
+    @classmethod
+    def today(cls):
+        return cls(2026, 10, 26)
+
+
 class WonjuPipelineTests(unittest.TestCase):
     def test_station_and_model_coordinates_match_committed_station_catalog(self):
         with open(Path(__file__).resolve().parents[1] / 'verification/obs/stations.csv', encoding='utf-8-sig') as f:
@@ -103,7 +109,7 @@ class WonjuPipelineTests(unittest.TestCase):
             raw = {issue: {'강릉': {valid: 16}}}
             (root / 'kmafcst/20261026.json').write_text(json.dumps(raw), encoding='utf-8')
             (root / 'obs/2026-10.csv').write_text('TM,STN,TA,CA_TOT\n2026-10-26 12:00:00,114,12.3,\n2026-10-26 12:00:00,105,16.1,3\n', encoding='utf-8')
-            with patch.object(build_site, 'VERIF_DIR', str(root)):
+            with patch.object(build_site, 'VERIF_DIR', str(root)), patch.object(build_site.dt, 'date', FixtureDate):
                 build_site.export_kmafcst(str(root / 'site'))
                 output = json.loads((root / 'site/kmafcst/20261026.json').read_text())
                 index = int((dt.datetime.strptime(valid, '%Y%m%d%H') - dt.datetime.strptime(output['t0'], '%Y%m%d%H')).total_seconds() / 3600)
@@ -213,7 +219,7 @@ class TwelveCityPipelineTests(unittest.TestCase):
             raw = {previous: {'청주': {valid: 99}}, issue: {'서울': {valid: 0}, '수원': {valid: 12}}}
             (root / 'kmafcst/20261026.json').write_text(json.dumps(raw), encoding='utf-8')
             (root / 'obs/2026-10.csv').write_text('TM,STN,TA,CA_TOT\n2026-10-26 12:00:00,119,11,0\n2026-10-26 11:00:00,131,20,3\n', encoding='utf-8')
-            with patch.object(build_site, 'VERIF_DIR', str(root)):
+            with patch.object(build_site, 'VERIF_DIR', str(root)), patch.object(build_site.dt, 'date', FixtureDate):
                 build_site.export_kmafcst(str(root / 'site'))
             out = json.loads((root / 'site/kmafcst/20261026.json').read_text())
             ix = int((dt.datetime.strptime(valid, '%Y%m%d%H') - dt.datetime.strptime(out['t0'], '%Y%m%d%H')).total_seconds() / 3600)
