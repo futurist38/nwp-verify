@@ -33,3 +33,21 @@
  linear-gradient(45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%),
  linear-gradient(-45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%)}
 .ing-legend i.none{background:transparent;border:1px solid transparent}
+/* Daily slots: enough room for the schedule labels and touch targets. */
+.ing-daypicker{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 8px}
+.ing-daypicker button{padding:8px 15px;border:1px solid #c6ced8;border-radius:7px;background:#fff;color:#344054;cursor:pointer;font:inherit}
+.ing-daypicker button[aria-pressed=true]{background:#203d58;color:#fff;border-color:#203d58}
+.ing-daypicker span{color:#64748b;font-size:12px;margin-left:auto}
+.ing-matrix{grid-template-columns:190px repeat(var(--cols),minmax(25px,1fr));grid-auto-rows:48px;gap:0;min-width:820px;background:#fff}
+.ing-corner{font-size:12px;color:#64748b}
+.ing-daymark{align-self:center;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
+.ing-rowlabel{font-size:13px;line-height:1.3;position:sticky;left:0;background:#fff;z-index:1;height:100%;justify-content:center;border-top:1px solid #edf0f4}
+.ing-rowlabel small{font-size:11px;color:#64748b;white-space:normal}
+.ing-cell{box-sizing:border-box;justify-self:center;width:20px;height:20px;border-radius:4px}
+.ing-cell.unknown,.ing-legend i.unknown{background:#edf0f4;border:1px solid #c9d0da}
+.ing-cell.expected,.ing-legend i.expected{border:1.5px dashed #8f9baa;background:transparent}
+.ing-legend{gap:14px;margin:12px 0;line-height:1.6}
+.ing-legend i{box-sizing:border-box;width:14px;height:14px}
+.ing-cell-detail{padding:13px 15px;color:#344054;min-height:20px}
+#ingestDashboard details{margin:20px 0}#ingestDashboard summary{cursor:pointer;color:#344054;font-weight:600}
+@media(max-width:640px){.ing-matrix{grid-template-columns:170px repeat(var(--cols),30px)}.ing-daypicker span{width:100%;margin-left:0}.ing-cell{width:24px;height:24px}}

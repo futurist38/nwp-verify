@@ -42,10 +42,11 @@ def _parse(s):
         return None
 
 
-def export(site_dir: str, days: int = 3) -> dict:
-    now = dt.datetime.now(KST)
+def export(site_dir: str, days: int = 3, *, now=None) -> dict:
+    now = now or dt.datetime.now(KST)
     cut = now - dt.timedelta(days=days)
     events = []
+    recording_start = None
     if EVENT_DIR.exists():
         for p in sorted(EVENT_DIR.glob("*.json")):
             try:
@@ -53,7 +54,9 @@ def export(site_dir: str, days: int = 3) -> dict:
             except Exception:
                 continue
             end = _parse(e.get("ended_kst"))
-            if not end or end < cut:
+            if end:
+                recording_start = min(recording_start, end) if recording_start else end
+            if not end or end < cut or end > now:
                 continue
             # Public summary: no raw error detail, workflow/run IDs, command, keys, or URLs.
             events.append({
@@ -68,6 +71,7 @@ def export(site_dir: str, days: int = 3) -> dict:
                 "summary": e.get("summary"),
             })
 
+    events.sort(key=lambda e: e["ended_kst"])
     latest = {}
     fail_count = {}
     for e in events:
@@ -88,13 +92,19 @@ def export(site_dir: str, days: int = 3) -> dict:
         row["failures_3d"] = fail_count.get(e["source"], 0)
         latest_rows.append(row)
 
+    labels = ["ECMWF", "GFS", "KIM", "ECMWF/GFS 상층", "KIM 상층", "기상청 단기예보", "기상청 예보변화", "기상청 중기예보", "기상청 중기개황", "ASOS", "GK2A 위성일사", "GK2A 운량 나우캐스트"]
+    for src, label in zip(SOURCE_ORDER, labels):
+        if src not in latest:
+            latest_rows.append({"source": src, "label": label, "status": "unknown"})
+    latest_rows.sort(key=rank)
+
     # Statuspage-style hourly history. Each source gets 72 hourly buckets;
     # a bucket is colored only when an ingest/check event actually ran.
     # Multiple events in one hour collapse to the worst status so a failure
     # followed by a success remains visible in the history.
-    severity = {"success": 0, "partial": 1, "failed": 2}
+    severity = {"success": 0, "partial": 1, "delayed": 1, "failed": 2}
     hours = []
-    end_hour = now.replace(minute=0, second=0, microsecond=0)
+    end_hour = now.replace(hour=23, minute=0, second=0, microsecond=0)
     for i in range(days * 24 - 1, -1, -1):
         h = end_hour - dt.timedelta(hours=i)
         hours.append(h.isoformat(timespec="minutes"))
@@ -104,7 +114,7 @@ def export(site_dir: str, days: int = 3) -> dict:
     schedule_meta = {}
     hour_objs = [dt.datetime.fromisoformat(h) for h in hours]
     for src, cfg in EXPECTED.items():
-        schedule_meta[src] = {"label": cfg.get("label"), "grace_h": cfg.get("grace_h", 1)}
+        schedule_meta[src] = {"label": cfg.get("label"), "grace_h": cfg.get("grace_h", 1), "hours": cfg.get("hours"), "every_hour": cfg.get("every_hour", False)}
         slots = {}
         for h in hour_objs:
             due = bool(cfg.get("every_hour")) or h.hour in cfg.get("hours", [])
@@ -122,12 +132,13 @@ def export(site_dir: str, days: int = 3) -> dict:
             continue
         src = e["source"]
         cfg = EXPECTED.get(src, {})
+        started = _parse(e.get("started_kst")) or end
         candidates = []
         for h in hour_objs:
             if h > end:
                 continue
             due = bool(cfg.get("every_hour")) or h.hour in cfg.get("hours", [])
-            if due and (end - h) <= dt.timedelta(hours=cfg.get("grace_h", 1)):
+            if due and h <= started and (started - h) <= dt.timedelta(hours=cfg.get("grace_h", 1)):
                 candidates.append(h)
         if candidates:
             slot = max(candidates)
@@ -135,6 +146,9 @@ def export(site_dir: str, days: int = 3) -> dict:
         else:
             key = end.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
             unmatched.append((src, key))
+        e = dict(e)
+        if candidates and e["status"] == "success" and end > slot + dt.timedelta(hours=cfg.get("grace_h", 1)):
+            e["status"] = "delayed"
         prev = matrix.setdefault(src, {}).get(key)
         if prev is None or severity.get(e["status"], 2) >= severity.get(prev, 2):
             matrix[src][key] = e["status"]
@@ -146,11 +160,16 @@ def export(site_dir: str, days: int = 3) -> dict:
         grace = dt.timedelta(hours=EXPECTED[src].get("grace_h", 1))
         for key in slots:
             h = dt.datetime.fromisoformat(key)
-            if key not in matrix.get(src, {}) and now > h + grace:
+            if key in matrix.get(src, {}):
+                continue
+            if h <= now and (recording_start is None or h < recording_start.replace(minute=0, second=0, microsecond=0)):
+                matrix.setdefault(src, {})[key] = "unknown"
+            elif now > h + grace:
                 matrix.setdefault(src, {})[key] = "missed"
 
     out = {
-        "schema": 2,
+        "schema": 3,
+        "recording_started_kst": recording_start.isoformat() if recording_start else None,
         "generated_kst": now.isoformat(timespec="seconds"),
         "window_days": days,
         "hours": hours,
