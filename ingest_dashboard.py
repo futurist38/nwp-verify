@@ -70,10 +70,36 @@ def export(site_dir: str, days: int = 3) -> dict:
         row["failures_3d"] = fail_count.get(e["source"], 0)
         latest_rows.append(row)
 
+    # Statuspage-style hourly history. Each source gets 72 hourly buckets;
+    # a bucket is colored only when an ingest/check event actually ran.
+    # Multiple events in one hour collapse to the worst status so a failure
+    # followed by a success remains visible in the history.
+    severity = {"success": 0, "partial": 1, "failed": 2}
+    hours = []
+    end_hour = now.replace(minute=0, second=0, microsecond=0)
+    for i in range(days * 24 - 1, -1, -1):
+        h = end_hour - dt.timedelta(hours=i)
+        hours.append(h.isoformat(timespec="minutes"))
+    matrix = {}
+    detail = {}
+    for e in events:
+        end = _parse(e.get("ended_kst"))
+        if not end:
+            continue
+        key = end.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
+        src = e["source"]
+        prev = matrix.setdefault(src, {}).get(key)
+        if prev is None or severity.get(e["status"], 2) >= severity.get(prev, 2):
+            matrix[src][key] = e["status"]
+            detail.setdefault(src, {})[key] = e
+
     out = {
-        "schema": 1,
+        "schema": 2,
         "generated_kst": now.isoformat(timespec="seconds"),
         "window_days": days,
+        "hours": hours,
+        "matrix": matrix,
+        "matrix_detail": detail,
         "latest": latest_rows,
         "events": sorted(events, key=lambda e: e.get("ended_kst") or "", reverse=True),
     }
