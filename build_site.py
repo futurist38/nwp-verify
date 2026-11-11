@@ -838,6 +838,13 @@ def main():
         os.makedirs(dst_ch, exist_ok=True)
         shutil.copy2(data_ch, dst_ch)
     nc = copy_nowcast(args.site_dir)
+    # 운영 수신현황: 상세 이벤트는 verification/ingest 에 보존하고,
+    # 사이트에는 최근 3일의 민감정보 제거 요약만 공개한다.
+    try:
+        import ingest_dashboard
+        ingest_dashboard.export(args.site_dir, days=3)
+    except Exception as e:
+        print(f"[site] 수신현황 대시보드 생성 실패(계속): {e}")
     # 브리핑 묶음(앞 7일 값, 2026-09-08) — daily·hourly 양쪽에서 갱신(관측은 매시, 모델은 daily 커밋 기준)
     try:
         import export_briefing
