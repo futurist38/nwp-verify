@@ -126,12 +126,23 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("실행할 명령이 없습니다. -- 뒤에 명령을 지정하세요.")
     started = now_kst()
     tic = time.monotonic()
-    p = subprocess.run(args.command, text=True, stdout=subprocess.PIPE,
-                       stderr=subprocess.STDOUT, errors="replace")
-    output = p.stdout or ""
+    timed_out = False
+    try:
+        p = subprocess.run(args.command, text=True, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, errors="replace",
+                           timeout=args.timeout if args.timeout and args.timeout > 0 else None)
+        returncode = p.returncode
+        output = p.stdout or ""
+    except subprocess.TimeoutExpired as ex:
+        timed_out = True
+        returncode = 124
+        raw = ex.stdout or ""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", "replace")
+        output = str(raw) + f"\n[ingest-status] 시간초과: {args.timeout}초"
     sys.stdout.write(output)
     ended = now_kst()
-    status, summary = classify(p.returncode, output)
+    status, summary = classify(returncode, output)
     issue = infer_issue(args.source, output, started)
     lines = [x.strip() for x in sanitize(output).splitlines() if x.strip()]
     detail = "\n".join(lines[-8:]) if status != "success" else None
@@ -147,14 +158,14 @@ def run(args: argparse.Namespace) -> int:
         "status": status,
         "summary": summary,
         "detail": detail,
-        "returncode": p.returncode,
+        "returncode": returncode,
         "workflow": os.environ.get("GITHUB_WORKFLOW"),
         "run_id": os.environ.get("GITHUB_RUN_ID"),
         "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
     }
     path = write_event(event)
     print(f"[ingest-status] {args.label or args.source}: {status}, issue={issue or '-'} -> {path}")
-    return p.returncode
+    return returncode
 
 
 def main() -> None:
@@ -165,6 +176,7 @@ def main() -> None:
     rp.add_argument("--label", default="")
     rp.add_argument("--kind", required=True,
                     choices=["model", "forecast", "observation", "satellite", "system"])
+    rp.add_argument("--timeout", type=int, default=0, help="명령 실행 상한(초). 시간초과도 이벤트로 기록")
     rp.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args()
     if args.action == "run":
