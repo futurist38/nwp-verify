@@ -49,7 +49,8 @@
       const d=new Date(h);
       const prev=i?new Date(hours[i-1]):null;
       const day=new Intl.DateTimeFormat("ko-KR",{month:"numeric",day:"numeric",timeZone:"Asia/Seoul"}).format(d);
-      return !prev || d.getDate()!==prev.getDate() ? `<span class="ing-daymark" style="grid-column:${i+2}">${day}</span>` : "";
+      const show=!prev || new Intl.DateTimeFormat("ko-KR",{day:"numeric",timeZone:"Asia/Seoul"}).format(d)!==new Intl.DateTimeFormat("ko-KR",{day:"numeric",timeZone:"Asia/Seoul"}).format(prev);
+      return `<span class="ing-daymark">${show?day:""}</span>`;
     }).join("");
     const rows=latest.map(e=>{
       const cells=hours.map(h=>{
