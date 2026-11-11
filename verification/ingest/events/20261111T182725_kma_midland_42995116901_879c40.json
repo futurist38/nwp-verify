@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "kma_midland",
+  "label": "기상청 중기개황",
+  "kind": "forecast",
+  "issue": "2026111118",
+  "started_kst": "2026-11-11T18:27:03+09:00",
+  "ended_kst": "2026-11-11T18:27:25+09:00",
+  "duration_s": 21.7,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "42995116901",
+  "run_attempt": "1"
+}
