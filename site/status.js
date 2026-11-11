@@ -2,12 +2,12 @@
 
 (() => {
   const STATUS = {
-    unknown: {label:"기록 없음", cls:"unknown"},
+    unknown: {label:"판정 불가", cls:"unknown"},
     delayed: {label:"지연 수신", cls:"warn"},
     success: {label:"정상", cls:"ok"},
     partial: {label:"부분수신", cls:"warn"},
     failed: {label:"실패", cls:"bad"},
-    missed: {label:"미수신", cls:"missed"}
+    missed: {label:"수신 기록 없음", cls:"missed"}
   };
   const KIND = {model:"수치모델", forecast:"기상청 예보", observation:"관측", satellite:"위성·초단기", system:"시스템"};
 
@@ -61,7 +61,7 @@
         let title;
         if(d) title=`${e.label} · ${due?"예정 슬롯":"추가 실행"} ${fmtKst(h)} · 실제 완료 ${fmtKst(d.ended_kst)} · ${STATUS[d.status]?.label||d.status}${d.issue?" · "+fmtIssue(d.issue,d.source):""}`;
         else if(st==="unknown") title=`${e.label} · ${fmtKst(h)} · 기록 시작 전 / 판정 불가`;
-        else if(st==="missed") title=`${e.label} · ${fmtKst(h)} 예정 · 유예시간 경과 후 미수신`;
+        else if(st==="missed") title=`${e.label} · ${fmtKst(h)} 예정 · 유예시간 경과 후 수신 기록 없음`;
         else if(st==="expected") title=`${e.label} · ${fmtKst(h)} 예정 · 아직 대기/유예시간`;
         else title=`${e.label} · 이 시간은 정규 수신 예정 슬롯 아님`;
         if(st==="none") return `<span class="ing-cell none" aria-label="${title}"></span>`;
@@ -74,7 +74,7 @@
       <div class="ing-corner">자료 / 수집 주기</div>${dayMarks}
       ${rows}
     </div></div>
-    <div class="ing-legend"><span><i class="expected"></i>수신 예정</span><span><i class="ok"></i>정상</span><span><i class="warn"></i>부분수신/지연</span><span><i class="bad"></i>실패</span><span><i class="missed"></i>예정시간 미수신</span><span><i class="unknown"></i>기록 없음</span><span>빈칸: 예정 없음</span></div>
+    <div class="ing-legend"><span><i class="expected"></i>수신 예정</span><span><i class="ok"></i>정상</span><span><i class="warn"></i>부분수신/지연</span><span><i class="bad"></i>실패</span><span><i class="missed"></i>수신 기록 없음</span><span><i class="unknown"></i>판정 불가</span><span>빈칸: 예정 없음</span></div>
     <div id="ingestCellDetail" class="ing-cell-detail" aria-live="polite">네모를 누르면 해당 시각의 상세 상태를 표시합니다.</div>`;
   }
   function row(e){
@@ -102,9 +102,9 @@
         const e=j.matrix_detail?.[btn.dataset.source]?.[btn.dataset.hour];
         const box=$("ingestCellDetail"); if(!box) return;
         if(!e){
-          if(btn.dataset.state==="unknown") box.textContent="기록 수집을 시작하기 전이므로 정상 또는 미수신 여부를 판정할 수 없습니다.";
-          else if(btn.dataset.state==="missed") box.textContent="원래 수신 예정 슬롯이지만 유예시간 안에 성공/부분수신 기록이 없어 미수신으로 판정했습니다.";
-          else if(btn.dataset.state==="expected") box.textContent="원래 수신 예정 슬롯입니다. 아직 예정시각 전이거나 유예시간 안이라 미수신 판정을 내리지 않았습니다.";
+          if(btn.dataset.state==="unknown") box.textContent="기록 수집을 시작하기 전이므로 수신 상태를 판정할 수 없습니다.";
+          else if(btn.dataset.state==="missed") box.textContent="수신 예정시각과 유예시간이 지났지만 이 슬롯에 작업 결과가 기록되지 않았습니다. 작업 미실행·지연·기록 누락 가능성이 있으며, 실제 자료 부재를 확정한 것은 아닙니다.";
+          else if(btn.dataset.state==="expected") box.textContent="원래 수신 예정 슬롯입니다. 아직 예정시각 전이거나 유예시간 안이므로 대기 상태입니다.";
           else box.textContent="이 시간은 이 자료의 정규 수신 예정 시간이 아닙니다.";
           return;
         }

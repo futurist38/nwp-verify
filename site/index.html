@@ -314,9 +314,10 @@
         <div id="ingestGenerated" class="ing-generated">수신현황 확인 중…</div>
       </div>
       <h3>시간별 수신 상태 · 최근 3일</h3>
-      <p class="ing-sub">예정 슬롯을 기준으로 표시합니다. 빈칸은 예정 없음, 점선은 대기, 빨간 X는 유예시간을 넘긴 미수신입니다. 추가 실행은 실제 실행 시간에 표시됩니다.</p>
+      <p class="ing-sub">예정 슬롯을 기준으로 표시합니다. 빈칸은 예정 없음, 점선은 대기, 빨간 X는 유예시간이 지난 뒤에도 수신 기록이 없다는 뜻입니다. 추가 실행은 실제 실행 시간에 표시됩니다.</p>
       <div id="ingestMatrix"><p class="note">시간별 상태를 불러오는 중…</p></div>
-      <details><summary>자료별 최근 수신 결과</summary><div id="ingestCards" class="ing-cards"></div></details>
+      <h3>자료별 최근 수신 결과</h3>
+      <div id="ingestCards" class="ing-cards"></div>
       <h3>최근 3일 이력</h3>
       <div class="ing-table-wrap">
         <table class="ing-table">
@@ -375,7 +376,7 @@
 <script src="app.js?v=40"></script>
 <script src="satellite.js?v=1"></script>
 <script src="forecast-compare.js?v=5"></script>
-<script src="status.js?v=3"></script>
+<script src="status.js?v=4"></script>
 </body>
 </html>
 
