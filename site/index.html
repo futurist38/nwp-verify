@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="surface-grid.css?v=1">
 <link rel="stylesheet" href="overview.css?v=2">
 <link rel="stylesheet" href="forecast-compare.css?v=2">
-<link rel="stylesheet" href="satellite.css?v=1">
+<link rel="stylesheet" href="satellite.css?v=1">\n<link rel="stylesheet" href="status.css?v=1">
 </head>
 <body>
 <header>
@@ -305,6 +305,24 @@
     <ul id="caseList"></ul>
   </section>
 
+  <section id="tab-status" class="tab card">
+    <div id="ingestDashboard" aria-busy="true">
+      <div class="ing-head">
+        <div><h2>자료 수신 현황</h2><p class="ing-sub">수치모델·기상청 예보·관측·위성 자료의 최근 수신 결과입니다. 시각은 별도 표기가 없으면 KST입니다.</p></div>
+        <div id="ingestGenerated" class="ing-generated">수신현황 확인 중…</div>
+      </div>
+      <div id="ingestCards" class="ing-cards"><p class="note">수신현황을 불러오는 중…</p></div>
+      <h3>최근 3일 이력</h3>
+      <div class="ing-table-wrap">
+        <table class="ing-table">
+          <thead><tr><th>수신완료</th><th>자료</th><th>자료/발표시각</th><th>결과</th><th>소요</th><th>비고</th></tr></thead>
+          <tbody id="ingestRows"><tr><td colspan="6">불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">상세 오류문과 실행 식별자는 사이트에 공개하지 않고 GitHub의 <code>verification/ingest/events/</code>에만 보관합니다. 실패 후 재시도에 성공해도 실패 이력은 지우지 않습니다.</p>
+    </div>
+  </section>
+
   <section id="tab-about" class="tab card">
     <h2>소개</h2>
     <p>수치예보모델(ECMWF·GFS·KIM)의 한반도 기온·운량·일사·강수 예측을 원본 GRIB에서 직접 추출해
@@ -351,7 +369,7 @@
 <script src="surface-grid.js?v=3"></script>
 <script src="app.js?v=40"></script>
 <script src="satellite.js?v=1"></script>
-<script src="forecast-compare.js?v=5"></script>
+<script src="forecast-compare.js?v=5"></script>\n<script src="status.js?v=1"></script>
 </body>
 </html>
 
