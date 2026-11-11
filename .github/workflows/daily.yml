@@ -130,12 +130,12 @@ jobs:
       # 넘겨 잡 전체가 100분 상한에 취소됐고, 그날 NWP 지도가 오후까지 안 나갔다.
       - name: 1단계 — NWP 수신·표출
         run: |
-          /usr/bin/time -f "[timing] surface_ecmwf_fetch: %e s" timeout 900 python tools/ingest_status.py run --source ecmwf --label ECMWF --kind model -- python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패/시간초과 — 계속"
-          /usr/bin/time -f "[timing] surface_gfs_fetch: %e s" timeout 600 python tools/ingest_status.py run --source gfs --label GFS --kind model -- python fetch_gfs.py || echo "::warning::GFS 수신 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] surface_ecmwf_fetch: %e s" python tools/ingest_status.py run --source ecmwf --label ECMWF --kind model --timeout 900 -- python fetch_ecmwf.py || echo "::warning::ECMWF 수신 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] surface_gfs_fetch: %e s" python tools/ingest_status.py run --source gfs --label GFS --kind model --timeout 600 -- python fetch_gfs.py || echo "::warning::GFS 수신 실패/시간초과 — 계속"
           # KIM (2026-09-16 전환): 1순위 NC 격자 조회(기관키, ~500요청·200MB, 실측 1분). 실패하면 2026-10-01 전까지만
           # GRIB(k512, 25스텝×76MB)으로 대체 — 그날부터 GRIB 생산이 끊기므로(API허브 공지 9/11) 시도하지 않는다.
           # 두 경로 다 실패하면 이 런은 KIM 없이 발행한다 (옛 파일을 쓰지 않는다 — 러너는 매번 빈 data/ 로 시작).
-          /usr/bin/time -f "[timing] surface_kim_fetch: %e s" timeout 600 python tools/ingest_status.py run --source kim --label KIM --kind model -- python fetch_kim_nc.py --max-minutes 8 \
+          /usr/bin/time -f "[timing] surface_kim_fetch: %e s" python tools/ingest_status.py run --source kim --label KIM --kind model --timeout 600 -- python fetch_kim_nc.py --max-minutes 8 \
             || { [ "$(date -u +%Y%m%d)" -lt 20261001 ] && timeout 1500 python fetch_kim.py --max-minutes 20; } \
             || echo "::warning::KIM 수신 실패(NC·GRIB 모두) — 이 런은 KIM 없이 계속"
           /usr/bin/time -f "[timing] surface_decode_export: %e s" python plot_charts.py --surface-grids
@@ -148,22 +148,22 @@ jobs:
       - name: 2단계 — 검증·관측·단기예보
         run: |
           # 고도별 기압장 (2026-09-07): ECMWF pl ≈ 200MB + GFS 14MB → 그림만 남기고 원본 삭제
-          /usr/bin/time -f "[timing] upper_ecmwf_gfs_fetch: %e s" timeout 1200 python tools/ingest_status.py run --source upper_global --label 'ECMWF/GFS 상층' --kind model -- python fetch_upper.py || echo "::warning::상층 수신 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] upper_ecmwf_gfs_fetch: %e s" python tools/ingest_status.py run --source upper_global --label 'ECMWF/GFS 상층' --kind model --timeout 1200 -- python fetch_upper.py || echo "::warning::상층 수신 실패/시간초과 — 계속"
           # KIM 상층+동아시아 지상장 (2026-09-16 전환): NC 격자 조회(1/4° 추출, ~340요청). 1단계가 고른 런을 그대로 쓴다.
           # 실패 시 2026-10-01 전까지만 GRIB(fetch_kim_pres.py, 3.9GB 스트리밍)으로 대체.
-          /usr/bin/time -f "[timing] upper_kim_fetch: %e s" timeout 600 python tools/ingest_status.py run --source kim_upper --label 'KIM 상층' --kind model -- python fetch_kim_nc.py --upper --max-minutes 8 \
+          /usr/bin/time -f "[timing] upper_kim_fetch: %e s" python tools/ingest_status.py run --source kim_upper --label 'KIM 상층' --kind model --timeout 600 -- python fetch_kim_nc.py --upper --max-minutes 8 \
             || { [ "$(date -u +%Y%m%d)" -lt 20261001 ] && timeout 1200 python fetch_kim_pres.py --max-minutes 15; } \
             || echo "::warning::KIM 상층 수신 실패(NC·GRIB 모두) — 계속"
           /usr/bin/time -f "[timing] upper_render: %e s" timeout 900  python plot_upper.py --delete-raw || echo "::warning::상층 지도 실패/시간초과 — 계속"
           /usr/bin/time -f "[timing] verification_score: %e s" timeout 600 python verify.py score   || echo "::warning::score 실패/시간초과 — 계속"
           /usr/bin/time -f "[timing] verification_report: %e s" timeout 300 python verify.py report  || echo "::warning::report 실패/시간초과 — 계속"
-          /usr/bin/time -f "[timing] observation_fetch: %e s" timeout 600 python tools/ingest_status.py run --source asos --label ASOS --kind observation -- python plot_obsmap.py --no-plot || echo "::warning::관측 수신 실패/시간초과 — 계속"
-          /usr/bin/time -f "[timing] forecast_observation: %e s" timeout 480 python tools/ingest_status.py run --source kma_short --label '기상청 단기예보' --kind forecast -- python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 캐시 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] observation_fetch: %e s" python tools/ingest_status.py run --source asos --label ASOS --kind observation --timeout 600 -- python plot_obsmap.py --no-plot || echo "::warning::관측 수신 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] forecast_observation: %e s" python tools/ingest_status.py run --source kma_short --label '기상청 단기예보' --kind forecast --timeout 480 -- python plot_kmafcst.py --no-fetch --no-plot || echo "::warning::단기예보 캐시 실패/시간초과 — 계속"
 
       - name: 예보변화 수집 — 완전한 캐시 재사용·누락만 조회
         run: |
           bash tools/restore_fcstdiff_cache.sh
-          /usr/bin/time -f "[timing] forecast_change_fetch: %e s" timeout 900 python tools/ingest_status.py run --source kma_fcstdiff --label '기상청 예보변화' --kind forecast -- python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] forecast_change_fetch: %e s" python tools/ingest_status.py run --source kma_fcstdiff --label '기상청 예보변화' --kind forecast --timeout 900 -- python plot_fcstdiff.py --no-plot --max-minutes 12 || echo "::warning::예보변화 실패/시간초과 — 계속"
 
       - name: 예보변화 캐시 보관 — 다음 실행에서 재사용
         id: fcstdiff_cache
@@ -178,8 +178,8 @@ jobs:
           /usr/bin/time -f "[timing] verification_map: %e s" timeout 300 python plot_verifmap.py  || echo "::warning::오차지도 실패/시간초과 — 계속"
           # 2026-09-06 추가 — 중기예보 기온(하루 2회 발표, 10도시 10호출) · GK2A 위성 일사 일적산
           # (ECMWF 앙상블 fetch_ens.py 는 사용자 결정으로 보류 — 필요 시 여기에 한 줄 추가)
-          /usr/bin/time -f "[timing] midrange_fetch: %e s" timeout 300 python tools/ingest_status.py run --source kma_mid --label '기상청 중기예보' --kind forecast -- python kma_midfcst.py --days 3 || echo "::warning::중기예보 실패/시간초과 — 계속"
-          /usr/bin/time -f "[timing] satellite_solar: %e s" timeout 600 python tools/ingest_status.py run --source gk2a_solar --label 'GK2A 위성일사' --kind satellite -- python gk2a_swrad_daily.py || echo "::warning::위성 일사 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] midrange_fetch: %e s" python tools/ingest_status.py run --source kma_mid --label '기상청 중기예보' --kind forecast --timeout 300 -- python kma_midfcst.py --days 3 || echo "::warning::중기예보 실패/시간초과 — 계속"
+          /usr/bin/time -f "[timing] satellite_solar: %e s" python tools/ingest_status.py run --source gk2a_solar --label 'GK2A 위성일사' --kind satellite --timeout 600 -- python gk2a_swrad_daily.py || echo "::warning::위성 일사 실패/시간초과 — 계속"
           # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청) — 되살리려면 아래 주석만 풀면 된다.
           # python send_summary.py   || echo "::warning::메일 실패 — 계속"
 
