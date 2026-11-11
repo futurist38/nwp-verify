@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": "202611111000",
+  "started_kst": "2026-11-11T19:16:41+09:00",
+  "ended_kst": "2026-11-11T19:19:31+09:00",
+  "duration_s": 170.2,
+  "status": "partial",
+  "summary": "일부 수신 실패 또는 경고",
+  "detail": "warnings.warn(f'Downloading: {url}', DownloadWarning)\n[GK2A] 202611110600 실패(1/3): NetCDF 아님: b''\n[GK2A] 202611110600 실패(2/3): NetCDF 아님: b''\n[GK2A] 202611110600 실패(3/3): NetCDF 아님: b''\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\n[nowcast] 표출 → /home/runner/work/nwp-verify/nwp-verify/output/nowcast/latest\n[nowcast] 채점: 202611110350 → /home/runner/work/nwp-verify/nwp-verify/verification/nowcast/2026-11.csv",
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "43001991096",
+  "run_attempt": "1"
+}
