@@ -20,3 +20,16 @@
 .ing-legend i.ok{background:#3fa45b}.ing-legend i.warn{background:#d99a1d}.ing-legend i.bad{background:#cc4b4b}
 .ing-cell-detail{font-size:13px;padding:9px 10px;background:#f7f8fa;border:1px solid #e3e6e9;border-radius:8px;margin-bottom:18px}
 @media(max-width:640px){.ing-matrix{grid-template-columns:100px repeat(var(--cols),12px)}}
+
+.ing-rowlabel{display:flex;flex-direction:column;line-height:1.05}
+.ing-rowlabel small{font-size:9px;font-weight:400;color:#8a8f96;margin-top:2px}
+.ing-cell.none{background:transparent;box-shadow:none;cursor:default}
+.ing-cell.expected{background:#fff;border:1px dashed #aeb4bb}
+.ing-cell.missed{border:1px solid #c43c3c;background:
+ linear-gradient(45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%),
+ linear-gradient(-45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%)}
+.ing-legend i.expected{background:#fff;border:1px dashed #aeb4bb}
+.ing-legend i.missed{border:1px solid #c43c3c;background:
+ linear-gradient(45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%),
+ linear-gradient(-45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%)}
+.ing-legend i.none{background:transparent;border:1px solid transparent}
