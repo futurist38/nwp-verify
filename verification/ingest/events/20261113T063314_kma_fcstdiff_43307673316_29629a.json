@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "kma_fcstdiff",
+  "label": "기상청 예보변화",
+  "kind": "forecast",
+  "issue": null,
+  "started_kst": "2026-11-13T06:23:12+09:00",
+  "ended_kst": "2026-11-13T06:33:14+09:00",
+  "duration_s": 602.3,
+  "status": "partial",
+  "summary": "일부 수신 실패 또는 경고",
+  "detail": "[예보변화] 2026111217(어제 17시) → 2026111305(오늘 5시)\n[예보변화] 2026111305: 재사용 0, 조회 97, 수신 97, 미완료 0지점, 292.26초\n[예보변화] 2026111217: 재사용 0, 조회 97, 수신 97, 미완료 0지점, 308.53초\n[예보변화] 캐시 정리: 1건 삭제\n[예보변화] 자료 저장 -> /home/runner/work/nwp-verify/nwp-verify/output/20261113/fcstdiff",
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "43307673316",
+  "run_attempt": "1"
+}
