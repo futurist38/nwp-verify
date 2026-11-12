@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": "202611122210",
+  "started_kst": "2026-11-13T07:27:54+09:00",
+  "ended_kst": "2026-11-13T07:30:44+09:00",
+  "duration_s": 170.3,
+  "status": "partial",
+  "summary": "일부 수신 실패 또는 경고",
+  "detail": "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_coastline.zip\nwarnings.warn(f'Downloading: {url}', DownloadWarning)\n/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_1_states_provinces_lakes.zip\nwarnings.warn(f'Downloading: {url}', DownloadWarning)\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\n[nowcast] 표출 → /home/runner/work/nwp-verify/nwp-verify/output/nowcast/latest\n[nowcast] 채점: 202611121600 → /home/runner/work/nwp-verify/nwp-verify/verification/nowcast/2026-11.csv",
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "43319831660",
+  "run_attempt": "1"
+}
