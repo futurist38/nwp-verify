@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "kim",
+  "label": "KIM",
+  "kind": "model",
+  "issue": "2026111112",
+  "started_kst": "2026-11-12T10:43:59+09:00",
+  "ended_kst": "2026-11-12T10:44:54+09:00",
+  "duration_s": 54.2,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "43136169230",
+  "run_attempt": "1"
+}

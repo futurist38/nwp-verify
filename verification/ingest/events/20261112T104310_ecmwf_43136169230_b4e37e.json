@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "ecmwf",
+  "label": "ECMWF",
+  "kind": "model",
+  "issue": "2026111112",
+  "started_kst": "2026-11-12T10:42:10+09:00",
+  "ended_kst": "2026-11-12T10:43:10+09:00",
+  "duration_s": 59.7,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "43136169230",
+  "run_attempt": "1"
+}
