@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": "202611121010",
+  "started_kst": "2026-11-12T19:28:01+09:00",
+  "ended_kst": "2026-11-12T19:32:30+09:00",
+  "duration_s": 268.4,
+  "status": "partial",
+  "summary": "일부 수신 실패 또는 경고",
+  "detail": "findfont: Failed to find font weight bold for NanumGothic, now using 600.\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\n[nowcast] 표출 → /home/runner/work/nwp-verify/nwp-verify/output/nowcast/latest\nW0000 00:00:1794479507.475101    2850 cpu_allocator_impl.cc:82] Allocation of 1610612736 exceeds 10% of free system memory.\n[GK2A] 202611120600 실패(1/3): NetCDF 아님: b''\n[GK2A] 202611120600 실패(2/3): NetCDF 아님: b''\n[GK2A] 202611120600 실패(3/3): NetCDF 아님: b''\n[nowcast] 채점: 202611120400 → /home/runner/work/nwp-verify/nwp-verify/verification/nowcast/2026-11.csv",
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "43200309000",
+  "run_attempt": "1"
+}
