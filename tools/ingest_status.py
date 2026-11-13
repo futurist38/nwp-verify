@@ -96,8 +96,13 @@ def infer_issue(source: str, output: str, started: dt.datetime) -> str | None:
 def classify(returncode: int, output: str) -> tuple[str, str | None]:
     low = output.lower()
     if returncode == 0:
-        if "수신 실패" in output or "미완료" in output or "warning" in low:
-            return "partial", "일부 수신 실패 또는 경고"
+        # Runtime/deprecation/cartography warnings do not imply missing data.
+        # Receivers also print a completeness summary even when missing == 0.
+        if re.search(r"미완료\s*[:=]?\s*[1-9]\d*", output):
+            return "partial", "미완료 자료 있음"
+        remaining = re.sub(r"미완료\s*[:=]?\s*0+(?!\d)", "", output)
+        if "수신 실패" in remaining or "미완료" in remaining:
+            return "partial", "수신 실패 또는 미완료 자료 있음"
         return "success", None
     if returncode == 124 or "timeout" in low or "시간초과" in output:
         return "failed", "시간초과"
@@ -148,6 +153,7 @@ def run(args: argparse.Namespace) -> int:
     detail = "\n".join(lines[-8:]) if status != "success" else None
     event = {
         "schema": 1,
+        "classification_version": 2,
         "source": args.source,
         "label": args.label or args.source,
         "kind": args.kind,
