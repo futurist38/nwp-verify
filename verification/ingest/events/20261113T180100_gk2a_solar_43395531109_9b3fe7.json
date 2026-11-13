@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "gk2a_solar",
+  "label": "GK2A 위성일사",
+  "kind": "satellite",
+  "issue": null,
+  "started_kst": "2026-11-13T17:58:04+09:00",
+  "ended_kst": "2026-11-13T18:01:00+09:00",
+  "duration_s": 176.6,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "43395531109",
+  "run_attempt": "1"
+}
