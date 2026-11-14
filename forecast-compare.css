@@ -1,0 +1,60 @@
+#tab-compare{--fc-max:#be3543;--fc-min:#216caa;color:#263442}
+#tab-compare h2{margin-top:0}
+.fc-heading,.fc-shortcuts,.fc-legend,.fc-range{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.fc-heading{justify-content:space-between;margin-bottom:16px}
+.fc-subtitle{font-size:12px;color:#657483;line-height:1.6;margin-top:7px}
+#tab-compare button,#tab-compare select{font:inherit;color:inherit;background:#fff;border:1px solid #ccd5dd;border-radius:6px;padding:7px 10px;cursor:pointer}
+#tab-compare button:focus-visible,#tab-compare select:focus-visible{outline:3px solid #347ca7;outline-offset:2px}
+.fc-shortcuts button{font-size:12px!important}
+.fc-controls{display:grid;grid-template-columns:1fr 1fr 120px;gap:16px;padding:16px;background:#f5f7fa;border:1px solid #e0e5eb;border-radius:9px}
+.fc-controls label{font-size:12px;color:#536473;display:block;margin-bottom:6px}
+.fc-ref{display:flex;gap:7px}.fc-ref select:first-child{flex:1;min-width:0}
+.fc-controls>div>select{width:100%}
+.fc-range{font-size:12px;padding:15px 0}
+#fc-summary{margin-left:auto;color:#647280}
+#fc-status{font-size:12px;color:#566575;line-height:1.6;min-height:25px;margin:10px 0}
+.fc-legend{gap:7px 18px;font-size:12px;margin:9px 0}
+.fc-legend span{display:inline-flex;align-items:center;gap:5px}
+.fc-swatch{display:inline-block;width:15px;height:13px;border:1px solid #c4cbd2;border-radius:3px}
+.fc-line{width:25px;border-top:2.5px solid #556472;display:inline-block}.fc-line.dashed{border-top-style:dashed;opacity:.65}
+.fc-max{color:var(--fc-max)}.fc-min{color:var(--fc-min)}
+#fc-timeline{width:100%;overflow-x:auto;border:1px solid #e0e5eb;border-radius:8px;background:#fff;margin-top:14px;padding:10px 0 13px}
+#fc-timeline:empty{display:none}
+#fc-timeline svg{display:block;font-size:12px;fill:#586875;font-family:inherit}
+#fc-timeline .fc-temp-label{font-weight:bold;font-size:12px;paint-order:stroke;stroke:white;stroke-width:3px;stroke-linejoin:round}
+.fc-weather-row,.fc-day-buttons{display:grid;align-items:stretch}
+.fc-weather-row>strong{font-size:10px;align-self:center;text-align:center;color:#526272}
+.fc-weather-cell{display:flex;border-left:1px solid #dce3e9;border-bottom:1px solid #e2e7eb;min-height:59px}
+.fc-weather-cell>span{flex:1;min-width:0;text-align:center;font-size:11px;line-height:1.4;padding:5px 2px;overflow-wrap:anywhere}
+.fc-weather-cell small{display:block;font-size:9px;color:#566575}
+.fc-missing{background:repeating-linear-gradient(135deg,#fff,#fff 5px,#e9edf1 5px,#e9edf1 6px)}
+.fc-day-buttons{margin-top:8px;gap:0}
+#tab-compare .fc-day-buttons button{font-size:11px;border:1px solid transparent;background:#fff;margin:0 3px;padding:5px 1px}
+#tab-compare .fc-day-buttons button[aria-pressed="true"]{border-color:#4382a8;background:#edf6fb;color:#205576}
+#fc-detail h3{margin:20px 0 10px}
+.fc-details-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fc-detail{padding:13px 15px;border:1px solid #e0e5eb;border-radius:8px;background:#fff;font-size:13px}
+.fc-values{font-size:18px;margin:7px 0}.fc-values b{font-size:14px;margin-left:8px}
+.fc-detail p{font-size:11px;color:#647483;line-height:1.8}
+.fc-weather-detail{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:9px;border:1px solid #d9e0e5;border-radius:7px;padding:10px 14px;font-size:12px}
+.fc-weather-detail small{flex-basis:100%;font-size:11px;color:#536371;line-height:1.8}
+.fc-help{margin-top:18px;border-top:1px solid #e1e6eb;padding-top:12px;font-size:12px;color:#637383;line-height:1.8}
+.fc-help summary{cursor:pointer;font-weight:bold}.fc-help p{margin-top:7px}
+.fc-empty{padding:20px;font-size:13px}
+.fc-range-toggle{display:inline-flex;gap:5px;align-items:center;cursor:pointer;margin-left:auto}
+.fc-hourly{margin-top:20px;padding-top:16px;border-top:1px solid #dce4eb}
+.fc-hourly .fc-heading{margin:0 0 8px}.fc-hourly h3{margin:0}.fc-hourly label{font-size:12px}
+#fc-hourly-info{color:#617282;margin-left:auto}
+#fc-hourly-plot{overflow-x:auto;width:100%;border:1px solid #dfe6ed;border-radius:8px;margin-top:10px;padding:10px 0;background:#fff}
+#fc-hourly-plot svg{display:block;font-size:11px;font-family:inherit;fill:#5b6b79}
+.fc-hour-row,.fc-hour-buttons{display:grid;align-items:stretch}
+.fc-hour-row>strong{font-size:10px;align-self:center;text-align:center;color:#5a6a79}
+.fc-hour-row>span{border-left:1px solid #e1e6eb;border-bottom:1px solid #e1e6eb;text-align:center;font-size:14px;padding:4px 0}
+.fc-hour-row small{display:block;font-size:9px;color:#516474}
+.fc-hour-buttons{margin-top:6px}
+#tab-compare .fc-hour-buttons button{font-size:10px;border:1px solid transparent;padding:5px 0;border-radius:4px}
+#tab-compare .fc-hour-buttons button[aria-pressed="true"]{border-color:#4382a8;background:#edf6fb;color:#205576}
+.fc-hourly-detail{display:flex;flex-wrap:wrap;gap:9px 18px;padding:13px 15px;border:1px solid #dce5ed;border-radius:8px;font-size:12px;margin-top:10px;background:#f7fafc}
+.fc-hourly-detail small{flex-basis:100%;line-height:1.8;color:#596b7b}
+.fc-hourly-detail:empty{display:none}
+@media(max-width:650px){.fc-controls{grid-template-columns:1fr;padding:12px;gap:12px}.fc-details-grid{grid-template-columns:1fr}.fc-heading{align-items:flex-start}.fc-range{gap:6px}#fc-summary{margin-left:0;flex-basis:100%}.fc-legend{gap:6px 12px}.fc-ref select{font-size:13px!important}}

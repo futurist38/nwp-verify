@@ -1,0 +1,53 @@
+.ing-head{display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.ing-head h2{margin:0}.ing-sub{margin:4px 0 0;color:#666;font-size:13px}
+.ing-generated{font-size:12px;color:#666}.ing-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0 20px}
+.ing-card{border:1px solid #d9dde3;border-radius:10px;padding:12px;background:#fff}.ing-card.ok{border-left:5px solid #2f8f46}.ing-card.warn{border-left:5px solid #c98500}.ing-card.bad{border-left:5px solid #c43c3c}
+.ing-card-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.ing-state,.ing-badge{font-size:12px;font-weight:700;padding:3px 7px;border-radius:999px;background:#eef1f4}.ing-state{white-space:nowrap}
+.ing-state.ok,.ing-badge.ok{background:#e7f6eb;color:#24733a}.ing-state.warn,.ing-badge.warn{background:#fff3d6;color:#8a5b00}.ing-state.bad,.ing-badge.bad{background:#fde8e8;color:#9d2929}
+.ing-meta{display:flex;justify-content:space-between;gap:8px;margin:8px 0;color:#70757b;font-size:12px}.ing-card dl{display:grid;grid-template-columns:80px 1fr;gap:5px 8px;margin:8px 0 0;font-size:13px}.ing-card dt{color:#777}.ing-card dd{margin:0;font-weight:600}
+.ing-table-wrap{overflow:auto;border:1px solid #e0e3e7;border-radius:10px}.ing-table{width:100%;border-collapse:collapse;min-width:760px;font-size:13px}.ing-table th,.ing-table td{padding:9px 10px;border-bottom:1px solid #eceef0;text-align:left;white-space:nowrap}.ing-table th{background:#f7f8fa;position:sticky;top:0}.ing-table td:last-child{white-space:normal;min-width:180px}
+@media(max-width:640px){.ing-cards{grid-template-columns:1fr}.ing-card dl{grid-template-columns:90px 1fr}}
+.ing-matrix-wrap{overflow-x:auto;padding:4px 0 8px}
+.ing-matrix{display:grid;grid-template-columns:120px repeat(var(--cols),12px);grid-auto-rows:18px;gap:3px;align-items:center;min-width:max-content}
+.ing-corner{grid-column:1;grid-row:1}
+.ing-daymark{grid-row:1;font-size:11px;color:#666;white-space:nowrap;align-self:end}
+.ing-rowlabel{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px}
+.ing-cell{width:12px;height:12px;border:0;border-radius:2px;padding:0;background:#e5e7eb;cursor:pointer}
+.ing-cell.ok{background:#3fa45b}.ing-cell.warn{background:#d99a1d}.ing-cell.bad{background:#cc4b4b}.ing-cell.none{background:#e5e7eb}
+.ing-cell:focus-visible{outline:2px solid #111;outline-offset:1px}
+.ing-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#666;margin:2px 0 10px}
+.ing-legend span{display:inline-flex;align-items:center;gap:5px}.ing-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;background:#e5e7eb}
+.ing-legend i.ok{background:#3fa45b}.ing-legend i.warn{background:#d99a1d}.ing-legend i.bad{background:#cc4b4b}
+.ing-cell-detail{font-size:13px;padding:9px 10px;background:#f7f8fa;border:1px solid #e3e6e9;border-radius:8px;margin-bottom:18px}
+@media(max-width:640px){.ing-matrix{grid-template-columns:100px repeat(var(--cols),12px)}}
+
+.ing-rowlabel{display:flex;flex-direction:column;line-height:1.05}
+.ing-rowlabel small{font-size:9px;font-weight:400;color:#8a8f96;margin-top:2px}
+.ing-cell.none{background:transparent;box-shadow:none;cursor:default}
+.ing-cell.expected{background:#fff;border:1px dashed #aeb4bb}
+.ing-cell.missed{border:1px solid #c43c3c;background:
+ linear-gradient(45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%),
+ linear-gradient(-45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%)}
+.ing-legend i.expected{background:#fff;border:1px dashed #aeb4bb}
+.ing-legend i.missed{border:1px solid #c43c3c;background:
+ linear-gradient(45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%),
+ linear-gradient(-45deg,transparent 43%,#c43c3c 44%,#c43c3c 56%,transparent 57%)}
+.ing-legend i.none{background:transparent;border:1px solid transparent}
+/* Daily slots: enough room for the schedule labels and touch targets. */
+.ing-daypicker{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 8px}
+.ing-daypicker button{padding:8px 15px;border:1px solid #c6ced8;border-radius:7px;background:#fff;color:#344054;cursor:pointer;font:inherit}
+.ing-daypicker button[aria-pressed=true]{background:#203d58;color:#fff;border-color:#203d58}
+.ing-daypicker span{color:#64748b;font-size:12px;margin-left:auto}
+.ing-matrix{grid-template-columns:190px repeat(var(--cols),minmax(25px,1fr));grid-auto-rows:48px;gap:0;min-width:820px;background:#fff}
+.ing-corner{font-size:12px;color:#64748b}
+.ing-daymark{align-self:center;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
+.ing-rowlabel{font-size:13px;line-height:1.3;position:sticky;left:0;background:#fff;z-index:1;height:100%;justify-content:center;border-top:1px solid #edf0f4}
+.ing-rowlabel small{font-size:11px;color:#64748b;white-space:normal}
+.ing-cell{box-sizing:border-box;justify-self:center;width:20px;height:20px;border-radius:4px}
+.ing-cell.unknown,.ing-legend i.unknown{background:#edf0f4;border:1px solid #c9d0da}
+.ing-cell.expected,.ing-legend i.expected{border:1.5px dashed #8f9baa;background:transparent}
+.ing-legend{gap:14px;margin:12px 0;line-height:1.6}
+.ing-legend i{box-sizing:border-box;width:14px;height:14px}
+.ing-cell-detail{padding:13px 15px;color:#344054;min-height:20px}
+#ingestDashboard details{margin:20px 0}#ingestDashboard summary{cursor:pointer;color:#344054;font-weight:600}
+@media(max-width:640px){.ing-matrix{grid-template-columns:170px repeat(var(--cols),30px)}.ing-daypicker span{width:100%;margin-left:0}.ing-cell{width:24px;height:24px}}
