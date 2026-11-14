@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kma_short",
+  "label": "기상청 단기예보",
+  "kind": "forecast",
+  "issue": "2026111417",
+  "started_kst": "2026-11-14T17:26:39+09:00",
+  "ended_kst": "2026-11-14T17:27:20+09:00",
+  "duration_s": 40.2,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "43575776876",
+  "run_attempt": "1"
+}
