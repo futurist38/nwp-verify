@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "asos",
+  "label": "ASOS",
+  "kind": "observation",
+  "issue": "2026111602",
+  "started_kst": "2026-11-16T02:26:58+09:00",
+  "ended_kst": "2026-11-16T02:27:05+09:00",
+  "duration_s": 6.6,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "43741052411",
+  "run_attempt": "1"
+}
