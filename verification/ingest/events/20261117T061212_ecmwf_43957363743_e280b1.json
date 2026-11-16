@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "ecmwf",
+  "label": "ECMWF",
+  "kind": "model",
+  "issue": "2026111612",
+  "started_kst": "2026-11-17T06:11:44+09:00",
+  "ended_kst": "2026-11-17T06:12:12+09:00",
+  "duration_s": 27.6,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "43957363743",
+  "run_attempt": "1"
+}
