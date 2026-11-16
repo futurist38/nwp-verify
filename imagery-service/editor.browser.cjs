@@ -48,6 +48,17 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   await page.reload();await page.waitForFunction(()=>!document.getElementById('edit').disabled&&!document.getElementById('edit2').disabled);
   assert.ok(await page.evaluate(()=>Object.values(editors).every(ed=>ed.scene.groups.length===ed.original.groups.length&&!ed.scene.labelOverrides)));
   console.log('Reset restores original sprites and survives reload on both pages');
+  await page.waitForSelector('#cityForecastTable tbody tr');
+  assert.equal(await page.locator('#cityForecastTable thead th').count(),12);
+  assert.equal(await page.locator('#cityForecastTable tbody tr').count(),34);
+  assert.equal(await page.locator('#cityForecastTable tbody .city-name').first().textContent(),'서울');
+  const report=await page.evaluate(async()=>{const r=await fetch('energy/'+document.getElementById('date').value+'/report.json');return r.json();});
+  assert.equal(await page.locator('#cityForecastTable tbody tr').first().locator('td').first().textContent(),report.forecast[0].cities['서울'].max.toFixed(1));
+  assert.equal(await page.locator('#cityForecastTable .weighted-row').first().locator('td').first().textContent(),report.forecast[0].max.toFixed(1));
+  await page.locator('#cityForecast').screenshot({path:'energy-browser-results/city-forecast.png'});
+  await page.setViewportSize({width:390,height:844});
+  assert.ok(await page.locator('#cityForecastTable').evaluate(n=>n.scrollWidth>n.clientWidth));
+  console.log('Ten-day city table, original source values, weighted values and mobile scrolling passed');
   assert.deepEqual(errors,[]);console.log('Browser editing, partial color, persistence, clipboard, PDF and print passed');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

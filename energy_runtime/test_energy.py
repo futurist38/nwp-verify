@@ -12,6 +12,27 @@ class EnergyTests(unittest.TestCase):
         self.assertEqual(weighted(dict.fromkeys(WEIGHTS,-1.25)),-1.3)
         with self.assertRaises(ValueError):number('-99')
         with self.assertRaises(ValueError):weighted({'서울':3})
+    def test_ten_day_table_preserves_nine_day_report_and_missing_values(self):
+        from energy_data import collect,REGIONS
+        day=dt.date(2026,11,16)
+        dates=[(day+dt.timedelta(days=n)).isoformat() for n in range(10)]
+        short={c:{d:{'am':{'temperature':1,'weather':'맑음'},'pm':{'temperature':10,'weather':'흐림'}} for d in dates[:4]} for c in WEIGHTS}
+        mid={c:{d:{'min':2,'max':12} for d in dates[4:]} for c in WEIGHTS}
+        weather={f'wf{n}{p}':'맑음' for n in range(4,8) for p in ('Am','Pm')}
+        weather.update(wf8='흐림',wf9='비')
+        with patch('energy_data.request',return_value=''), patch('energy_data.parse_short',return_value=short), patch('energy_data.mid_temperatures',return_value=mid), patch('energy_data.mid_weather',side_effect=lambda r,d:(r,weather)), patch('energy_data.minute_minimum',side_effect=lambda c,d:(c,-1,{})), patch('energy_data.daily_extrema',return_value=dict.fromkeys(WEIGHTS,5)):
+            data=collect(day)
+            self.assertEqual(len(data['forecast']),9)
+            self.assertEqual(len(data['forecast_table']),10)
+            self.assertEqual(data['forecast_table'][9]['max'],12)
+            self.assertEqual(data['forecast_table'][9]['cities']['서울']['weather'],['비','비'])
+            self.assertEqual(data['forecast_table'][9]['cities']['서울']['weather_resolution'],'day')
+            self.assertEqual(data['forecast'][0]['min'],-1)
+            del mid['서울'][dates[9]]
+            data=collect(day)
+            self.assertIsNone(data['forecast_table'][9]['max'])
+            self.assertEqual(data['forecast_table'][9]['cities']['부산']['max'],12)
+
     def test_city_short_exact_issue(self):
         raw='11B10101,202610290500,202610291200,A02,1,109,0,0,0,0,0,0,13,60,DB04,1,흐리고 가끔 비\n11B10101,202610290800,202610291200,A02,1,109,0,0,0,0,0,0,15,60,DB04,1,비'
         result=parse_short(raw,'2026102905')

@@ -108,7 +108,7 @@ def collect(day):
     previous_cities={k:daily_extrema(day-dt.timedelta(days=1),k) for k in ('min','max')}
     previous={k:weighted(v) for k,v in previous_cities.items()}
     rows=[]
-    for n in range(9):
+    for n in range(10):
         date=(day+dt.timedelta(days=n)).isoformat();cities={}
         # 05:00 city land forecasts cover D through D+3. All cities must agree.
         use_short=n<=3
@@ -123,12 +123,13 @@ def collect(day):
                 lo,hi=rec.get('min'),rec.get('max')
                 w=weather[REGIONS[c]]
                 texts=[w.get(f'wf{n}{p}',w.get(f'wf{n}')) for p in ('Am','Pm')]
-            if lo is None or hi is None or not all(texts):raise ValueError('Incomplete forecast: '+c+' '+date)
-            if lo>hi:raise ValueError('Min above max: '+c+' '+date)
-            cities[c]={'min':lo,'max':hi,'weather':texts,'source':'short' if use_short else 'mid'}
-        rows.append({'date':date,'cities':cities,**{k:weighted({c:v[k] for c,v in cities.items()}) for k in ('min','max')}})
+            if n<9 and (lo is None or hi is None or not all(texts)):raise ValueError('Incomplete forecast: '+c+' '+date)
+            if lo is not None and hi is not None and lo>hi:raise ValueError('Min above max: '+c+' '+date)
+            cities[c]={'min':lo,'max':hi,'weather':texts,'source':'short' if use_short else 'mid',
+                       'weather_resolution':'half_day' if use_short or all(f'wf{n}{p}' in w for p in ('Am','Pm')) else 'day'}
+        rows.append({'date':date,'cities':cities,**{k:weighted({c:v[k] for c,v in cities.items()}) if all(v[k] is not None for v in cities.values()) else None for k in ('min','max')}})
     return {'date':day.isoformat(),'publication_kst':dt.datetime.combine(day,dt.time(7),KST).isoformat(),
-            'forecast':rows,'previous_weighted':previous,'previous_observations':previous_cities,
+            'forecast':rows[:9],'forecast_table':rows,'previous_weighted':previous,'previous_observations':previous_cities,
             'morning_observation_coverage':{c:meta for c,v,meta in obs},'weights':WEIGHTS,
             'short_issue_kst':issue,'mid_issue_kst':day.strftime('%Y%m%d')+'06',
             'status':'automatic','automatic_generation':True}

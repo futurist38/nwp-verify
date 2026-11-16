@@ -470,10 +470,48 @@ el('refreshImages').onclick=async()=>{
   if(token!==loadToken)return;const good=result.filter(r=>r.status==='fulfilled').map(r=>r.value);if(!good.length)throw Error('unavailable');ed.remember();ed.scene.panels=ed.scene.panels||clone(ed.original.panels||[]);for(const p of good){const i=ed.scene.panels.findIndex(x=>x.id===p.id);if(i<0)ed.scene.panels.push(p);else ed.scene.panels[i]=p;}ed.draw();el('status').textContent=(good.length===2?'최신 위성·레이더 영상을 적용했습니다.':'불러온 영상만 갱신했습니다. 실패한 영상은 기존 상태로 유지됩니다.')+' 영상별 관측 시각을 확인해 주세요. 예보와 지도 편집 내용은 유지됩니다. 1페이지 PNG 저장으로 내려받을 수 있습니다.';
  }catch{if(token===loadToken)el('status').textContent='최신 영상을 가져오지 못했습니다. 기존 영상과 편집 내용은 유지됩니다. 잠시 후 다시 시도해 주세요.';}finally{refreshing=false;refreshControls();}
 };
+// Read the archived report for the selected date, never substitute a newer forecast.
+async function loadCityForecast(day,version,token){
+ const panel=el('cityForecast'),host=el('cityForecastTable'),meta=el('cityForecastMeta');
+ panel.hidden=false;host.replaceChildren();el('cityForecastWeights').textContent='';meta.textContent='도시별 예보를 불러오고 있습니다…';
+ const cell=(tag,text,cls)=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;};
+ const num=value=>Number.isFinite(value)?value.toFixed(1):'—';
+ try{
+  const r=await reportFetch(`energy/${day}/report.json?v=${version}`,{signal:AbortSignal.timeout(15000)});
+  if(!r.ok)throw Error('report');const data=await r.json();if(token!==loadToken)return;
+  if(data.date!==format(day)||!Array.isArray(data.forecast))throw Error('date');
+  const cities=['서울','수원','인천','대전','광주','부산','대구','원주'];
+  const rows=new Map((data.forecast_table||data.forecast).map(r=>[r.date,r]));
+  const dates=Array.from({length:10},(_,i)=>new Date(Date.parse(data.date+'T00:00:00Z')+i*86400000).toISOString().slice(0,10));
+  const table=document.createElement('table'),head=document.createElement('thead'),hr=document.createElement('tr');
+  for(const [name,cls] of [['도시','city-name'],['항목','city-field']]){const th=cell('th',name,cls);th.scope='col';hr.append(th);}
+  dates.forEach((date,i)=>{const dow=new Date(date+'T00:00:00Z').getUTCDay(),th=cell('th',date.slice(5).replace('-','/')+' ('+'일월화수목금토'[dow]+')'+(i===0?' · 오늘':''),dow===0||dow===6?'weekend':'');th.scope='col';hr.append(th);});
+  head.append(hr);table.append(head);const body=document.createElement('tbody');
+  for(const city of cities){
+   [['최고기온','max'],['최저기온','min'],['오전개황',0],['오후개황',1]].forEach(([label,key],i)=>{
+    const tr=document.createElement('tr');if(i===0){tr.className='city-start';const th=cell('th',city,'city-name');th.rowSpan=4;th.scope='rowgroup';tr.append(th);}
+    const th=cell('th',label,'city-field');th.scope='row';tr.append(th);
+    for(const date of dates){const record=rows.get(date)?.cities?.[city],weather=typeof key==='number';
+     const td=cell('td',weather?(record?.weather?.[key]||'—'):num(record?.[key]),weather?'weather-text':'temp-'+key);
+     if(weather&&record?.weather?.[key]&&(record.weather_resolution==='day'||(!record.weather_resolution&&record.source==='mid'&&dates.indexOf(date)>=8)))td.append(cell('span','종일','day-label'));
+     tr.append(td);
+    }body.append(tr);
+   });
+  }
+  for(const [label,key] of [['최고기온','max'],['최저기온','min']]){
+   const tr=document.createElement('tr');tr.className='weighted-row';const city=cell('th','전국가중','city-name');city.scope='row';tr.append(city,cell('th',label,'city-field'));
+   for(const date of dates)tr.append(cell('td',num(rows.get(date)?.[key]),'temp-'+key));body.append(tr);
+  }
+  table.append(body);host.replaceChildren(table);
+  const issue=v=>/^\d{10}$/.test(v||'')?`${v.slice(4,6)}/${v.slice(6,8)} ${v.slice(8,10)}시`:'미기록';
+  meta.textContent=`${data.date} 07시 기준 · 단기 ${issue(data.short_issue_kst)} / 중기 ${issue(data.mid_issue_kst)} 발표 · 단위 ℃`;
+  el('cityForecastWeights').textContent=cities.map(c=>c+' '+(Number.isFinite(data.weights?.[c])?(data.weights[c]*100).toFixed(2)+'%':'미기록')).join(' · ')+' · 도시별 최고·최저에 각각 적용';
+ }catch{if(token===loadToken){host.replaceChildren();meta.textContent='이 날짜의 도시별 예보 원자료를 불러오지 못했습니다.';}}
+}
 async function show(){
  const token=++loadToken,day=el('date').value;if(!/^\d{8}$/.test(day))return;for(const ed of Object.values(editors))ed.clear();refreshControls();
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()).replaceAll('-','');el('status').textContent=`${format(day)} 자료입니다. `+(index.automatic_generation?'매일 오전 7시 기준 자동 생성 · ':'자동 생성 연결 중 · ')+(day!==today?'오늘 자료가 아니므로 날짜를 확인해 주세요.':'');
- const version=encodeURIComponent(index.updated_kst||'two-page-icons-1');for(const n of [1,2]){el('page'+n).src=window.ENERGY_PREVIEW?.images?.[`energy/${day}/0${n}.webp`]||`energy/${day}/0${n}.webp?v=${version}`;el('save'+n).hidden=false;}el('report').hidden=false;el('print').disabled=false;
+ const version=encodeURIComponent(index.updated_kst||'two-page-icons-1');loadCityForecast(day,version,token);for(const n of [1,2]){el('page'+n).src=window.ENERGY_PREVIEW?.images?.[`energy/${day}/0${n}.webp`]||`energy/${day}/0${n}.webp?v=${version}`;el('save'+n).hidden=false;}el('report').hidden=false;el('print').disabled=false;
  await Promise.all(Object.values(editors).map(ed=>ed.load(day,version,token)));if(token===loadToken)await window.energyShared?.load();if(token===loadToken){refreshControls();for(const ed of Object.values(editors)){el('figure'+ed.page).classList.add('report-preview-only');ed.node('palettePanel').hidden=true;ed.node('imageSettings').hidden=true;}if(window.ENERGY_PREVIEW){el('status').textContent='검토용 시안 · 2026-11-04 저장 자료 · 편집 내용은 운영 페이지에 반영되지 않습니다.';editors[1].node('edit').click();}}
 }
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
