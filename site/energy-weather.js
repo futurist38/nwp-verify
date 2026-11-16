@@ -493,6 +493,7 @@ async function loadCityForecast(day,version,token){
     const th=cell('th',label,'city-field');th.scope='row';tr.append(th);
     for(const date of dates){const record=rows.get(date)?.cities?.[city],weather=typeof key==='number';
      const td=cell('td',weather?(record?.weather?.[key]||'—'):num(record?.[key]),weather?'weather-text':'temp-'+key);
+     if(weather){const text=record?.weather?.[key]||'';const kind=/비|눈|소나기/.test(text)?'precip':/흐/.test(text)?'overcast':/구름\s*많/.test(text)?'cloudy':'';if(kind)td.classList.add('weather-'+kind);}
      if(weather&&record?.weather?.[key]&&(record.weather_resolution==='day'||(!record.weather_resolution&&record.source==='mid'&&dates.indexOf(date)>=8)))td.append(cell('span','종일','day-label'));
      tr.append(td);
     }body.append(tr);
