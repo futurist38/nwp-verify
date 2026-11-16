@@ -50,11 +50,10 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
   console.log('Reset restores original sprites and survives reload on both pages');
   await page.waitForSelector('#cityForecastTable tbody tr');
   assert.equal(await page.locator('#cityForecastTable table').count(),2);
-  assert.equal(await page.locator('#cityForecastTable thead th').count(),74);
+  assert.equal(await page.locator('#cityForecastTable thead th').count(),72);
   assert.equal(await page.locator('#cityForecastTable tbody tr').count(),18);
-  assert.equal(await page.locator('#cityForecastTable .region-divider').count(),2);
-  assert.deepEqual(await page.locator('#cityForecastTable tbody .region-name').allTextContents(),['중부','남부','중부','남부']);
-  assert.equal(await page.locator('#cityForecastTable .region-divider').first().locator('.city-name').textContent(),'대구');
+  assert.equal(await page.locator('#cityForecastTable .region-divider').count(),0);
+  assert.equal(await page.locator('#cityForecastTable .region-name').count(),0);
   assert.equal(await page.locator('#cityForecastTable tbody .city-name').first().textContent(),'서울');
   const report=await page.evaluate(async()=>{const r=await fetch('energy/'+document.getElementById('date').value+'/report.json');return r.json();});
   assert.equal(await page.locator('#cityForecastTable tbody tr').first().locator('td').first().textContent(),report.forecast[0].cities['서울'].max.toFixed(1));

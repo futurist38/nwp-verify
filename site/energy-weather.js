@@ -488,18 +488,17 @@ async function loadCityForecast(day,version,token){
    const days=dates.slice(offset,offset+5),table=document.createElement('table');
    table.setAttribute('aria-label',`${days[0]}부터 5일간 도시별 예보`);
    const cols=document.createElement('colgroup');
-   for(const cls of ['region-col','city-col',...Array.from({length:5},()=>['temp-col','temp-col','weather-col','weather-col']).flat()]){const col=document.createElement('col');col.className=cls;cols.append(col);}table.append(cols);
+   for(const cls of ['city-col',...Array.from({length:5},()=>['temp-col','temp-col','weather-col','weather-col']).flat()]){const col=document.createElement('col');col.className=cls;cols.append(col);}table.append(cols);
    const head=document.createElement('thead'),top=document.createElement('tr'),middle=document.createElement('tr'),bottom=document.createElement('tr');
-   for(const [name,cls] of [['권역','region-name'],['도시','city-name']]){const th=cell('th',name,cls);th.rowSpan=3;th.scope='col';top.append(th);}
+   for(const [name,cls] of [['도시','city-name']]){const th=cell('th',name,cls);th.rowSpan=3;th.scope='col';top.append(th);}
    days.forEach((date,i)=>{
     const dow=new Date(date+'T00:00:00Z').getUTCDay(),th=cell('th',date.slice(5).replace('-','/')+' ('+'일월화수목금토'[dow]+')'+(offset+i===0?' · 오늘':' 전망'),'day-start');
     if(dow===0||dow===6)th.classList.add('weekend');th.colSpan=4;th.scope='colgroup';top.append(th);
     for(const [label,cls] of [['기온','day-start'],['개황','']]){const h=cell('th',label,cls);h.colSpan=2;h.scope='colgroup';middle.append(h);}
     ['최고','최저','오전','오후'].forEach((label,j)=>{const h=cell('th',label,j===0?'day-start':'');h.scope='col';bottom.append(h);});
    });head.append(top,middle,bottom);table.append(head);const body=document.createElement('tbody');
-   cities.forEach((city,index)=>{
-    const tr=document.createElement('tr');if(index===5)tr.className='region-divider';
-    if(index===0||index===5){const th=cell('th',index===0?'중부':'남부','region-name');th.rowSpan=index===0?5:3;th.scope='rowgroup';tr.append(th);}
+   cities.forEach(city=>{
+    const tr=document.createElement('tr');
     const th=cell('th',city,'city-name');th.scope='row';tr.append(th);
     for(const date of days){const record=rows.get(date)?.cities?.[city];
      tr.append(cell('td',num(record?.max),'temp-max day-start'),cell('td',num(record?.min),'temp-min'));
@@ -511,7 +510,7 @@ async function loadCityForecast(day,version,token){
      }
     }body.append(tr);
    });
-   const total=document.createElement('tr');total.className='weighted-row';const label=cell('th','전국가중','weighted-name');label.colSpan=2;label.scope='row';total.append(label);
+   const total=document.createElement('tr');total.className='weighted-row';const label=cell('th','전국가중','weighted-name');label.scope='row';total.append(label);
    for(const date of days){total.append(cell('td',num(rows.get(date)?.max),'temp-max day-start'),cell('td',num(rows.get(date)?.min),'temp-min'));const blank=cell('td','');blank.colSpan=2;blank.setAttribute('aria-label','전국 개황 해당 없음');total.append(blank);}
    body.append(total);table.append(body);tables.push(table);
   }
