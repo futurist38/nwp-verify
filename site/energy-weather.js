@@ -480,30 +480,42 @@ async function loadCityForecast(day,version,token){
   const r=await reportFetch(`energy/${day}/report.json?v=${version}`,{signal:AbortSignal.timeout(15000)});
   if(!r.ok)throw Error('report');const data=await r.json();if(token!==loadToken)return;
   if(data.date!==format(day)||!Array.isArray(data.forecast))throw Error('date');
-  const cities=['서울','수원','인천','대전','광주','부산','대구','원주'];
+  const cities=['서울','인천','수원','원주','대전','대구','광주','부산'];
   const rows=new Map((data.forecast_table||data.forecast).map(r=>[r.date,r]));
   const dates=Array.from({length:10},(_,i)=>new Date(Date.parse(data.date+'T00:00:00Z')+i*86400000).toISOString().slice(0,10));
-  const table=document.createElement('table'),head=document.createElement('thead'),hr=document.createElement('tr');
-  for(const [name,cls] of [['도시','city-name'],['항목','city-field']]){const th=cell('th',name,cls);th.scope='col';hr.append(th);}
-  dates.forEach((date,i)=>{const dow=new Date(date+'T00:00:00Z').getUTCDay(),th=cell('th',date.slice(5).replace('-','/')+' ('+'일월화수목금토'[dow]+')'+(i===0?' · 오늘':''),dow===0||dow===6?'weekend':'');th.scope='col';hr.append(th);});
-  head.append(hr);table.append(head);const body=document.createElement('tbody');
-  for(const city of cities){
-   [['최고기온','max'],['최저기온','min'],['오전개황',0],['오후개황',1]].forEach(([label,key],i)=>{
-    const tr=document.createElement('tr');if(i===0){tr.className='city-start';const th=cell('th',city,'city-name');th.rowSpan=4;th.scope='rowgroup';tr.append(th);}
-    const th=cell('th',label,'city-field');th.scope='row';tr.append(th);
-    for(const date of dates){const record=rows.get(date)?.cities?.[city],weather=typeof key==='number';
-     const td=cell('td',weather?(record?.weather?.[key]||'—'):num(record?.[key]),weather?'weather-text':'temp-'+key);
-     if(weather){const text=record?.weather?.[key]||'';const kind=/비|눈|소나기/.test(text)?'precip':/흐/.test(text)?'overcast':/구름\s*많/.test(text)?'cloudy':'';if(kind)td.classList.add('weather-'+kind);}
-     if(weather&&record?.weather?.[key]&&(record.weather_resolution==='day'||(!record.weather_resolution&&record.source==='mid'&&dates.indexOf(date)>=8)))td.append(cell('span','종일','day-label'));
-     tr.append(td);
+  const tables=[];
+  for(let offset=0;offset<10;offset+=5){
+   const days=dates.slice(offset,offset+5),table=document.createElement('table');
+   table.setAttribute('aria-label',`${days[0]}부터 5일간 도시별 예보`);
+   const cols=document.createElement('colgroup');
+   for(const cls of ['region-col','city-col',...Array.from({length:5},()=>['temp-col','temp-col','weather-col','weather-col']).flat()]){const col=document.createElement('col');col.className=cls;cols.append(col);}table.append(cols);
+   const head=document.createElement('thead'),top=document.createElement('tr'),middle=document.createElement('tr'),bottom=document.createElement('tr');
+   for(const [name,cls] of [['권역','region-name'],['도시','city-name']]){const th=cell('th',name,cls);th.rowSpan=3;th.scope='col';top.append(th);}
+   days.forEach((date,i)=>{
+    const dow=new Date(date+'T00:00:00Z').getUTCDay(),th=cell('th',date.slice(5).replace('-','/')+' ('+'일월화수목금토'[dow]+')'+(offset+i===0?' · 오늘':' 전망'),'day-start');
+    if(dow===0||dow===6)th.classList.add('weekend');th.colSpan=4;th.scope='colgroup';top.append(th);
+    for(const [label,cls] of [['기온','day-start'],['개황','']]){const h=cell('th',label,cls);h.colSpan=2;h.scope='colgroup';middle.append(h);}
+    ['최고','최저','오전','오후'].forEach((label,j)=>{const h=cell('th',label,j===0?'day-start':'');h.scope='col';bottom.append(h);});
+   });head.append(top,middle,bottom);table.append(head);const body=document.createElement('tbody');
+   cities.forEach((city,index)=>{
+    const tr=document.createElement('tr');if(index===5)tr.className='region-divider';
+    if(index===0||index===5){const th=cell('th',index===0?'중부':'남부','region-name');th.rowSpan=index===0?5:3;th.scope='rowgroup';tr.append(th);}
+    const th=cell('th',city,'city-name');th.scope='row';tr.append(th);
+    for(const date of days){const record=rows.get(date)?.cities?.[city];
+     tr.append(cell('td',num(record?.max),'temp-max day-start'),cell('td',num(record?.min),'temp-min'));
+     for(const period of [0,1]){
+      const text=record?.weather?.[period]||'',td=cell('td',text||'—','weather-text');
+      const kind=/비|눈|소나기/.test(text)?'precip':/흐/.test(text)?'overcast':/구름\s*많/.test(text)?'cloudy':'';if(kind)td.classList.add('weather-'+kind);
+      if(text&&(record.weather_resolution==='day'||(!record.weather_resolution&&record.source==='mid'&&dates.indexOf(date)>=8)))td.append(cell('span','종일','day-label'));
+      tr.append(td);
+     }
     }body.append(tr);
    });
+   const total=document.createElement('tr');total.className='weighted-row';const label=cell('th','전국가중','weighted-name');label.colSpan=2;label.scope='row';total.append(label);
+   for(const date of days){total.append(cell('td',num(rows.get(date)?.max),'temp-max day-start'),cell('td',num(rows.get(date)?.min),'temp-min'));const blank=cell('td','');blank.colSpan=2;blank.setAttribute('aria-label','전국 개황 해당 없음');total.append(blank);}
+   body.append(total);table.append(body);tables.push(table);
   }
-  for(const [label,key] of [['최고기온','max'],['최저기온','min']]){
-   const tr=document.createElement('tr');tr.className='weighted-row';const city=cell('th','전국가중','city-name');city.scope='row';tr.append(city,cell('th',label,'city-field'));
-   for(const date of dates)tr.append(cell('td',num(rows.get(date)?.[key]),'temp-'+key));body.append(tr);
-  }
-  table.append(body);host.replaceChildren(table);
+  host.replaceChildren(...tables);
   const issue=v=>/^\d{10}$/.test(v||'')?`${v.slice(4,6)}/${v.slice(6,8)} ${v.slice(8,10)}시`:'미기록';
   meta.textContent=`${data.date} 07시 기준 · 단기 ${issue(data.short_issue_kst)} / 중기 ${issue(data.mid_issue_kst)} 발표 · 단위 ℃`;
   el('cityForecastWeights').textContent=cities.map(c=>c+' '+(Number.isFinite(data.weights?.[c])?(data.weights[c]*100).toFixed(2)+'%':'미기록')).join(' · ')+' · 도시별 최고·최저에 각각 적용';
@@ -518,6 +530,7 @@ async function show(){
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
 (async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+
 
 
 
