@@ -37,8 +37,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y fonts-noto-cjk
           pip install Pillow numpy scipy pymupdf
-          npm install --prefix /tmp/energy-browser playwright@1.58.2
-          /tmp/energy-browser/node_modules/.bin/playwright install --with-deps chromium
+          npm install --prefix /tmp/energy-browser playwright@1.65.1 --ignore-scripts --no-audit --no-fund
+          /tmp/energy-browser/node_modules/.bin/playwright install --with-deps --force chrome
+          google-chrome --version
       - name: Test report and editor logic
         run: |
           python -m unittest discover -s energy_runtime -p 'test_*.py' -v
@@ -52,6 +53,7 @@ jobs:
       - name: Validate real browser and publish approved editor
         env:
           NODE_PATH: /tmp/energy-browser/node_modules
+          PLAYWRIGHT_CHANNEL: chrome
         run: |
           git config user.name nwp-bot
           git config user.email actions@users.noreply.github.com

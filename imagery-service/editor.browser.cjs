@@ -3,7 +3,7 @@ const {chromium}=require('playwright');const {spawn,execFileSync}=require('node:
  const server=spawn('python',['-m','http.server','8765','--bind','127.0.0.1','--directory','energy_editor_stage'],{stdio:'ignore'});let browser;
  try{
   for(let i=0;i<50;i++){try{await fetch('http://127.0.0.1:8765/energy/index.json');break;}catch{await new Promise(r=>setTimeout(r,100));}}
-  browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1600,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL});const page=await browser.newPage({viewport:{width:1600,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/energy-shared-ui.js*',route=>route.fulfill({body:'',contentType:'application/javascript'}));
   await page.goto('http://127.0.0.1:8765/energy-weather.html');await page.waitForFunction(()=>!document.getElementById('edit').disabled);await page.click('#edit');
   assert.ok(await page.locator('#paletteGrid button').count()>10);

@@ -3,7 +3,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),ass
  const server=spawn('python',['-m','http.server','8766','--bind','127.0.0.1','--directory','energy_editor_stage'],{stdio:'ignore'});let browser;
  try{
   for(let i=0;i<50;i++){try{await fetch('http://127.0.0.1:8766/energy/index.json');break;}catch{await new Promise(r=>setTimeout(r,100));}}
-  browser=await chromium.launch();const rows=new Map(),images=new Map(),errors=[];
+  browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL});const rows=new Map(),images=new Map(),errors=[];
   async function client(){const context=await browser.newContext(),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept(d.type()==='prompt'?'energy':undefined));
    await page.route('https://lfxajxconibunipejdjz.supabase.co/**',async route=>{
     const req=route.request(),u=new URL(req.url()),path=u.pathname,headers={'access-control-allow-origin':'*'};
