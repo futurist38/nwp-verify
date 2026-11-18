@@ -2,7 +2,28 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const code=fs.readFileSync(new URL('../supabase/functions/energy-imagery/index.ts',import.meta.url),'utf8');
-const {parseTime,requestTime,satelliteFrame,warningChoices,warningImage,pm10Rows,handle}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const {parseTime,requestTime,satelliteFrame,warningChoices,warningImage,pm10Rows,handle,readRequestText}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+test('imagery request limit counts bytes across chunks and stops reading at the limit', async () => {
+  const text = '기'.repeat(170) + '12';
+  const bytes = new TextEncoder().encode(text);
+  const parts = [bytes.slice(0, 1), bytes.slice(1)];
+  function request(chunks) {
+    return new Request('https://example.test', {
+      method: 'POST', duplex: 'half',
+      body: new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(chunk);
+          controller.close();
+        }
+      })
+    });
+  }
+  assert.equal(await readRequestText(request(parts)), text);
+  assert.equal(await readRequestText(request([...parts, Uint8Array.of(32)])), null);
+  const declared = request([]);
+  declared.headers.set('Content-Length', '513');
+  assert.equal(await readRequestText(declared), null);
+});
 const now=parseTime('202611041600');
 test('KST query validates calendar, past range and each source cadence',()=>{
  assert.throws(()=>parseTime('202602300700'));

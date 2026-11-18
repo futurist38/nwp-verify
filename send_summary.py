@@ -24,7 +24,6 @@ import glob
 import os
 import re
 import smtplib
-import socket
 import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -236,22 +235,9 @@ def render(target, val, models, runs, flags, signal, impact_lines, impact_note):
 # ══════════════════════════════════════════════════════════
 
 def _smtp_connect() -> smtplib.SMTP_SSL:
-    """정상 검증 우선. 이 PC의 AVG Mail Shield는 SMTP를 'AVG Web/Mail Shield
-    Untrusted Root'로 가로채 OS 신뢰소(truststore)로도 검증이 불가하다(2026-08-18 실측).
-    AVG가 업스트림 검증·재암호화를 수행하므로, 가로챈 주체가 AVG로 확인될 때만
-    검증을 생략한다. 다른 사유의 검증 실패는 그대로 예외."""
-    try:
-        return smtplib.SMTP_SSL("smtp.gmail.com", 465,
-                                context=ssl.create_default_context(), timeout=60)
-    except ssl.SSLCertVerificationError:
-        probe = ssl._create_unverified_context()
-        with socket.create_connection(("smtp.gmail.com", 465), 30) as sk:
-            with probe.wrap_socket(sk, server_hostname="smtp.gmail.com") as w:
-                der = w.getpeercert(binary_form=True)
-        if b"AVG Web/Mail Shield" not in der:
-            raise
-        print("[메일] AVG Mail Shield 가로채기 감지 — 로컬 AV 구간 비검증 연결")
-        return smtplib.SMTP_SSL("smtp.gmail.com", 465, context=probe, timeout=60)
+    """서버 인증서와 호스트 이름을 검증한 뒤에만 로그인할 수 있다."""
+    return smtplib.SMTP_SSL("smtp.gmail.com", 465,
+                            context=ssl.create_default_context(), timeout=60)
 
 
 def main():

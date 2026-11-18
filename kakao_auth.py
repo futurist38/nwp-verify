@@ -15,8 +15,8 @@
   → 결과: .env 에 KAKAO_REST_KEY / KAKAO_REFRESH_TOKEN 저장 + GitHub 시크릿 등록 명령 안내.
 토큰: access 6시간 · refresh 60일 (남은 기간 30일 미만일 때만 갱신 시 재발급). 9/23 까지는 갱신 없이 충분.
 """
+from getpass import getpass
 import http.server
-import json
 import os
 import threading
 import urllib.parse
@@ -46,7 +46,7 @@ class _H(http.server.BaseHTTPRequestHandler):
 
 def main():
     rest = input("REST API 키: ").strip()
-    secret = input("Client Secret (없으면 Enter): ").strip()
+    secret = getpass("Client Secret (없으면 Enter): ").strip()
     import secrets as _s
     state = _s.token_urlsafe(16)
     url = ("https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=" + rest
@@ -66,7 +66,7 @@ def main():
     r = requests.post("https://kauth.kakao.com/oauth/token", data=data, timeout=30)
     tok = r.json()
     if "refresh_token" not in tok:
-        raise SystemExit("토큰 발급 실패: " + json.dumps(tok, ensure_ascii=False))
+        raise SystemExit(f"토큰 발급 실패 (HTTP {r.status_code})")
     print("발급 OK: scope =", tok.get("scope"), "| refresh 만료(초) =", tok.get("refresh_token_expires_in"))
     # .env 갱신 (기존 KAKAO_* 줄 교체)
     lines = open(ENV, encoding="utf-8").read().splitlines() if os.path.exists(ENV) else []
@@ -77,10 +77,11 @@ def main():
     open(ENV, "w", encoding="utf-8").write(chr(10).join(lines) + chr(10))
     print(".env 저장 완료. 시험 발송: python kakao_send.py --test")
     print("GitHub 시크릿 등록 (PowerShell):")
-    print('  gh secret set KAKAO_REST_KEY --body "' + rest + '"')
-    print('  gh secret set KAKAO_REFRESH_TOKEN --body "' + tok["refresh_token"] + '"')
+    print("아래 명령의 숨김 입력란에 .env의 해당 값을 입력하세요.")
+    print("  gh secret set KAKAO_REST_KEY")
+    print("  gh secret set KAKAO_REFRESH_TOKEN")
     if secret:
-        print('  gh secret set KAKAO_CLIENT_SECRET --body "' + secret + '"')
+        print("  gh secret set KAKAO_CLIENT_SECRET")
 
 
 if __name__ == "__main__":

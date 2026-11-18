@@ -47,7 +47,7 @@ def access_token() -> str:
     r = requests.post("https://kauth.kakao.com/oauth/token", data=data, timeout=30)
     j = r.json()
     if "access_token" not in j:
-        raise SystemExit("토큰 갱신 실패: " + json.dumps({k: v for k, v in j.items() if k != "refresh_token"}, ensure_ascii=False))
+        raise SystemExit(f"토큰 갱신 실패 (HTTP {r.status_code})")
     if j.get("refresh_token"):
         print("[카톡] 주의: refresh 토큰이 재발급됨 — GitHub 시크릿 KAKAO_REFRESH_TOKEN 을 갱신해야 다음 갱신이 된다")
     return j["access_token"]

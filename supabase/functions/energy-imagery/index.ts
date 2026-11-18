@@ -116,6 +116,31 @@ export async function loadSource(kind, tm, now=Date.now()) {
   return {...common,title:'미세먼지(PM10)',map:{basemap,rows},timeKind:'관측'};
 }
 function response(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'}});}
+export async function readRequestText(req) {
+  const limit = 512;
+  if (Number(req.headers.get('Content-Length')) > limit) {
+    await req.body?.cancel();
+    return null;
+  }
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const bytes = new Uint8Array(limit);
+  let length = 0;
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) return new TextDecoder().decode(bytes.subarray(0, length));
+      if (value.length > limit - length) {
+        await reader.cancel();
+        return null;
+      }
+      bytes.set(value, length);
+      length += value.length;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 export async function handle(req,env){
   if(req.headers.get('Origin') && req.headers.get('Origin')!==ORIGIN)return response({error:'origin'},403);
   if(req.method==='OPTIONS')return response({});
@@ -126,7 +151,7 @@ export async function handle(req,env){
     const r=await fetch(env.url+'/rest/v1/energy_editors?select=user_id,unlocked_at&limit=1',{headers:{apikey:env.key,Authorization:auth},signal:AbortSignal.timeout(8000)});
     const rows=r.ok?await r.json():[];const user=rows[0];if(!user||Date.parse(user.unlocked_at)<Date.now()-DAY)return response({error:'locked'},403);
     const state=users.get(user.user_id)||{at:Date.now(),n:0};if(Date.now()-state.at>60000){state.at=Date.now();state.n=0;}if(++state.n>12)return response({error:'rate_limit'},429);if(users.size>=500)users.delete(users.keys().next().value);users.set(user.user_id,state);
-    const raw=await req.text();if(raw.length>512)return response({error:'request'},400);
+    const raw=await readRequestText(req);if(raw===null)return response({error:'request'},400);
     let body;try{body=JSON.parse(raw);requestTime(body.kind,body.time);}catch{return response({error:'invalid_time'},400);}
     const data=await cached(body.kind+':'+body.time,()=>loadSource(body.kind,body.time));return response(data);
   }catch{return response({error:'source_unavailable'},502);}
