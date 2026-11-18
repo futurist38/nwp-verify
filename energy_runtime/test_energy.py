@@ -28,6 +28,15 @@ class EnergyTests(unittest.TestCase):
             self.assertEqual(data['forecast_table'][9]['cities']['서울']['weather'],['비','비'])
             self.assertEqual(data['forecast_table'][9]['cities']['서울']['weather_resolution'],'day')
             self.assertEqual(data['forecast'][0]['min'],-1)
+            short['대구'][dates[0]]['pm']['temperature'] = -3
+            short['대구'][dates[1]]['am']['temperature'] = 12
+            data = collect(day)
+            for n, expected in enumerate([(-1, -3), (12, 10)]):
+                row = data['forecast'][n]
+                city = row['cities']['대구']
+                self.assertEqual((city['min'], city['max']), expected)
+                for key in ('min', 'max'):
+                    self.assertEqual(row[key], weighted({c: v[key] for c, v in row['cities'].items()}))
             del mid['서울'][dates[9]]
             data=collect(day)
             self.assertIsNone(data['forecast_table'][9]['max'])

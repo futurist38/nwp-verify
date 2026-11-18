@@ -124,7 +124,9 @@ def collect(day):
                 w=weather[REGIONS[c]]
                 texts=[w.get(f'wf{n}{p}',w.get(f'wf{n}')) for p in ('Am','Pm')]
             if n<9 and (lo is None or hi is None or not all(texts)):raise ValueError('Incomplete forecast: '+c+' '+date)
-            if lo is not None and hi is not None and lo>hi:raise ValueError('Min above max: '+c+' '+date)
+            # Morning and daytime temperature windows can legitimately cross.
+            if lo is not None and hi is not None and lo > hi:
+                print(f'{date} {c}: morning minimum {lo} C, daytime maximum forecast {hi} C')
             cities[c]={'min':lo,'max':hi,'weather':texts,'source':'short' if use_short else 'mid',
                        'weather_resolution':'half_day' if use_short or all(f'wf{n}{p}' in w for p in ('Am','Pm')) else 'day'}
         rows.append({'date':date,'cities':cities,**{k:weighted({c:v[k] for c,v in cities.items()}) if all(v[k] is not None for v in cities.values()) else None for k in ('min','max')}})
