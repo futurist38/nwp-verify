@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "gk2a_solar",
+  "label": "GK2A 위성일사",
+  "kind": "satellite",
+  "issue": null,
+  "started_kst": "2026-11-18T10:52:46+09:00",
+  "ended_kst": "2026-11-18T10:54:49+09:00",
+  "duration_s": 123.5,
+  "status": "failed",
+  "summary": "수신 작업 실패",
+  "detail": "total, n, used = daily_sum(day)\n^^^^^^^^^^^^^^\nFile \"/home/runner/work/nwp-verify/nwp-verify/gk2a_swrad_daily.py\", line 64, in daily_sum\nstamps = [s for s in data_list(\"SWRAD\", \"KO\", t0, t1) if s.endswith(\"00\")]\n^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFile \"/home/runner/work/nwp-verify/nwp-verify/fetch_gk2a.py\", line 57, in data_list\nraise RuntimeError(\"dataList 3회 실패\")\nRuntimeError: dataList 3회 실패",
+  "returncode": 1,
+  "workflow": "daily-nwp",
+  "run_id": "44217547756",
+  "run_attempt": "1"
+}
