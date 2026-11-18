@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": null,
+  "started_kst": "2026-11-18T11:27:57+09:00",
+  "ended_kst": "2026-11-18T11:37:57+09:00",
+  "duration_s": 600.0,
+  "status": "failed",
+  "summary": "시간초과",
+  "detail": "[GK2A] dataList 실패(3/3): Expecting value: line 1 column 1 (char 0)\n[nowcast] 목록 조회 실패(dataList 3회 실패) — 직접 수신으로 대체\n[GK2A] 202611180140 실패(1/3): NetCDF 아님: b''\n[GK2A] 202611180140 실패(2/3): NetCDF 아님: b''\n[GK2A] 202611180140 실패(3/3): HTTPSConnectionPool(host='apihub-pub.kma.go.kr', port=443): Read timed out. (read timeout=300)\n[GK2A] 202611180130 실패(1/3): NetCDF 아님: b''\n[GK2A] 202611180130 실패(2/3): NetCDF 아님: b''\n[ingest-status] 시간초과: 600초",
+  "returncode": 124,
+  "workflow": "obs-hourly",
+  "run_id": "44223093566",
+  "run_attempt": "1"
+}
