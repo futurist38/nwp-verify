@@ -51,7 +51,7 @@ class EnergyTests(unittest.TestCase):
         start=dt.datetime(2026,11,19)
         header='# YYMMDDHHMI STN TA'
         def rows(a,b):
-            return '\\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {3 if i!=210 else -2}' for i in range(a,b)])
+            return '\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {3 if i!=210 else -2}' for i in range(a,b)])
         from energy_data import minute_minimum
         with patch('energy_data.time.sleep'),patch('energy_data.request',side_effect=[rows(0,301),rows(0,421)]) as req:
             city,value,meta=minute_minimum('대전',start.date())
@@ -61,7 +61,7 @@ class EnergyTests(unittest.TestCase):
     def test_recover_missing_window_without_fabricating_temperatures(self):
         start=dt.datetime(2026,11,19); header='# YYMMDDHHMI STN TA'
         def rows(a,b):
-            return '\\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {6-i/100}' for i in range(a,b)])
+            return '\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {6-i/100}' for i in range(a,b)])
         def source(path,params):
             return rows(0,360) if params['tm1'].endswith('0000') and params['tm2'].endswith('0700') else (rows(360,421) if params['tm1'].endswith('0500') else header)
         from energy_data import minute_minimum
@@ -73,7 +73,7 @@ class EnergyTests(unittest.TestCase):
         self.assertEqual(req.call_count,6)
 
     def test_persistent_observation_gaps_fail_with_diagnostics(self):
-        raw='# YYMMDDHHMI STN TA\\n202611190700 133 3'
+        raw='# YYMMDDHHMI STN TA\n202611190700 133 3'
         with patch('energy_data.time.sleep'),patch('energy_data.request',return_value=raw):
             with self.assertRaisesRegex(ValueError,r'대전 .*1/421.*max_missing_run='):
                 minute_minimum('대전',dt.date(2026,11,19))
@@ -87,7 +87,7 @@ class EnergyTests(unittest.TestCase):
             c,v,meta=minute_minimum('서울',start.date())
         self.assertEqual(v,5);self.assertEqual(meta['last'],'202610290700')
     def test_missing_observations_fail(self):
-        with patch('energy_data.request',return_value='# YYMMDDHHMI STN TA\n202610290700 108 3'):
+        with patch('energy_data.time.sleep'),patch('energy_data.request',return_value='# YYMMDDHHMI STN TA\n202610290700 108 3'):
             with self.assertRaises(ValueError):minute_minimum('서울',dt.date(2026,10,29))
     def test_timestamp_and_weather(self):
         self.assertEqual(publication_label('2026-10-29T22:00:00+00:00'),'발표시점: 2026. 10. 30.(금) 07시 기준')
