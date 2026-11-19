@@ -46,6 +46,38 @@ class EnergyTests(unittest.TestCase):
         raw='11B10101,202610290500,202610291200,A02,1,109,0,0,0,0,0,0,13,60,DB04,1,흐리고 가끔 비\n11B10101,202610290800,202610291200,A02,1,109,0,0,0,0,0,0,15,60,DB04,1,비'
         result=parse_short(raw,'2026102905')
         self.assertEqual(result['서울']['2026-10-29']['pm']['temperature'],13)
+
+    def test_retry_recovers_temporarily_incomplete_minutes(self):
+        start=dt.datetime(2026,11,19)
+        header='# YYMMDDHHMI STN TA'
+        def rows(a,b):
+            return '\\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {3 if i!=210 else -2}' for i in range(a,b)])
+        from energy_data import minute_minimum
+        with patch('energy_data.time.sleep'),patch('energy_data.request',side_effect=[rows(0,301),rows(0,421)]) as req:
+            city,value,meta=minute_minimum('대전',start.date())
+        self.assertEqual((city,value,meta['count'],meta['missing']),('대전',-2,421,0))
+        self.assertEqual(req.call_count,2)
+
+    def test_recover_missing_window_without_fabricating_temperatures(self):
+        start=dt.datetime(2026,11,19); header='# YYMMDDHHMI STN TA'
+        def rows(a,b):
+            return '\\n'.join([header]+[f'{start+dt.timedelta(minutes=i):%Y%m%d%H%M} 133 {6-i/100}' for i in range(a,b)])
+        def source(path,params):
+            return rows(0,360) if params['tm1'].endswith('0000') and params['tm2'].endswith('0700') else (rows(360,421) if params['tm1'].endswith('0500') else header)
+        from energy_data import minute_minimum
+        with patch('energy_data.time.sleep'),patch('energy_data.request',side_effect=source) as req:
+            city,value,meta=minute_minimum('대전',start.date())
+        self.assertEqual(meta['count'],421)
+        self.assertAlmostEqual(value,1.8)
+        self.assertEqual(meta['retrievals'],6)
+        self.assertEqual(req.call_count,6)
+
+    def test_persistent_observation_gaps_fail_with_diagnostics(self):
+        raw='# YYMMDDHHMI STN TA\\n202611190700 133 3'
+        with patch('energy_data.time.sleep'),patch('energy_data.request',return_value=raw):
+            with self.assertRaisesRegex(ValueError,r'대전 .*1/421.*max_missing_run='):
+                minute_minimum('대전',dt.date(2026,11,19))
+
     def test_minimum_excludes_after_07(self):
         lines=['# YYMMDDHHMI STN TA']
         start=dt.datetime(2026,10,29)

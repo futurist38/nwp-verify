@@ -46,3 +46,42 @@ test('public image route cannot dispatch workflows, original protected test rout
  await scheduler.fetch(request('/latest/radar?wf=daily.yml&key=test'),{...env,GH_TOKEN:'test-token',TEST_KEY:'test'},{});assert.equal(calls.length,0);
  const r=await scheduler.fetch(request('/?wf=daily.yml'),{...env,GH_TOKEN:'test-token',TEST_KEY:'test'},{});assert.equal(await r.text(),'nwp-verify scheduler alive\n');assert.equal(calls.length,0);
 });
+
+test('energy cron requests the workflow when today report is missing',async()=>{
+ const requests=[];
+ globalThis.fetch=async(url,options)=>{
+  const u=String(url);requests.push(u);
+  if(u.includes('/energy/'))return new Response(null,{status:404});
+  if(u.includes('/runs?'))return Response.json({workflow_runs:[]});
+  if(u.endsWith('/dispatches'))return new Response(null,{status:204});
+  throw Error('unexpected URL');
+ };
+ let pending;await scheduler.scheduled({cron:'10 22 * * *',scheduledTime:Date.now()},
+  {GH_TOKEN:'fake-token'},{waitUntil:p=>pending=p});await pending;
+ assert.ok(requests.some(url=>url.endsWith('/energy-daily.yml/dispatches')));
+});
+test('energy cron skips duplicate when report is already published',async()=>{
+ const requests=[];
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+ const day=parts.year+'-'+parts.month+'-'+parts.day;
+ globalThis.fetch=async(url)=>{
+  requests.push(String(url));
+  return Response.json({date:day,forecast:Array(9).fill({}),forecast_table:Array(10).fill({})});
+ };
+ let pending;await scheduler.scheduled({cron:'40 22 * * *',scheduledTime:Date.now()},
+  {GH_TOKEN:'fake-token'},{waitUntil:p=>pending=p});await pending;
+ assert.equal(requests.length,1);
+ assert.ok(requests[0].includes('/energy/'));
+});
+test('energy cron skips duplicate while recent Actions run is active',async()=>{
+ const requests=[];
+ globalThis.fetch=async(url)=>{
+  const u=String(url);requests.push(u);
+  if(u.includes('/energy/'))return new Response(null,{status:404});
+  if(u.includes('/runs?'))return Response.json({workflow_runs:[{status:'in_progress',created_at:new Date().toISOString()}]});
+  throw Error('unexpected dispatch');
+ };
+ let pending;await scheduler.scheduled({cron:'10 23 * * *',scheduledTime:Date.now()},
+  {GH_TOKEN:'fake-token'},{waitUntil:p=>pending=p});await pending;
+ assert.equal(requests.filter(u=>u.endsWith('/dispatches')).length,0);
+});

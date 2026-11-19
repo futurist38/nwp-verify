@@ -75,3 +75,17 @@ https://nwp-verify-scheduler.<계정>.workers.dev/?wf=obs-hourly.yml&key=<TEST_K
 만료되면 Worker 는 계속 돌지만 GitHub 가 401 로 거절해 **사이트가 조용히 멈춘다**.
 갱신일은 구글 캘린더에 등록해 두었다. 사이트가 "N시간 전" 을 표시하므로
 눈으로도 잡히지만, 캘린더가 1차 방어다.
+
+## 에너지기상 발행 복구 (2026-11-19)
+
+기존 관측·NWP 예약을 유지하면서 에너지기상 작업만 별도로 추가:
+
+- `10 22 * * *` UTC = **07:10 KST**: 보고서 미게시 시 `energy-daily.yml` dispatch.
+- `40 22 * * *` UTC = **07:40 KST**: 실제 보고서 JSON 확인 후 미게시·실패 시 재시도.
+- `10 23 * * *` UTC = **08:10 KST**: 마지막 점검, 미게시 경고 로그 및 재시도.
+
+공개된 `energy/YYYYMMDD/report.json`의 **해당 날짜·9일 보고서·10일 예보 구조**를 확인한다. 25분 이내 진행 중인 GitHub 실행이 있으면 중복 호출하지 않는다. 확인 API 장애 시에는 실패를 성공으로 간주하지 않고 재시도 호출한다. 기존 GitHub `energy-daily.yml` 자체 schedule은 예비 경로로 유지한다.
+
+`energy_runtime/energy_data.py`는 관측 원본을 최대 3회 재조회하고 필요한 경우 00–02:59, 03–04:59, 05–07시로 분할 재조회한다. 유효한 실측만 결합하며 임의 보간/대체 관측소 사용 금지. 실측 최소 400/421분, 시작 00:05 이전, 종료 06:50 이후, 최대 연속 누락 10분을 모두 만족할 때만 부분자료를 허용한다. 미충족 시 발행을 차단하고 로그에 수신 수와 최대 결측 길이를 남긴다. 이미 발행된 당일 보고서는 늦게 발생한 재실행이 덮어쓰지 않는다.
+
+**중요:** GitHub 소스 업데이트만으로 Cloudflare Worker가 자동 배포되지 않는다. 배포 시 기존 이미지 경로와 `GH_TOKEN`, `TEST_KEY`, `IMAGERY_LIMITER`가 유지되도록 `scheduler/` 기준 `npx wrangler deploy`를 실행하거나 Cloudflare 대시보드에 `worker.bundle.js`를 반영하고, 위 3개 Cron Trigger가 추가됐는지 확인한다. Wrangler 배포는 cron 전체 목록을 동기화하므로 기존 3개 트리거가 반드시 함께 있어야 한다.

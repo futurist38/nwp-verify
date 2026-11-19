@@ -26,8 +26,8 @@ def main():
                 try:old=json.loads(git('show',base+':energy/'+folder.name+'/report.json'))
                 except subprocess.CalledProcessError:old={}
                 # Preserve a later approved/manual report for the same day.
-                if old.get('publication_kst','')>report['publication_kst']:
-                    print('Preserved later publication:',folder.name);continue
+                if old.get('publication_kst','')>=report['publication_kst']:
+                    print('Preserved existing or later publication:',folder.name);continue
                 for p in folder.iterdir():
                     if not p.is_file():continue
                     sha=git('hash-object','-w',str(p))

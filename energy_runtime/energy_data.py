@@ -1,5 +1,5 @@
 """07 KST energy report inputs. Missing required temperatures stop publication."""
-import csv, io, json, os, datetime as dt
+import csv, io, json, os, time, datetime as dt
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal, ROUND_HALF_UP
@@ -33,26 +33,78 @@ def weighted(values):
     if set(values)!=set(WEIGHTS): raise ValueError('All eight cities are required')
     return float(sum(Decimal(str(values[c]))*Decimal(str(w)) for c,w in WEIGHTS.items()).quantize(Decimal('.1'),rounding=ROUND_HALF_UP))
 
-def minute_minimum(city,day):
-    date=day.strftime('%Y%m%d'); cutoff=date+'0700'
-    raw=request('/api/typ01/cgi-bin/url/nph-aws2_min',{'tm1':date+'0000','tm2':cutoff,'stn':STATIONS[city],'disp':0,'help':0})
+def _parse_minute_rows(raw, city, date, start, end):
+    """Accept only real KMA one-minute observations for the expected station/time."""
     header=None; points={}
     for line in raw.splitlines():
         fields=line.lstrip('# ').split()
         if line.startswith('#'):
-            if 'TA' in fields and 'STN' in fields: header=fields
+            if 'TA' in fields and 'STN' in fields:header=fields
             continue
-        if not fields or not fields[0].isdigit():continue
-        if header is None:raise ValueError('AWS temperature header missing')
-        if len(fields)<=header.index('TA'):raise ValueError('AWS truncated row')
-        tm=fields[0]
-        if not date+'0000'<=tm<=cutoff or int(fields[header.index('STN')])!=STATIONS[city]:continue
-        try:points[tm]=number(fields[header.index('TA')])
-        except ValueError:continue
-    # Allow a small reception delay at 07:00, never use later observations.
-    if len(points)<400 or min(points)>date+'0005' or max(points)<date+'0650':
-        raise ValueError('Incomplete 00–07 minute observations: '+city)
-    return city,min(points.values()),{'first':min(points),'last':max(points),'count':len(points)}
+        if header is None or not fields or len(fields[0])!=12 or not fields[0].isdigit():continue
+        try:
+            tm=fields[0]
+            if not start<=tm<=end or int(fields[header.index('STN')])!=STATIONS[city]:continue
+            points[tm]=number(fields[header.index('TA')])
+        except (ValueError,IndexError):
+            continue
+    return points
+
+def _minute_quality(points, day):
+    """Check continuity; never manufacture temperatures for absent minutes."""
+    base=dt.datetime.combine(day,dt.time(0))
+    expected=[(base+dt.timedelta(minutes=i)).strftime('%Y%m%d%H%M') for i in range(421)]
+    run=longest=0
+    for tm in expected:
+        run=0 if tm in points else run+1
+        longest=max(longest,run)
+    first=min(points) if points else None
+    last=max(points) if points else None
+    date=day.strftime('%Y%m%d')
+    valid=(len(points)>=400 and first is not None and first<=date+'0005'
+           and last>=date+'0650' and longest<=10)
+    return valid, {'first':first,'last':last,'count':len(points),
+                   'expected':421,'missing':421-len(points),'longest_missing_minutes':longest,
+                   'quality':'complete' if len(points)==421 else 'partial-validated'}
+
+def minute_minimum(city,day):
+    date=day.strftime('%Y%m%d'); start=date+'0000'; cutoff=date+'0700'
+    params={'tm1':start,'tm2':cutoff,'stn':STATIONS[city],'disp':0,'help':0}
+    endpoint='/api/typ01/cgi-bin/url/nph-aws2_min'
+    points={};probes=0
+    # A successful HTTP response can still contain incomplete station data.
+    for attempt,delay in enumerate((0,2,5),1):
+        if delay:time.sleep(delay)
+        probes+=1
+        try:
+            raw=request(endpoint,params)
+            points.update(_parse_minute_rows(raw,city,date,start,cutoff))
+        except Exception as exc:
+            print(f'[energy] {city}: minute request {attempt}/3 failed ({type(exc).__name__})')
+        if len(points)==421:break
+    valid,meta=_minute_quality(points,day)
+    # Recover missing minutes from smaller KMA observation windows, not interpolation.
+    if not valid:
+        for tm1,tm2 in (('0000','0259'),('0300','0459'),('0500','0700')):
+            probes+=1
+            try:
+                raw=request(endpoint,dict(params,tm1=date+tm1,tm2=date+tm2))
+                points.update(_parse_minute_rows(raw,city,date,date+tm1,date+tm2))
+            except Exception as exc:
+                print(f'[energy] {city}: minute window {tm1}-{tm2} failed ({type(exc).__name__})')
+        valid,meta=_minute_quality(points,day)
+    if not valid:
+        raise ValueError(
+            f'Incomplete 00–07 minute observations: {city} '
+            f'({meta["count"]}/421; first={meta["first"]}; last={meta["last"]}; '
+            f'max_missing_run={meta["longest_missing_minutes"]} min; probes={probes})'
+        )
+    meta['retrievals']=probes
+    if meta['missing']:
+        print(f'[energy] {city}: validated partial minute observations '
+              f'({meta["count"]}/421; max gap {meta["longest_missing_minutes"]} min)')
+    return city,min(points.values()),meta
+
 
 def daily_extrema(day,kind):
     date=day.strftime('%Y%m%d')
