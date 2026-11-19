@@ -1,1 +1,4 @@
-{"date":"2026-11-18","requested_at_kst":"2026-11-18T07:10:55+09:00"}
+{
+  "date": "2026-11-20",
+  "reason": "Recover scheduled 07 KST energy-weather publication after scheduler setup"
+}
