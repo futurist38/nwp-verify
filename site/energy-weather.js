@@ -528,7 +528,21 @@ async function show(){
 }
 el('date').addEventListener('change',show);el('print').onclick=()=>window.print();
 window.addEventListener('beforeprint',()=>Object.values(editors).forEach(ed=>ed.draw(false)));window.addEventListener('afterprint',()=>Object.values(editors).forEach(ed=>ed.draw()));
-(async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
+function updatePublicationWarning(dates){
+ const alert=el('publishWarning');
+ if(!alert||!dates.length)return;
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
+   timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',
+   hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+ }).formatToParts(new Date()).map(p=>[p.type,p.value]));
+ const today=parts.year+parts.month+parts.day;
+ const minutes=Number(parts.hour)*60+Number(parts.minute);
+ const missing=minutes>=8*60+10 && dates[0]<today;
+ alert.hidden=!missing;
+ if(missing)alert.textContent=
+   `${parts.year}-${parts.month}-${parts.day} 07시 기준 에너지기상 보고서가 아직 발행되지 않았습니다. 최신 게시 자료는 ${format(dates[0])}입니다. 자동 재시도 결과를 확인해 주세요.`;
+}
+(async()=>{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));try{const r=await reportFetch('energy/index.json',{cache:'no-store'});if(!r.ok)throw Error('index');index=await r.json();const dates=index.dates.filter(d=>/^\d{8}$/.test(d));if(!dates.length){el('status').textContent='최근 30일 이내 게시된 자료가 없습니다.';return;}for(const d of dates){const o=document.createElement('option');o.value=d;o.textContent=format(d);el('date').append(o);}el('date').disabled=false;await show();updatePublicationWarning(dates);}catch{el('status').textContent='자료 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';}})();
 
 
 
