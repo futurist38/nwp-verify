@@ -695,15 +695,16 @@ def build_manifest(site_dir: str, nowcast: dict | None = None):
         files.setdefault(os.path.basename(d), set()).update(os.listdir(d))
     listing = os.environ.get("R2_LISTING")
     if listing and os.path.exists(listing):
-        cut = (dt.date.today() - dt.timedelta(days=MAX_DAYS)).strftime("%Y%m%d")
+        cut = (today_kst() - dt.timedelta(days=MAX_DAYS)).strftime("%Y%m%d")
         n_remote = 0
-        for line in open(listing, encoding="utf-8"):
-            line = line.strip()
-            if "/" not in line:
-                continue
-            ymd, fn = line.split("/", 1)
-            if len(ymd) == 8 and ymd.isdigit() and ymd >= cut:
-                files.setdefault(ymd, set()).add(fn); n_remote += 1
+        with open(listing, encoding="utf-8") as listing_file:
+            for line in listing_file:
+                line = line.strip()
+                if "/" not in line:
+                    continue
+                ymd, fn = line.split("/", 1)
+                if len(ymd) == 8 and ymd.isdigit() and ymd >= cut:
+                    files.setdefault(ymd, set()).add(fn); n_remote += 1
         print(f"[site] R2 목록 병합: {n_remote}개")
     if os.environ.get("IMG_BASE"):
         manifest["img_base"] = os.environ["IMG_BASE"].rstrip("/")
