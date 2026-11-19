@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kim",
+  "label": "KIM",
+  "kind": "model",
+  "issue": null,
+  "started_kst": "2026-11-19T10:43:43+09:00",
+  "ended_kst": "2026-11-19T10:52:11+09:00",
+  "duration_s": 508.5,
+  "status": "failed",
+  "summary": "수신 작업 실패",
+  "detail": "[KIM-NC]  실패: psl/0 hf=6: HTTP 504\n[KIM-NC]  실패: lcld/0 hf=57: HTTP 504\n[KIM-NC]  실패: hcld/0 hf=105: HTTP 504\n[KIM-NC]  실패: t2m/0 hf=108: HTTP 504\n[KIM-NC]  실패: mcld/0 hf=252: HTTP 504\n[KIM-NC] 시간 상한 8.0분 — 남은 요청 취소\n[KIM-NC] 수신 499건 성공 / 5건 실패, 501초\n[KIM-NC] 수신 실패: 완결 관문 실패 — 72h 이내 결손 스텝 [6], 120h 이내 확보 39/41 → 파일 미생성",
+  "returncode": 1,
+  "workflow": "daily-nwp",
+  "run_id": "44438640796",
+  "run_attempt": "1"
+}
