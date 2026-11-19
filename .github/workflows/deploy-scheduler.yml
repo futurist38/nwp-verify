@@ -33,7 +33,7 @@ jobs:
             echo "::warning::Cloudflare deployment is not connected: configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
             if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then exit 1; fi
           fi
-      - name: Deploy existing Worker with all six cron triggers
+      - name: Deploy existing Worker with five cron triggers
         if: steps.credentials.outputs.ready == 'true'
         working-directory: scheduler
         env:

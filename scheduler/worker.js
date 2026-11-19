@@ -21,11 +21,10 @@ const JOBS = {
   "25 * * * *": "obs-hourly.yml",  // hourly observation refresh
   "10 21 * * *": "daily.yml",      // 06:10 KST
   "40 1 * * *": "daily.yml",       // 10:40 KST
-  "10 22 * * *": "energy-daily.yml", // 07:10 KST initial
+  "10 22,23 * * *": "energy-daily.yml", // 07:10 + 08:10 KST, one trigger
   "40 22 * * *": "energy-daily.yml", // 07:40 KST verify/retry
-  "10 23 * * *": "energy-daily.yml", // 08:10 KST final verify/retry
 };
-const ENERGY_CRONS = new Set(["10 22 * * *", "40 22 * * *", "10 23 * * *"]);
+const ENERGY_CRONS = new Set(["10 22,23 * * *", "40 22 * * *"]);
 
 function kstDay(date) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -82,7 +81,8 @@ async function ensureEnergy(event, env) {
       return;
     }
   }catch(err){console.warn("[energy] run-state check unavailable",String(err));}
-  if(event.cron==="10 23 * * *")console.warn("[energy] still unpublished at 08:10 KST",day);
+  if(event.cron==="10 22,23 * * *" && new Date(event.scheduledTime||Date.now()).getUTCHours()===23)
+    console.warn("[energy] still unpublished at 08:10 KST",day);
   return dispatch("energy-daily.yml",env);
 }
 

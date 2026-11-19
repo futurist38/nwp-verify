@@ -56,7 +56,7 @@ test('energy cron requests the workflow when today report is missing',async()=>{
   if(u.endsWith('/dispatches'))return new Response(null,{status:204});
   throw Error('unexpected URL');
  };
- let pending;await scheduler.scheduled({cron:'10 22 * * *',scheduledTime:Date.now()},
+ let pending;await scheduler.scheduled({cron:'10 22,23 * * *',scheduledTime:Date.now()},
   {GH_TOKEN:'fake-token'},{waitUntil:p=>pending=p});await pending;
  assert.ok(requests.some(url=>url.endsWith('/energy-daily.yml/dispatches')));
 });
@@ -81,7 +81,30 @@ test('energy cron skips duplicate while recent Actions run is active',async()=>{
   if(u.includes('/runs?'))return Response.json({workflow_runs:[{status:'in_progress',created_at:new Date().toISOString()}]});
   throw Error('unexpected dispatch');
  };
- let pending;await scheduler.scheduled({cron:'10 23 * * *',scheduledTime:Date.now()},
+ let pending;await scheduler.scheduled({cron:'10 22,23 * * *',scheduledTime:Date.now()},
   {GH_TOKEN:'fake-token'},{waitUntil:p=>pending=p});await pending;
  assert.equal(requests.filter(u=>u.endsWith('/dispatches')).length,0);
+});
+
+test('merged energy cron handles both 07:10 and 08:10 schedules with one trigger',async()=>{
+ const fired=[];
+ globalThis.fetch=async(url)=>{
+   const u=String(url);fired.push(u);
+   if(u.includes('/energy/'))return new Response(null,{status:404});
+   if(u.includes('/runs?'))return Response.json({workflow_runs:[]});
+   if(u.endsWith('/dispatches'))return new Response(null,{status:204});
+   throw Error('unexpected URL');
+ };
+ const d=new Date();
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).map(p=>[p.type,p.value]));
+ const date=`${parts.year}-${parts.month}-${parts.day}`;
+ for(const hour of [7,8]){
+   fired.length=0;
+   let task;
+   const time=Date.parse(`${date}T0${hour}:10:00+09:00`);
+   await scheduler.scheduled({cron:'10 22,23 * * *',scheduledTime:time},
+     {GH_TOKEN:'fake-token'},{waitUntil:p=>task=p});
+   await task;
+   assert.equal(fired.filter(u=>u.endsWith('/energy-daily.yml/dispatches')).length,1);
+ }
 });
