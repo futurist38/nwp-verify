@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kim",
+  "label": "KIM",
+  "kind": "model",
+  "issue": null,
+  "started_kst": "2026-11-20T10:43:36+09:00",
+  "ended_kst": "2026-11-20T10:53:36+09:00",
+  "duration_s": 600.1,
+  "status": "failed",
+  "summary": "시간초과",
+  "detail": "[KIM-NC] 기관키 길이 22자 (정상 22자)\n[KIM-NC] 런 2026111800 지상 55스텝, 요청 505건, 병렬 4\n[KIM-NC]  실패: mcld/0 hf=9: HTTP 504\n[KIM-NC]  실패: psl/0 hf=15: HTTP 504\n[KIM-NC]  실패: tcld/0 hf=15: HTTP 504\n[KIM-NC]  실패: prec_acc/0 hf=18: HTTP 504\n[ingest-status] 시간초과: 600초",
+  "returncode": 124,
+  "workflow": "daily-nwp",
+  "run_id": "44655325502",
+  "run_attempt": "1"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kim_upper",
+  "label": "KIM 상층",
+  "kind": "model",
+  "issue": null,
+  "started_kst": "2026-11-20T10:56:38+09:00",
+  "ended_kst": "2026-11-20T10:58:48+09:00",
+  "duration_s": 129.5,
+  "status": "failed",
+  "summary": "수신 작업 실패",
+  "detail": "[KIM-NC] 런 2026111918 상층 13스텝 + 지상장 35스텝, 요청 304건, 병렬 4\n[KIM-NC]  실패: psl/0 hf=90: # ERROR : file is not exist (/ARCV/RAWD/MODL/GDPS/NE57/202611/19/18/ERLY/FCST/post/g576_v091_glob_etc.2byte.1hr.ft090.2026111918.nc)\n[KIM-NC]  실패: t2m/0 hf=90: # ERROR : file is not exist (/ARCV/RAWD/MODL/GDPS/NE57/202611/19/18/ERLY/FCST/post/g576_v091_glob_etc.2byte.1hr.ft090.2026111918.nc)\n[KIM-NC]  실패: psl/0 hf=96: # ERROR : file is not exist (/ARCV/RAWD/MODL/GDPS/NE57/202611/19/18/ERLY/FCST/post/g576_v091_glob_etc.2byte.1hr.ft096.2026111918.nc)\n[KIM-NC]  실패: t2m/0 hf=96: # ERROR : file is not exist (/ARCV/RAWD/MODL/GDPS/NE57/202611/19/18/ERLY/FCST/post/g576_v091_glob_etc.2byte.1hr.ft096.2026111918.nc)\n[KIM-NC]  실패: psl/0 hf=102: # ERROR : file is not exist (/ARCV/RAWD/MODL/GDPS/NE57/202611/19/18/ERLY/FCST/post/g576_v091_glob_etc.2byte.1hr.ft102.2026111918.nc)\n[KIM-NC] 수신 264건 성공 / 40건 실패, 126초\n[KIM-NC] 수신 실패: 완결 관문 실패 — 상층 결손(≤48h) [], 상층 확보 13/13, 지상장 결손(≤72h) [], 지상장 확보 15/35 → 파일 미생성",
+  "returncode": 1,
+  "workflow": "daily-nwp",
+  "run_id": "44655325502",
+  "run_attempt": "1"
+}
