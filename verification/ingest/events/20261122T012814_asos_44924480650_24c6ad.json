@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "asos",
+  "label": "ASOS",
+  "kind": "observation",
+  "issue": "2026112200",
+  "started_kst": "2026-11-22T01:26:26+09:00",
+  "ended_kst": "2026-11-22T01:28:14+09:00",
+  "duration_s": 108.2,
+  "status": "partial",
+  "summary": "수신 실패 또는 미완료 자료 있음",
+  "detail": "[ASOS] 응답 형식 이상 (1/3) h_n97_81abd0c1_202611210000_202611220126\n[ASOS] 응답 형식 이상 (2/3) h_n97_81abd0c1_202611210000_202611220126\n[ASOS] 응답 형식 이상 (3/3) h_n97_81abd0c1_202611210000_202611220126\n[관측지도] 실황 수신 실패(요청 최종 실패 [h_n97_81abd0c1_202611210000_202611220126]: 정상 마커(#START7777) 없음: ) — 기존 CSV로 진행\n[관측지도] 실황 수신만 — 표출은 사이트가 JSON으로 그림",
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "44924480650",
+  "run_attempt": "1"
+}
