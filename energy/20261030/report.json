@@ -1,0 +1,1172 @@
+{
+  "date": "2026-10-30",
+  "publication_kst": "2026-10-30T07:00:00+09:00",
+  "forecast": [
+    {
+      "date": "2026-10-30",
+      "cities": {
+        "서울": {
+          "min": 6.7,
+          "max": 19.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "인천": {
+          "min": 8.8,
+          "max": 18.0,
+          "weather": [
+            "구름많고 한때 비",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "수원": {
+          "min": 5.9,
+          "max": 19.0,
+          "weather": [
+            "구름많고 한때 비",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "원주": {
+          "min": 6.0,
+          "max": 17.0,
+          "weather": [
+            "구름많음",
+            "구름많고 한때 비"
+          ],
+          "source": "short"
+        },
+        "대전": {
+          "min": 8.3,
+          "max": 19.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "대구": {
+          "min": 9.9,
+          "max": 20.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "광주": {
+          "min": 11.0,
+          "max": 20.0,
+          "weather": [
+            "구름많음",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "부산": {
+          "min": 13.3,
+          "max": 21.0,
+          "weather": [
+            "구름많음",
+            "맑음"
+          ],
+          "source": "short"
+        }
+      },
+      "min": 8.9,
+      "max": 19.5
+    },
+    {
+      "date": "2026-10-31",
+      "cities": {
+        "서울": {
+          "min": 9.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "인천": {
+          "min": 9.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "수원": {
+          "min": 8.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "원주": {
+          "min": 8.0,
+          "max": 15.0,
+          "weather": [
+            "구름많고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "대전": {
+          "min": 9.0,
+          "max": 17.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "대구": {
+          "min": 8.0,
+          "max": 19.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "광주": {
+          "min": 10.0,
+          "max": 19.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "short"
+        },
+        "부산": {
+          "min": 12.0,
+          "max": 21.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "short"
+        }
+      },
+      "min": 9.6,
+      "max": 16.5
+    },
+    {
+      "date": "2026-11-01",
+      "cities": {
+        "서울": {
+          "min": 5.0,
+          "max": 13.0,
+          "weather": [
+            "흐림",
+            "흐리고 한때 비"
+          ],
+          "source": "short"
+        },
+        "인천": {
+          "min": 5.0,
+          "max": 13.0,
+          "weather": [
+            "흐림",
+            "흐리고 한때 비"
+          ],
+          "source": "short"
+        },
+        "수원": {
+          "min": 6.0,
+          "max": 13.0,
+          "weather": [
+            "흐림",
+            "흐리고 한때 비"
+          ],
+          "source": "short"
+        },
+        "원주": {
+          "min": 4.0,
+          "max": 13.0,
+          "weather": [
+            "흐림",
+            "흐리고 한때 비"
+          ],
+          "source": "short"
+        },
+        "대전": {
+          "min": 5.0,
+          "max": 14.0,
+          "weather": [
+            "흐리고 한때 비",
+            "흐리고 가끔 비"
+          ],
+          "source": "short"
+        },
+        "대구": {
+          "min": 6.0,
+          "max": 14.0,
+          "weather": [
+            "흐림",
+            "흐리고 가끔 비"
+          ],
+          "source": "short"
+        },
+        "광주": {
+          "min": 7.0,
+          "max": 16.0,
+          "weather": [
+            "흐림",
+            "흐리고 비"
+          ],
+          "source": "short"
+        },
+        "부산": {
+          "min": 10.0,
+          "max": 18.0,
+          "weather": [
+            "흐림",
+            "흐리고 가끔 비"
+          ],
+          "source": "short"
+        }
+      },
+      "min": 6.3,
+      "max": 14.4
+    },
+    {
+      "date": "2026-11-02",
+      "cities": {
+        "서울": {
+          "min": 9.0,
+          "max": 15.0,
+          "weather": [
+            "구름많고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "인천": {
+          "min": 10.0,
+          "max": 15.0,
+          "weather": [
+            "구름많고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "수원": {
+          "min": 9.0,
+          "max": 15.0,
+          "weather": [
+            "구름많고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "원주": {
+          "min": 8.0,
+          "max": 16.0,
+          "weather": [
+            "흐리고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "대전": {
+          "min": 8.0,
+          "max": 17.0,
+          "weather": [
+            "흐리고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "대구": {
+          "min": 10.0,
+          "max": 18.0,
+          "weather": [
+            "구름많고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "광주": {
+          "min": 11.0,
+          "max": 18.0,
+          "weather": [
+            "흐리고 한때 비",
+            "맑음"
+          ],
+          "source": "short"
+        },
+        "부산": {
+          "min": 14.0,
+          "max": 20.0,
+          "weather": [
+            "구름많고 가끔 비",
+            "맑음"
+          ],
+          "source": "short"
+        }
+      },
+      "min": 10.3,
+      "max": 16.7
+    },
+    {
+      "date": "2026-11-03",
+      "cities": {
+        "서울": {
+          "min": 4.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "인천": {
+          "min": 6.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "수원": {
+          "min": 5.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "원주": {
+          "min": 3.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대전": {
+          "min": 4.0,
+          "max": 16.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대구": {
+          "min": 5.0,
+          "max": 16.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "광주": {
+          "min": 7.0,
+          "max": 17.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "부산": {
+          "min": 7.0,
+          "max": 18.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        }
+      },
+      "min": 5.1,
+      "max": 15.4
+    },
+    {
+      "date": "2026-11-04",
+      "cities": {
+        "서울": {
+          "min": 5.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "인천": {
+          "min": 7.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "수원": {
+          "min": 6.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "원주": {
+          "min": 4.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대전": {
+          "min": 5.0,
+          "max": 17.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대구": {
+          "min": 6.0,
+          "max": 16.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "광주": {
+          "min": 8.0,
+          "max": 18.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "부산": {
+          "min": 9.0,
+          "max": 18.0,
+          "weather": [
+            "맑음",
+            "구름많음"
+          ],
+          "source": "mid"
+        }
+      },
+      "min": 6.3,
+      "max": 16.1
+    },
+    {
+      "date": "2026-11-05",
+      "cities": {
+        "서울": {
+          "min": 6.0,
+          "max": 17.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "인천": {
+          "min": 8.0,
+          "max": 17.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "수원": {
+          "min": 7.0,
+          "max": 17.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "원주": {
+          "min": 5.0,
+          "max": 16.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "대전": {
+          "min": 7.0,
+          "max": 18.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "대구": {
+          "min": 8.0,
+          "max": 18.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "광주": {
+          "min": 9.0,
+          "max": 19.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        },
+        "부산": {
+          "min": 11.0,
+          "max": 20.0,
+          "weather": [
+            "구름많음",
+            "구름많음"
+          ],
+          "source": "mid"
+        }
+      },
+      "min": 7.6,
+      "max": 17.9
+    },
+    {
+      "date": "2026-11-06",
+      "cities": {
+        "서울": {
+          "min": 5.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "인천": {
+          "min": 7.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "수원": {
+          "min": 6.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "원주": {
+          "min": 3.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대전": {
+          "min": 5.0,
+          "max": 16.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대구": {
+          "min": 6.0,
+          "max": 17.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "광주": {
+          "min": 7.0,
+          "max": 18.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "부산": {
+          "min": 10.0,
+          "max": 19.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        }
+      },
+      "min": 6.4,
+      "max": 15.8
+    },
+    {
+      "date": "2026-11-07",
+      "cities": {
+        "서울": {
+          "min": 4.0,
+          "max": 13.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "인천": {
+          "min": 6.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "수원": {
+          "min": 5.0,
+          "max": 14.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "원주": {
+          "min": 2.0,
+          "max": 13.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대전": {
+          "min": 4.0,
+          "max": 15.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "대구": {
+          "min": 5.0,
+          "max": 16.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "광주": {
+          "min": 6.0,
+          "max": 17.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        },
+        "부산": {
+          "min": 9.0,
+          "max": 18.0,
+          "weather": [
+            "맑음",
+            "맑음"
+          ],
+          "source": "mid"
+        }
+      },
+      "min": 5.4,
+      "max": 14.8
+    }
+  ],
+  "previous_weighted": {
+    "min": 5.4,
+    "max": 12.3
+  },
+  "previous_observations": {
+    "min": {
+      "서울": 4.2,
+      "인천": 6.6,
+      "원주": 0.6,
+      "수원": 2.7,
+      "대전": 2.9,
+      "대구": 3.6,
+      "광주": 5.4,
+      "부산": 10.0
+    },
+    "max": {
+      "서울": 10.2,
+      "인천": 12.1,
+      "원주": 10.1,
+      "수원": 12.0,
+      "대전": 13.2,
+      "대구": 12.1,
+      "광주": 12.6,
+      "부산": 16.5
+    }
+  },
+  "morning_observation_coverage": {
+    "서울": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "인천": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "수원": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "원주": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "대전": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "대구": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "광주": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    },
+    "부산": {
+      "first": "202610300000",
+      "last": "202610300700",
+      "count": 421
+    }
+  },
+  "weights": {
+    "서울": 0.4376,
+    "인천": 0.0558,
+    "수원": 0.0448,
+    "원주": 0.0306,
+    "대전": 0.0633,
+    "대구": 0.0838,
+    "광주": 0.0647,
+    "부산": 0.2194
+  },
+  "short_issue_kst": "2026103005",
+  "mid_issue_kst": "2026103006",
+  "status": "automatic",
+  "automatic_generation": true,
+  "normals": [
+    {
+      "min": {
+        "mean": 7.442537999999999,
+        "lower": 6.088800642181095,
+        "upper": 8.796275357818903,
+        "p10": 3.9236899999999997,
+        "p90": 11.56148
+      },
+      "max": {
+        "mean": 17.19064733333333,
+        "lower": 15.751280115662736,
+        "upper": 18.630014551003924,
+        "p10": 12.768473,
+        "p90": 21.185907
+      }
+    },
+    {
+      "min": {
+        "mean": 7.304957333333333,
+        "lower": 5.867045689277347,
+        "upper": 8.74286897738932,
+        "p10": 3.7685660000000003,
+        "p90": 12.250742
+      },
+      "max": {
+        "mean": 16.99602066666667,
+        "lower": 15.477291875960038,
+        "upper": 18.514749457373302,
+        "p10": 12.518849000000003,
+        "p90": 21.422265000000003
+      }
+    },
+    {
+      "min": {
+        "mean": 7.381191666666667,
+        "lower": 5.842760704616943,
+        "upper": 8.919622628716391,
+        "p10": 2.5227510000000004,
+        "p90": 11.592084
+      },
+      "max": {
+        "mean": 16.541921999999996,
+        "lower": 14.884103335341688,
+        "upper": 18.199740664658304,
+        "p10": 11.359638,
+        "p90": 21.579342
+      }
+    },
+    {
+      "min": {
+        "mean": 6.751349666666666,
+        "lower": 5.044997897009774,
+        "upper": 8.457701436323559,
+        "p10": 0.843272,
+        "p90": 11.773016000000002
+      },
+      "max": {
+        "mean": 16.257517333333332,
+        "lower": 14.786213890393032,
+        "upper": 17.728820776273633,
+        "p10": 11.618908000000001,
+        "p90": 19.917671000000002
+      }
+    },
+    {
+      "min": {
+        "mean": 6.648819666666666,
+        "lower": 5.312481361496181,
+        "upper": 7.985157971837151,
+        "p10": 2.8707550000000004,
+        "p90": 10.453232999999999
+      },
+      "max": {
+        "mean": 17.092593000000004,
+        "lower": 15.587221505910016,
+        "upper": 18.597964494089993,
+        "p10": 12.695765000000002,
+        "p90": 20.903253
+      }
+    },
+    {
+      "min": {
+        "mean": 6.785954666666667,
+        "lower": 5.311398649738632,
+        "upper": 8.260510683594703,
+        "p10": 3.047371000000001,
+        "p90": 10.254110000000004
+      },
+      "max": {
+        "mean": 17.35598966666667,
+        "lower": 15.982125913509867,
+        "upper": 18.729853419823474,
+        "p10": 14.053016,
+        "p90": 20.223691
+      }
+    },
+    {
+      "min": {
+        "mean": 7.700983666666668,
+        "lower": 6.274456350823787,
+        "upper": 9.127510982509548,
+        "p10": 3.3955670000000002,
+        "p90": 11.357998
+      },
+      "max": {
+        "mean": 17.865432333333334,
+        "lower": 16.636950092814114,
+        "upper": 19.093914573852555,
+        "p10": 13.829244000000001,
+        "p90": 20.536317000000004
+      }
+    },
+    {
+      "min": {
+        "mean": 8.334174333333333,
+        "lower": 7.176731880294292,
+        "upper": 9.491616786372374,
+        "p10": 4.955128,
+        "p90": 11.585298
+      },
+      "max": {
+        "mean": 17.821116,
+        "lower": 16.6641474949915,
+        "upper": 18.9780845050085,
+        "p10": 14.174436000000004,
+        "p90": 20.832467
+      }
+    },
+    {
+      "min": {
+        "mean": 7.808375000000001,
+        "lower": 6.415595949560154,
+        "upper": 9.201154050439847,
+        "p10": 4.366892000000001,
+        "p90": 11.516106000000002
+      },
+      "max": {
+        "mean": 16.915884666666667,
+        "lower": 15.855771285248448,
+        "upper": 17.975998048084886,
+        "p10": 13.986773000000001,
+        "p90": 19.358903
+      }
+    }
+  ],
+  "icon_summary": [
+    {
+      "north": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        },
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        },
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "cloudy",
+          "precip": null,
+          "frequency": null
+        },
+        {
+          "sky": "cloudy",
+          "precip": "rain",
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "cloudy",
+          "precip": null,
+          "frequency": null
+        },
+        {
+          "sky": "cloudy",
+          "precip": "rain",
+          "frequency": "가끔"
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": "rain",
+          "frequency": null
+        },
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": "rain",
+          "frequency": null
+        },
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        },
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "sun_cloud_b",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    },
+    {
+      "north": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ],
+      "south": [
+        {
+          "sky": "clear",
+          "precip": null,
+          "frequency": null
+        }
+      ]
+    }
+  ],
+  "weather_notes": [
+    "인천,수원,대전 상이 / 원주,대전 상이 / 대구 상이",
+    "원주 상이 / 광주 상이",
+    "대전 상이 / 광주 상이",
+    "원주,대전 상이 / 광주,부산 상이",
+    "",
+    "대구 상이",
+    "",
+    "",
+    ""
+  ],
+  "imagery": {
+    "satellite": {
+      "time": "2026-10-30T07:00:00+09:00",
+      "url": "https://www.weather.go.kr/w/repositary/image/sat/gk2a/KO/gk2a_ami_le1b_rgb-s-daynight_ko020lc_202610292200.png",
+      "available": true
+    },
+    "radar": {
+      "available": true,
+      "time": "2026-10-30T07:00:00+09:00",
+      "url": "https://apihub-pub.kma.go.kr/api/typ03/cgi/rdr/nph-rdr_cmp1_img",
+      "parameters": {
+        "tm": "202610300700",
+        "cmp": "HSR",
+        "qcd": "HSLP",
+        "obs": "ECHD",
+        "color": "C4",
+        "aws": 0,
+        "acc": "",
+        "map": "HR",
+        "grid": 2,
+        "legend": 1,
+        "size": 600,
+        "itv": 5,
+        "zoom_level": 0,
+        "zoom_x": "0000000",
+        "zoom_y": "0000000",
+        "gov": ""
+      },
+      "product": "HSR graphic with map and mm/h legend"
+    }
+  },
+  "generated_kst": "2026-10-30T10:30:38+09:00",
+  "publication_label_format": "발표시점: YYYY. MM. DD.(요일) HH시 기준",
+  "retention_days": 30,
+  "show_provisional_label": false
+}

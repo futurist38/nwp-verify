@@ -1,0 +1,14 @@
+.surface-grid { width:100%; max-width:900px; margin:0 auto; background:#fff; color:#222; min-height:160px; }
+.surface-grid canvas { display:block; width:100%; touch-action:pan-y; }
+.surface-grid .sg-legend { margin:4px 20px 0; }
+.surface-grid .sg-legend-title { text-align:center; font-size:13px; margin-bottom:4px; }
+.surface-grid .sg-legend svg { display:block; width:100%; height:43px; }
+.surface-grid .sg-legend text { font:12px sans-serif; fill:#333; }
+.surface-grid .sg-detail,.surface-grid .sg-note { font-size:12px; text-align:center; padding:4px 10px 10px; color:#555; }
+.surface-grid .sg-cloud-legend { display:flex; flex-wrap:wrap; gap:6px 14px; justify-content:center; font-size:12px; margin:8px 0; }
+.surface-grid .sg-cloud-legend span { display:inline-flex; align-items:center; gap:4px; }
+.surface-grid .sg-cloud-legend i { display:inline-block; width:16px; height:11px; }
+.surface-grid .sg-cloud-bars { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 14px; font-size:12px; }
+.surface-grid .sg-cloud-bars div { display:flex; align-items:center; gap:4px; }
+.surface-grid .sg-cloud-bars i { width:70px; height:10px; border:1px solid #ddd; }
+.surface-grid[data-ready="error"],.surface-grid[data-ready="loading"] { padding:30px 12px; box-sizing:border-box; text-align:center; }
