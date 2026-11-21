@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": null,
+  "started_kst": "2026-11-21T23:34:23+09:00",
+  "ended_kst": "2026-11-21T23:44:23+09:00",
+  "duration_s": 600.1,
+  "status": "failed",
+  "summary": "시간초과",
+  "detail": "[GK2A] dataList 실패(1/3): HTTPSConnectionPool(host='apihub-pub.kma.go.kr', port=443): Max retries exceeded with url: /api/typ05/api/GK2A/LE2/CLA/KO/dataList?sDate=202611211234&eDate=202611211434&format=json&authKey=*** (Caused by ConnectTimeoutError(<HTTPSConnection(host='apihub-pub.kma.go.kr', port=443) at 0x7923163c8f80>, 'Connection to apihub-pub.kma.go.kr timed out. (connect timeout=120)'))\n[GK2A] dataList 실패(2/3): HTTPSConnectionPool(host='apihub-pub.kma.go.kr', port=443): Max retries exceeded with url: /api/typ05/api/GK2A/LE2/CLA/KO/dataList?sDate=202611211234&eDate=202611211434&format=json&authKey=*** (Caused by ConnectTimeoutError(<HTTPSConnection(host='apihub-pub.kma.go.kr', port=443) at 0x7922fc39b5f0>, 'Connection to apihub-pub.kma.go.kr timed out. (connect timeout=120)'))\n[GK2A] dataList 실패(3/3): HTTPSConnectionPool(host='apihub-pub.kma.go.kr', port=443): Max retries exceeded with url: /api/typ05/api/GK2A/LE2/CLA/KO/dataList?sDate=202611211234&eDate=202611211434&format=json&authKey=*** (Caused by ConnectTimeoutError(<HTTPSConnection(host='apihub-pub.kma.go.kr', port=443) at 0x7922fc39bc80>, 'Connection to apihub-pub.kma.go.kr timed out. (connect timeout=120)'))\n[nowcast] 목록 조회 실패(dataList 3회 실패) — 직접 수신으로 대체\n[GK2A] 202611211350 실패(1/3): HTTPSConnectionPool(host='apihub-pub.kma.go.kr', port=443): Max retries exceeded with url: /api/typ05/api/GK2A/LE2/CLA/KO/data?date=202611211350&authKey=*** (Caused by ConnectTimeoutError(<HTTPSConnection(host='apihub-pub.kma.go.kr', port=443) at 0x7922fc3bc3e0>, 'Connection to apihub-pub.kma.go.kr timed out. (connect timeout=300)'))\n[ingest-status] 시간초과: 600초",
+  "returncode": 124,
+  "workflow": "obs-hourly",
+  "run_id": "44913841801",
+  "run_attempt": "1"
+}
