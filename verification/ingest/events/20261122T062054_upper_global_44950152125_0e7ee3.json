@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "upper_global",
+  "label": "ECMWF/GFS 상층",
+  "kind": "model",
+  "issue": null,
+  "started_kst": "2026-11-22T06:20:12+09:00",
+  "ended_kst": "2026-11-22T06:20:54+09:00",
+  "duration_s": 42.4,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "44950152125",
+  "run_attempt": "1"
+}
