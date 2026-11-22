@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kim_upper",
+  "label": "KIM 상층",
+  "kind": "model",
+  "issue": null,
+  "started_kst": "2026-11-22T10:50:21+09:00",
+  "ended_kst": "2026-11-22T10:58:42+09:00",
+  "duration_s": 501.2,
+  "status": "failed",
+  "summary": "수신 작업 실패",
+  "detail": "[KIM-NC] 기관키 길이 22자 (정상 22자)\n[KIM-NC] 지상 수신이 고른 런 사용: 2026112100\n[KIM-NC] 런 2026112100 상층 13스텝 + 지상장 35스텝, 요청 304건, 병렬 4\n[KIM-NC]  실패: hgt/500 hf=42: HTTP 504\n[KIM-NC] 시간 상한 8.0분 — 남은 요청 취소\n[KIM-NC] 수신 171건 성공 / 1건 실패, 483초\n[KIM-NC] 수신 실패: 완결 관문 실패 — 상층 결손(≤48h) [42, 48], 상층 확보 7/13, 지상장 결손(≤72h) [0, 6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72], 지상장 확보 0/35 → 파일 미생성",
+  "returncode": 1,
+  "workflow": "daily-nwp",
+  "run_id": "44972551251",
+  "run_attempt": "1"
+}

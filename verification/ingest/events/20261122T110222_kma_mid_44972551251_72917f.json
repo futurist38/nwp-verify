@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kma_mid",
+  "label": "기상청 중기예보",
+  "kind": "forecast",
+  "issue": "2026112206",
+  "started_kst": "2026-11-22T11:02:00+09:00",
+  "ended_kst": "2026-11-22T11:02:22+09:00",
+  "duration_s": 21.8,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "44972551251",
+  "run_attempt": "1"
+}
