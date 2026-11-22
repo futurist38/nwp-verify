@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": null,
+  "started_kst": "2026-11-22T09:32:27+09:00",
+  "ended_kst": "2026-11-22T09:42:27+09:00",
+  "duration_s": 600.1,
+  "status": "failed",
+  "summary": "시간초과",
+  "detail": "W0000 00:00:1795307974.897370    3047 cpu_allocator_impl.cc:82] Allocation of 1610612736 exceeds 10% of free system memory.\n/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_coastline.zip\nwarnings.warn(f'Downloading: {url}', DownloadWarning)\n/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_1_states_provinces_lakes.zip\nwarnings.warn(f'Downloading: {url}', DownloadWarning)\n[GK2A] 202611212300 실패(1/3): NetCDF 아님: b''\n[GK2A] 202611212300 실패(2/3): NetCDF 아님: b''\n[ingest-status] 시간초과: 600초",
+  "returncode": 124,
+  "workflow": "obs-hourly",
+  "run_id": "44966532532",
+  "run_attempt": "1"
+}
