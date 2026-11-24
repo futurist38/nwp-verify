@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "gfs",
+  "label": "GFS",
+  "kind": "model",
+  "issue": "2026112412",
+  "started_kst": "2026-11-25T06:12:06+09:00",
+  "ended_kst": "2026-11-25T06:12:55+09:00",
+  "duration_s": 48.7,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "45488390267",
+  "run_attempt": "1"
+}
