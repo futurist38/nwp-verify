@@ -6,7 +6,7 @@
 
 방식: 서비스 계정은 개인 드라이브에 새 파일을 소유할 수 없다(저장 용량 없음). 그래서
       사용자가 미리 만든 파일을 서비스 계정에 '편집자'로 공유해 두고, 여기서는 그 파일의
-      내용만 바꾼다. 대상이 구글 문서면 text/plain 으로 올려 문서 본문으로 변환된다.
+      내용만 바꾼다. .md 파일은 UTF-8 Markdown으로 저장한다.
 
 환경변수:
   GDRIVE_SA_JSON  서비스 계정 키 JSON 원문 (GitHub Secret)
@@ -27,6 +27,7 @@ import uuid
 
 PAGES = "https://futurist38.github.io/nwp-verify/briefing"
 GDOC = "application/vnd.google-apps.document"
+MARKDOWN = "text/markdown"
 _GEN = re.compile(r"생성\s+(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})\s*KST")
 
 
@@ -65,9 +66,9 @@ def _token(sa_json: str) -> str:
 def mirror(md_path: str, sa_json: str, file_id: str, session=None, token: str | None = None,
            now_kst: dt.datetime | None = None) -> str:
     """반환: 'skipped' (내용 동일) 또는 'updated'."""
-    import requests
-
-    s = session or requests.Session()
+    if session is None:
+        import requests
+        session = requests.Session()
     tok = token or _token(sa_json)
     hdr = {"Authorization": f"Bearer {tok}"}
     with open(md_path, encoding="utf-8") as fp:
@@ -75,35 +76,49 @@ def mirror(md_path: str, sa_json: str, file_id: str, session=None, token: str | 
     if not md.strip():
         raise SystemExit("::error::[drive] 원본 브리핑이 비어 있음 — 덮어쓰지 않음")
 
-    meta = s.get(f"https://www.googleapis.com/drive/v3/files/{file_id}",
+    meta = session.get(f"https://www.googleapis.com/drive/v3/files/{file_id}",
                  params={"fields": "id,name,mimeType,appProperties", "supportsAllDrives": "true"},
                  headers=hdr, timeout=30)
     if meta.status_code == 404:
         raise SystemExit("::error::[drive] 파일을 찾을 수 없음 — GDRIVE_FILE_ID 와 서비스 계정 '편집자' 공유를 확인")
     meta.raise_for_status()
     info = meta.json()
+    mime = info["mimeType"]
+    if mime == GDOC:
+        media_type = "text/plain"
+    elif info["name"].lower().endswith(".md") and mime in (MARKDOWN, "text/plain", "text/x-markdown", "application/octet-stream"):
+        media_type = MARKDOWN
+    elif mime == "text/plain" and info["name"].lower().endswith(".txt"):
+        media_type = "text/plain"
+    else:
+        raise SystemExit("::error::[drive] 대상 파일 형식을 확인하세요 (.md, .txt, Google 문서)")
+    target_type = GDOC if mime == GDOC else media_type
     h = content_hash(md)
-    if (info.get("appProperties") or {}).get("src_sha") == h:
+    if (info.get("appProperties") or {}).get("src_sha") == h and mime == target_type:
         print(f"[drive] 변경 없음 — 건너뜀 ({info.get('name')})")
         return "skipped"
 
     now_kst = now_kst or dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
     body = build_payload(md, now_kst).encode("utf-8")
-    # 구글 문서는 text/plain 으로 올리면 본문으로 변환된다. 일반 파일(.txt/.md)도 text/plain 이면 충분.
     boundary = uuid.uuid4().hex
-    meta_part = json.dumps({"appProperties": {"src_sha": h, "src_stamp": source_stamp(md) or ""}})
+    meta_part = json.dumps({
+        "mimeType": target_type,
+        "appProperties": {"src_sha": h, "src_stamp": source_stamp(md) or ""},
+    })
     multipart = (
         f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{meta_part}\r\n"
-        f"--{boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n"
+        f"--{boundary}\r\nContent-Type: {media_type}; charset=UTF-8\r\n\r\n"
     ).encode("utf-8") + body + f"\r\n--{boundary}--\r\n".encode("utf-8")
-    r = s.patch(f"https://www.googleapis.com/upload/drive/v3/files/{file_id}",
+    r = session.patch(f"https://www.googleapis.com/upload/drive/v3/files/{file_id}",
                 params={"uploadType": "multipart", "supportsAllDrives": "true", "fields": "id,name,mimeType"},
                 headers={**hdr, "Content-Type": f"multipart/related; boundary={boundary}"},
                 data=multipart, timeout=60)
     if r.status_code == 403:
         raise SystemExit("::error::[drive] 권한 거부 — 서비스 계정이 '편집자'인지, Drive API 가 켜져 있는지 확인")
     r.raise_for_status()
-    kind = "구글 문서" if info.get("mimeType") == GDOC else info.get("mimeType")
+    kind = r.json()["mimeType"]
+    if kind != target_type:
+        raise SystemExit(f"::error::[drive] 업로드 후 대상 MIME 형식 확인 필요 ({kind})")
     print(f"[drive] 갱신 완료 — {info.get('name')} ({kind}), 원본 {source_stamp(md)}, {len(body) / 1024:.0f}KB")
     return "updated"
 

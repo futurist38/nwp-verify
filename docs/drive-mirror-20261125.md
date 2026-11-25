@@ -1,44 +1,21 @@
-# 브리핑 묶음 드라이브 사본 (2026-11-25)
+# Gemini용 브리핑 Markdown 사본
 
-## 왜
+`drive-mirror`는 main의 `obs-hourly` 또는 `daily-nwp` 실행이 끝나면 `site-data:briefing/latest.md`를 읽어 Google Drive의 고정 파일 하나를 갱신한다. 일부 자료를 이미 발행한 뒤 수집 작업이 실패할 수 있어 실패 종료 때도 최신 발행본을 확인한다. 내용이 같으면 업로드를 생략한다. 파일 주소와 공유 권한은 계속 유지된다.
 
-`briefing/YYYYMMDDHH.md` 는 셸(curl)이 있는 AI(Claude)만 직접 읽는다. Gemini 앱처럼 URL 을
-못 읽는 AI 는 구글 드라이브 파일만 불러올 수 있으므로, 발행 직후 같은 내용을 드라이브의
-**고정 파일 하나**에 덮어쓴다.
+## 최초 설정
 
-## 동작
+1. Gemini에서 사용할 Google 계정의 내 드라이브에 `nwp-briefing-최신.md`를 한 번 업로드한다. 이미 첫 사본이 있으면 그 파일을 사용한다. 파일의 '링크 복사' 주소에서 `/d/` 다음 문자열이 파일 ID다.
+2. [Google Cloud 콘솔](https://console.cloud.google.com/apis/library/drive.googleapis.com)에서 자동화에 사용할 프로젝트를 선택하고 Google Drive API를 사용 설정한다. [서비스 계정](https://console.cloud.google.com/iam-admin/serviceaccounts)에서 해당 계정을 선택하거나 만든다. 개별 파일 접근은 Drive에서 부여한다.
+3. Drive 파일의 공유 메뉴에서 서비스 계정의 `…@….iam.gserviceaccount.com` 주소에 편집자 권한을 준다.
+4. [저장소의 Actions 설정](https://github.com/futurist38/nwp-verify/settings/secrets/actions)에 두 값을 등록한다.
+   - **Secrets**의 `GDRIVE_SA_JSON`에 서비스 계정 키 JSON 전체를 넣는다. 키는 서비스 계정의 **키 → 키 추가 → 새 키 만들기 → JSON**에서 발급할 수 있다.
+   - **Variables**의 `GDRIVE_FILE_ID`에 1단계의 파일 ID를 넣는다. 같은 이름의 Secret도 지원한다. 둘 다 있으면 Variable을 사용한다.
+5. [drive-mirror 실행 화면](https://github.com/futurist38/nwp-verify/actions/workflows/drive-mirror.yml)에서 **Run workflow → main**을 선택한다. 로그에서 `[drive] 갱신 완료`와 `text/markdown`을 확인한다. 다시 실행했을 때 원본이 같으면 `[drive] 변경 없음`이 정상이다. `미설정`은 업로드를 건너뛴 결과다.
 
-- `.github/workflows/drive-mirror.yml` — `obs-hourly`·`daily-nwp` 가 끝나면(`workflow_run`) 실행.
-  발행 파이프라인은 건드리지 않으며, 여기가 실패해도 사이트 발행과 무관하다.
-- `site-data` 브랜치의 `briefing/latest.md` 를 읽어 `tools/drive_mirror.py` 가 드라이브 파일
-  내용을 교체한다. 파일 ID 는 그대로라 AI 는 늘 같은 파일을 연다.
-- 맨 위에 머리말 두 줄을 붙인다: 원본 정시 주소, 사본 갱신 시각, "생성 시각이 2시간 이상
-  이르면 구자료로 취급" 안내.
-- 원본 본문 해시를 파일의 `appProperties.src_sha` 에 적어 두고, 내용이 같으면 올리지 않는다.
-- 비밀값이 없으면 notice 만 남기고 성공 종료 — 설정 전에 머지해도 안전하다.
+## Gemini에서 읽기
 
-## 설정 (한 번)
+Gemini의 **파일 추가 → Drive에서 추가**에서 `nwp-briefing-최신.md`를 선택한다. 새 브리핑을 요청할 때는 해당 시점의 Drive 파일을 다시 첨부한다. Drive 연결에 필요한 설정은 [Gemini 도움말](https://support.google.com/gemini/answer/14903178?hl=ko)에서 확인할 수 있다.
 
-1. **Google Cloud**: 프로젝트 하나(기존 것도 됨)에서 *Google Drive API* 사용 설정.
-2. **서비스 계정** 생성 → 키(JSON) 발급. 역할(IAM)은 필요 없다.
-3. **드라이브에서 대상 파일을 직접 만든다** — 권장: 빈 **구글 문서** `nwp-briefing-최신`.
-   서비스 계정은 개인 드라이브에 새 파일을 소유할 수 없으므로 반드시 사람이 만든 파일이어야 한다.
-4. 그 파일을 서비스 계정 이메일(`…@….iam.gserviceaccount.com`)에 **편집자**로 공유.
-5. 파일 ID 확인: 문서 주소 `https://docs.google.com/document/d/<여기>/edit`.
-6. GitHub 저장소 설정:
-   - Secret `GDRIVE_SA_JSON` = 키 JSON 원문 전체
-   - Variable `GDRIVE_FILE_ID` = 파일 ID (Secret 으로 넣어도 된다)
-7. Actions → drive-mirror → **Run workflow** 로 한 번 수동 실행해 확인.
-   로그에 `[drive] 갱신 완료 — … (구글 문서)` 가 나오고 문서 본문이 채워지면 끝.
+> 첨부한 브리핑에서 원본 생성 시각(KST)과 모델별 발표 시각을 먼저 알려줘. 생성 후 2시간 이상 지났으면 구자료임을 밝혀줘. 기상청 예보와 모델 전망을 구분해서 전력수요 브리핑을 작성해줘.
 
-## 확인할 점
-
-- 구글 문서 대상은 text/plain 업로드가 본문으로 변환된다. 표(마크다운 `|`)는 글자 그대로 남는다
-  — AI 판독에는 문제없다. 변환이 기대와 다르면 대상 파일을 `.txt` 로 바꿔도 같은 코드로 동작한다.
-- 오류 문구: 404 = 파일 ID 또는 편집자 공유 누락 / 403 = 공유 권한 또는 Drive API 미사용.
-- 드라이브 파일의 버전 기록이 매시 쌓인다(드라이브가 오래된 버전을 자동 정리).
-
-## AI 쪽 사용
-
-Gemini 에서는 드라이브 연결 후 `@Google Drive nwp-briefing-최신` 처럼 파일을 지정해 읽게 한다.
-첫 줄 머리말의 '생성' 시각을 먼저 확인하게 하고, 2시간 이상 지났으면 구자료임을 밝히게 한다.
+사본 첫 줄에는 시간별 원본 주소와 사본 갱신 시각이 있다. 신선도 판단 기준은 그 아래 본문의 **생성 시각**이다. Markdown 표와 한글 본문은 UTF-8로 보존된다. HTTP 404가 뜨면 파일 ID와 공유 대상을, 403이 뜨면 서비스 계정 편집 권한과 해당 프로젝트의 Drive API 사용 설정을 확인한다.
