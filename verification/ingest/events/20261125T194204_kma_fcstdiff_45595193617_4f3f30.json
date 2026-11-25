@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kma_fcstdiff",
+  "label": "기상청 예보변화",
+  "kind": "forecast",
+  "issue": null,
+  "started_kst": "2026-11-25T19:42:02+09:00",
+  "ended_kst": "2026-11-25T19:42:04+09:00",
+  "duration_s": 1.4,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "45595193617",
+  "run_attempt": "1"
+}
