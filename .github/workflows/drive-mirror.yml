@@ -1,0 +1,60 @@
+name: drive-mirror
+
+on:
+  workflow_run:
+    workflows: [obs-hourly, daily-nwp]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# An upload in progress should finish before the next job reads site-data.
+concurrency:
+  group: drive-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    # A failed daily run can already have published a valid briefing.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Drive configuration
+        id: config
+        env:
+          CONFIGURED: ${{ secrets.GDRIVE_SA_JSON != '' && (vars.GDRIVE_FILE_ID != '' || secrets.GDRIVE_FILE_ID != '') }}
+        run: |
+          echo "ready=$CONFIGURED" >> "$GITHUB_OUTPUT"
+          if [ "$CONFIGURED" != "true" ]; then
+            echo "::notice::[drive] GDRIVE_SA_JSON / GDRIVE_FILE_ID 미설정 — 사본 갱신 건너뜀"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.ready == 'true'
+        with:
+          sparse-checkout: tools/drive_mirror.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.ready == 'true'
+        with:
+          ref: site-data
+          path: site
+          sparse-checkout: briefing/latest.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.ready == 'true'
+        with:
+          python-version: "3.12"
+      - name: Install Drive dependencies
+        if: steps.config.outputs.ready == 'true'
+        run: python -m pip install -q google-auth requests
+      - name: Mirror briefing to Google Drive
+        if: steps.config.outputs.ready == 'true'
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FILE_ID: ${{ vars.GDRIVE_FILE_ID || secrets.GDRIVE_FILE_ID }}
+        run: python tools/drive_mirror.py site/briefing/latest.md
