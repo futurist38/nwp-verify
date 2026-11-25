@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kma_mid",
+  "label": "기상청 중기예보",
+  "kind": "forecast",
+  "issue": "2026112306",
+  "started_kst": "2026-11-26T06:40:36+09:00",
+  "ended_kst": "2026-11-26T06:41:44+09:00",
+  "duration_s": 68.1,
+  "status": "partial",
+  "summary": "수신 실패 또는 미완료 자료 있음",
+  "detail": "[중기예보] 11D10401 수신 실패(1/3): 504 Server Error: Gateway Timeout for url: https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php?reg=11D10401&tmfc1=202611230600&tmfc2=202611260600&disp=0&help=0&authKey=***\n[중기예보] 발표 7건 조회, 신규 저장 1건 → /home/runner/work/nwp-verify/nwp-verify/verification/midfcst",
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "45701889424",
+  "run_attempt": "1"
+}
