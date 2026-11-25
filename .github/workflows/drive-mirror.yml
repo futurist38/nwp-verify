@@ -1,0 +1,55 @@
+name: drive-mirror
+
+# 브리핑 묶음(site-data 의 briefing/latest.md)을 구글 드라이브 고정 파일 하나에 덮어쓴다 (2026-11-25).
+# URL 을 직접 못 읽는 AI(Gemini 앱 등)가 드라이브에서 같은 자료를 읽게 하려는 것.
+# 발행 파이프라인(obs-hourly·daily-nwp)에는 손대지 않는다 — 그것들이 끝난 뒤 따라 돌고,
+# 여기가 실패해도 사이트 발행에는 영향이 없다.
+# 설정: docs/drive-mirror-20261125.md. 비밀값이 없으면 건너뛰고 성공으로 끝난다.
+
+on:
+  workflow_run:
+    workflows: [obs-hourly, daily-nwp]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # 최신 것만 의미가 있다 — 밀린 실행은 취소
+  group: drive-mirror
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    # 건너뛴(gate) 실행·취소된 실행 뒤에는 돌 필요가 없다
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TZ: Asia/Seoul
+      PYTHONIOENCODING: utf-8
+      GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+      GDRIVE_FILE_ID: ${{ vars.GDRIVE_FILE_ID || secrets.GDRIVE_FILE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/drive_mirror.py
+          sparse-checkout-cone-mode: false
+      # 발행본은 site-data 브랜치에 있다 (Pages 배포 지연과 무관하게 방금 발행된 것을 읽는다)
+      - uses: actions/checkout@v4
+        with:
+          ref: site-data
+          path: site
+          sparse-checkout: briefing/latest.md
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Mirror briefing to Google Drive
+        run: |
+          if [ -z "$GDRIVE_SA_JSON" ] || [ -z "$GDRIVE_FILE_ID" ]; then
+            python tools/drive_mirror.py site/briefing/latest.md; exit 0
+          fi
+          pip install -q google-auth requests
+          python tools/drive_mirror.py site/briefing/latest.md
