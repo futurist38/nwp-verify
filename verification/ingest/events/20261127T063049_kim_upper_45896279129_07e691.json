@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 2,
+  "source": "kim_upper",
+  "label": "KIM 상층",
+  "kind": "model",
+  "issue": "2026112612",
+  "started_kst": "2026-11-27T06:23:17+09:00",
+  "ended_kst": "2026-11-27T06:30:49+09:00",
+  "duration_s": 452.4,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "45896279129",
+  "run_attempt": "1"
+}
