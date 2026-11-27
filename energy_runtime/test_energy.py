@@ -42,6 +42,36 @@ class EnergyTests(unittest.TestCase):
             self.assertIsNone(data['forecast_table'][9]['max'])
             self.assertEqual(data['forecast_table'][9]['cities']['부산']['max'],12)
 
+    def test_first_evening_report_uses_issue_relative_leads_for_all_ten_days(self):
+        from energy_data import collect
+        day = dt.date(2026, 11, 27)
+        dates = [(day + dt.timedelta(days=i)).isoformat() for i in range(10)]
+        short = {c: {d: {'am': {'temperature': 2, 'weather': '맑음'},
+                         'pm': {'temperature': 10, 'weather': '흐림'}}
+                     for d in dates[:4]} for c in WEIGHTS}
+
+        def item(product, region, issue):
+            self.assertEqual(issue, '2026112618')
+            if product == 'getMidTa':
+                return {f'{field}{n}': value for n in range(5, 11)
+                        for field, value in [('taMin', -n), ('taMax', n)]}
+            return {**{f'wf{n}{p}': p for n in range(5, 8) for p in ('Am','Pm')},
+                    **{f'wf{n}': str(n) for n in range(8, 11)}}
+
+        with patch('energy_data.request', return_value=''), patch('energy_data.parse_short', return_value=short), \
+             patch('energy_data.mid_item', side_effect=item), \
+             patch('energy_data.minute_minimum', side_effect=lambda c,d:(c,-1,{})), \
+             patch('energy_data.daily_extrema', return_value=dict.fromkeys(WEIGHTS,5)):
+            report = collect(day)
+        self.assertEqual(report['mid_issue_kst'], '2026112618')
+        self.assertEqual([r['date'] for r in report['forecast_table']], dates)
+        for i, row in enumerate(report['forecast_table'][4:], 5):
+            self.assertEqual((row['min'], row['max']), (-i, i))
+            for city in WEIGHTS:
+                rec = row['cities'][city]
+                self.assertEqual(rec['weather_resolution'], 'half_day' if i < 8 else 'day')
+                self.assertEqual(rec['weather'], ['Am','Pm'] if i < 8 else [str(i)] * 2)
+
     def test_city_short_exact_issue(self):
         raw='11B10101,202610290500,202610291200,A02,1,109,0,0,0,0,0,0,13,60,DB04,1,흐리고 가끔 비\n11B10101,202610290800,202610291200,A02,1,109,0,0,0,0,0,0,15,60,DB04,1,비'
         result=parse_short(raw,'2026102905')

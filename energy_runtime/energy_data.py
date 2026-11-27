@@ -8,6 +8,8 @@ from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
+from mid_cycle import FIRST_ISSUE, latest_issue
+
 KST=ZoneInfo('Asia/Seoul')
 WEIGHTS={'서울':.4376,'인천':.0558,'수원':.0448,'원주':.0306,'대전':.0633,'대구':.0838,'광주':.0647,'부산':.2194}
 REGS=dict(zip(WEIGHTS,['11B10101','11B20201','11B20601','11D10401','11C20401','11H10701','11F20501','11H20201']))
@@ -128,8 +130,34 @@ def parse_short(raw,issue):
         rec[period]={'temperature':None if float(f[12])<=-99 else number(f[12]),'weather':f[16]}
     return result
 
-def mid_temperatures(day):
-    issue=day.strftime('%Y%m%d')+'06'
+def mid_item(product, region, issue):
+    raw = request('/api/typ02/openApi/MidFcstInfoService/' + product,
+                  {'regId': region, 'tmFc': issue + '00', 'pageNo': 1,
+                   'numOfRows': 10, 'dataType': 'JSON'})
+    data = json.loads(raw)['response']
+    if str(data['header']['resultCode']) != '00':
+        raise ValueError(f'{product} unavailable for {region} at {issue}')
+    item = data['body']['items']['item'][0]
+    if item.get('regId') != region:
+        raise ValueError(f'Unexpected region in {product} for {issue}')
+    return item
+
+
+def mid_temperatures(issued):
+    issue = issued.strftime('%Y%m%d%H')
+    if issue >= FIRST_ISSUE:
+        def city_days(city):
+            item = mid_item('getMidTa', REGS[city], issue)
+            days = {}
+            for lead in range(5, 11):
+                valid = (issued.date() + dt.timedelta(days=lead)).isoformat()
+                days[valid] = {'min': number(item[f'taMin{lead}']),
+                               'max': number(item[f'taMax{lead}'])}
+            return city, days
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            return dict(pool.map(city_days, WEIGHTS))
+
     raw=request('/api/typ01/url/fct_afs_wc.php',{'reg':'','tmfc1':issue,'tmfc2':issue,'disp':0,'help':0})
     result={c:{} for c in WEIGHTS};byreg={v:k for k,v in REGS.items()}
     for line in raw.splitlines():
@@ -143,19 +171,18 @@ def mid_temperatures(day):
             old['min']=min(old['min'],rec['min']);old['max']=max(old['max'],rec['max'])
     return result
 
-def mid_weather(region,day):
-    raw=request('/api/typ02/openApi/MidFcstInfoService/getMidLandFcst',{'regId':region,'tmFc':day.strftime('%Y%m%d')+'0600','pageNo':1,'numOfRows':10,'dataType':'JSON'})
-    data=json.loads(raw)['response']
-    if str(data['header']['resultCode'])!='00':raise ValueError('Mid weather unavailable')
-    return region,data['body']['items']['item'][0]
+def mid_weather(region, issued):
+    return region, mid_item('getMidLandFcst', region, issued.strftime('%Y%m%d%H'))
+
 
 def collect(day):
     issue=day.strftime('%Y%m%d')+'05'
     short=parse_short(request('/api/typ01/url/fct_afs_dl.php',{'reg':'','tmfc1':issue,'tmfc2':issue,'disp':1,'help':0}),issue)
-    mid=mid_temperatures(day)
+    issued = latest_issue(dt.datetime.combine(day, dt.time(7), KST))
+    mid=mid_temperatures(issued)
     with ThreadPoolExecutor(max_workers=4) as pool:
         obs=list(pool.map(lambda c:minute_minimum(c,day),WEIGHTS))
-        weather=dict(pool.map(lambda r:mid_weather(r,day),sorted(set(REGIONS.values()))))
+        weather=dict(pool.map(lambda r:mid_weather(r,issued),sorted(set(REGIONS.values()))))
     todaymin={c:v for c,v,_ in obs}
     previous_cities={k:daily_extrema(day-dt.timedelta(days=1),k) for k in ('min','max')}
     previous={k:weighted(v) for k,v in previous_cities.items()}
@@ -164,6 +191,7 @@ def collect(day):
         date=(day+dt.timedelta(days=n)).isoformat();cities={}
         # 05:00 city land forecasts cover D through D+3. All cities must agree.
         use_short=n<=3
+        lead = (dt.date.fromisoformat(date) - issued.date()).days
         for c in WEIGHTS:
             if use_short:
                 rec=short[c].get(date,{})
@@ -174,18 +202,18 @@ def collect(day):
                 rec=mid[c].get(date,{})
                 lo,hi=rec.get('min'),rec.get('max')
                 w=weather[REGIONS[c]]
-                texts=[w.get(f'wf{n}{p}',w.get(f'wf{n}')) for p in ('Am','Pm')]
-            if n<9 and (lo is None or hi is None or not all(texts)):raise ValueError('Incomplete forecast: '+c+' '+date)
+                texts=[w.get(f'wf{lead}{p}',w.get(f'wf{lead}')) for p in ('Am','Pm')]
+            if (n<9 or issued.strftime('%Y%m%d%H') >= FIRST_ISSUE) and (lo is None or hi is None or not all(texts)):raise ValueError('Incomplete forecast: '+c+' '+date)
             # Morning and daytime temperature windows can legitimately cross.
             if lo is not None and hi is not None and lo > hi:
                 print(f'{date} {c}: morning minimum {lo} C, daytime maximum forecast {hi} C')
             cities[c]={'min':lo,'max':hi,'weather':texts,'source':'short' if use_short else 'mid',
-                       'weather_resolution':'half_day' if use_short or all(f'wf{n}{p}' in w for p in ('Am','Pm')) else 'day'}
+                       'weather_resolution':'half_day' if use_short or all(f'wf{lead}{p}' in w for p in ('Am','Pm')) else 'day'}
         rows.append({'date':date,'cities':cities,**{k:weighted({c:v[k] for c,v in cities.items()}) if all(v[k] is not None for v in cities.values()) else None for k in ('min','max')}})
     return {'date':day.isoformat(),'publication_kst':dt.datetime.combine(day,dt.time(7),KST).isoformat(),
             'forecast':rows[:9],'forecast_table':rows,'previous_weighted':previous,'previous_observations':previous_cities,
             'morning_observation_coverage':{c:meta for c,v,meta in obs},'weights':WEIGHTS,
-            'short_issue_kst':issue,'mid_issue_kst':day.strftime('%Y%m%d')+'06',
+            'short_issue_kst':issue,'mid_issue_kst':issued.strftime('%Y%m%d%H'),
             'status':'automatic','automatic_generation':True}
 
 def fetch_image(kind,cutoff,destination):

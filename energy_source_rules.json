@@ -15,13 +15,10 @@
     "weather_matches_after_whitespace_normalization": 56
   },
   "mid": {
-    "issue": "06:00",
-    "endpoint": "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php",
-    "coverage_verified": [
-      "2026-11-02",
-      "2026-11-07"
-    ],
-    "temperature_matches": 96
+    "issue": "18:00 KST on the previous day (reports from 2026-11-27)",
+    "endpoint": "https://apihub-pub.kma.go.kr/api/typ02/openApi/MidFcstInfoService/getMidTa",
+    "weather_product": "getMidLandFcst",
+    "leads_from_issue_date": [5, 6, 7, 8, 9, 10]
   },
   "rounding": "ROUND_HALF_UP to one decimal before daily differences",
   "automatic_generation": true,

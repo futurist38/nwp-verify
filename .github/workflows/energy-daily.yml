@@ -2,6 +2,7 @@ name: energy-daily
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - energy_runtime/**
       - .github/workflows/energy-daily.yml
