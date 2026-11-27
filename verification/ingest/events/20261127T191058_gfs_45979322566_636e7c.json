@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 3,
+  "source": "gfs",
+  "label": "GFS",
+  "kind": "model",
+  "issue": "2026112706",
+  "started_kst": "2026-11-27T19:08:44+09:00",
+  "ended_kst": "2026-11-27T19:10:58+09:00",
+  "duration_s": 133.7,
+  "status": "partial",
+  "summary": "수신 실패 또는 미완료 자료 있음",
+  "detail": "[GFS]  f174 수신 실패 (건너뜀)\n[GFS]  f186 수신 실패 (건너뜀)\n[GFS]  f198 수신 실패 (건너뜀)\n[GFS]  f210 수신 실패 (건너뜀)\n[GFS]  f222 수신 실패 (건너뜀)\n[GFS]  f234 수신 실패 (건너뜀)\n[GFS] 수신 완료: /home/runner/work/nwp-verify/nwp-verify/data/gfs_0p25_2026112706.grib2 (2.3 MB, 성공 44 / 실패 7 스텝)\n/home/runner/work/nwp-verify/nwp-verify/data/gfs_0p25_2026112706.grib2",
+  "returncode": 0,
+  "workflow": "daily-nwp",
+  "run_id": "45979322566",
+  "run_attempt": "1"
+}
