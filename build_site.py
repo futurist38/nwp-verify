@@ -445,11 +445,13 @@ def export_midfcst(site_dir: str) -> bool:
     최근 21일 발표분과, 검증용 실측 일 최고·최저(ASOS 시간값 기반)를 한 파일에.
     구조: {issues:[tmfc...], cities:[...], fcst:{tmfc:{city:{ymd:[min,max,min_l,min_h,max_l,max_h]}}},
            obs:{city:{ymd:[tmax,tmin]}}}"""
+    from forecast_compare import mid_bounds
+    from energy_runtime.mid_cycle import FIRST_ISSUE, scheduled_issue
     src = sorted(glob.glob(os.path.join(VERIF_DIR, "midfcst", "??????????.json")))
     if not src:
         return False
     cut = (dt.date.today() - dt.timedelta(days=21)).strftime("%Y%m%d")
-    src = [f for f in src if os.path.basename(f)[:8] >= cut]
+    src = [f for f in src if os.path.basename(f)[:8] >= cut and scheduled_issue(os.path.basename(f)[:-5])]
     out = {"issues": [], "cities": list(DISPLAY_CITIES), "fcst": {},
            "obs": {c: {} for c in DISPLAY_CITIES}}
     for f in src:
@@ -460,8 +462,29 @@ def export_midfcst(site_dir: str) -> bool:
         for c, days in d.items():
             if c not in DISPLAY_CITIES:
                 continue
-            out["fcst"][tmfc][c] = {ymd: [v.get("min"), v.get("max"), v.get("min_l"), v.get("min_h"),
-                                          v.get("max_l"), v.get("max_h")] for ymd, v in days.items()}
+            for ymd, v in days.items():
+                # Keep the public chart's width format for old and new issues.
+                widths = [v.get(key) for key in ("min_l", "min_h", "max_l", "max_h")]
+                if tmfc >= FIRST_ISSUE:
+                    widths = []
+                    for metric in ("min", "max"):
+                        low, high = mid_bounds(tmfc, v, metric)
+                        center = v.get(metric)
+                        widths.extend([center - low if low is not None else None,
+                                       high - center if high is not None else None])
+                out["fcst"][tmfc][c][ymd] = [v.get("min"), v.get("max"), *widths]
+    prior = Path(site_dir) / "midfcst" / "index.json"
+    if prior.exists():
+        previous = json.loads(prior.read_text(encoding="utf-8"))
+        for issue, cities in previous.get("fcst", {}).items():
+            if issue[:8] < cut or not scheduled_issue(issue):
+                continue
+            saved = out["fcst"].setdefault(issue, {})
+            for city, days in cities.items():
+                current = saved.setdefault(city, {})
+                for day, record in days.items():
+                    current.setdefault(day, record)
+        out["issues"] = sorted(out["fcst"])
     # 실측 일 극값 (시간값 기반 — 정시 사이 극값은 놓친다; 표출에 명시)
     months = sorted({f"{(dt.date.today() - dt.timedelta(days=k)):%Y-%m}" for k in (0, 21, 35)})
     frames = [pd.read_csv(os.path.join(VERIF_DIR, "obs", f"{mm}.csv"), parse_dates=["TM"])
@@ -810,14 +833,13 @@ def main():
         # 다시 쓰면 검증 탭이 하루 뒤로 간다 → daily 소유물은 목록만 세고 손대지 않는다.
         METEO_DATES = _json_dates(os.path.join(args.site_dir, "meteo"), MAX_DAYS)
         FD_DATES = _json_dates(os.path.join(args.site_dir, "fcstdiff"), MAX_DAYS)
-        HAS_MIDFCST = os.path.exists(os.path.join(args.site_dir, "midfcst", "index.json"))
     else:
         copy_outputs(args.site_dir)
         copy_verif(args.site_dir)
         export_verif_daily(args.site_dir)
         METEO_DATES = export_meteo(args.site_dir)
         FD_DATES = export_fcstdiff(args.site_dir)
-        HAS_MIDFCST = export_midfcst(args.site_dir)
+    HAS_MIDFCST = export_midfcst(args.site_dir) or os.path.exists(os.path.join(args.site_dir, "midfcst", "index.json"))
     KMAFCST_DATES = export_kmafcst(args.site_dir)
     # 발표별 비교는 daily/hourly 모두 갱신. 기존 발행본과 누락 없이 병합한다.
     from forecast_compare import export as export_forecast_compare

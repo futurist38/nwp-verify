@@ -7,7 +7,7 @@
   · 응답: REG_ID TM_FC TM_EF MOD STN C MIN MAX MIN_L MIN_H MAX_L MAX_H  (disp=0, 공백 구분)
     MOD A01=24시간 구간, A02=12시간 구간(가까운 날에 오전/오후로 쪼개지기도 함).
     MIN_L/MIN_H/MAX_L/MAX_H 는 예보 범위 폭(±℃).
-  · 발표 하루 2회(06·18시). tmfc1~tmfc2 범위 조회가 되므로 백필은 도시당 1회 호출.
+  · 2026-11-26 18시부터 매일 18시 발표. tmfc1~tmfc2 범위 조회가 되므로 백필은 도시당 1회 호출.
 
 캐시: verification/midfcst/{발표YYYYMMDDHH}.json  {city: {YYYYMMDD: {min,max,min_l,min_h,max_l,max_h}}}
       발표분은 불변 → 있으면 재호출하지 않는다 (커밋 대상).
@@ -24,6 +24,7 @@ import requests
 import sslfix  # noqa: F401
 from kma_vilage import auth_key
 from config import VERIF_DIR
+from energy_runtime.mid_cycle import scheduled_issue
 
 URL = "https://apihub-pub.kma.go.kr/api/typ01/url/fct_afs_wc.php"
 CACHE_DIR = os.path.join(VERIF_DIR, "midfcst")
@@ -67,6 +68,8 @@ def collect(days: int) -> dict:
             if len(f) < 12:
                 continue
             tmfc, tmef, mod = f[1][:10], f[2][:8], f[3]
+            if not scheduled_issue(tmfc):
+                continue
             rec = {"min": _num(f[6]), "max": _num(f[7]), "min_l": _num(f[8]),
                    "min_h": _num(f[9]), "max_l": _num(f[10]), "max_h": _num(f[11]), "mod": mod}
             slot = out.setdefault(tmfc, {}).setdefault(city, {})

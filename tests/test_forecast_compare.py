@@ -167,6 +167,15 @@ class ForecastComparisonTests(unittest.TestCase):
         self.assertEqual(fc.merge(new,old),new)
         self.assertEqual(fc.merge(old,{"tmax":{"value":21,"basis":"MID","lower":19,"upper":24}})["tmax"],old["tmax"])
 
+    def test_evening_bounds_replace_archived_width_interpretation(self):
+        issue = "2026112618"
+        raw = {"서울": {"20261206": {"min": 1, "max": 8, "min_l": -2, "min_h": 4, "max_l": 5, "max_h": 11}}}
+        rec = fc.normalize_mid(issue, raw, {})["cities"]["서울"]["20261206"]
+        self.assertEqual((rec["tmin"]["lower"], rec["tmin"]["upper"]), (-2, 4))
+        self.assertEqual((rec["tmax"]["lower"], rec["tmax"]["upper"]), (5, 11))
+        old = {"tmax": {"basis": "MID", "value": 8, "lower": 3, "upper": 19}}
+        self.assertEqual(fc.merge(old, rec)["tmax"], rec["tmax"])
+
     def test_medium_api_parser_preserves_optional_range_widths(self):
         from kma_midland import temperature_days
         days = temperature_days({"taMin5":10,"taMax5":23,"taMin5Low":2,"taMin5High":1,

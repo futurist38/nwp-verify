@@ -216,3 +216,10 @@ test('comparison retains all cities and correct default without optional overvie
   assert.deepEqual(fc.CITIES.map(c=>c.stn),require('../site/overview.js').CITIES.map(c=>c.stn));
 });
 
+
+test('an 18 KST operational medium update is immediately available for comparison',()=>{
+  const entries=[entry('2026112617','short'),entry('2026112618','mid'),entry('2026112705','short')];
+  assert.deepEqual(fc.defaultPair(entries.slice(0,2)),{latest:'2026112618',previous:'2026112617'});
+  assert.deepEqual(fc.defaultPair(entries),{latest:'2026112705',previous:'2026112617'});
+  assert.equal(fc.selectEntries(entries,'2026112705')[1].issue,'2026112618');
+});

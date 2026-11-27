@@ -6,6 +6,7 @@ import time
 
 import requests
 import sslfix  # noqa: F401
+from energy_runtime.mid_cycle import FIRST_ISSUE, latest_issue, scheduled_issue
 from config import VERIF_DIR
 from forecast_compare import CITY_REGIONS, mid_weather, number, read, write, merge
 from kma_midfcst import REGS
@@ -22,7 +23,7 @@ def temperature_days(item, issued):
             rec = {"min": lo, "max": hi}
             for metric, field in (("min", "taMin"), ("max", "taMax")):
                 for suffix, key in (("Low", "_l"), ("High", "_h")):
-                    rec[metric + key] = number(item.get(f"{field}{n}{suffix}"), 0, 50)
+                    rec[metric + key] = number(item.get(f"{field}{n}{suffix}"), -60 if issued.strftime("%Y%m%d%H") >= FIRST_ISSUE else 0, 60)
             days[(issued + dt.timedelta(days=n)).strftime("%Y%m%d")] = rec
     return days
 
@@ -37,7 +38,7 @@ def fetch(region, issue, key, product="getMidLandFcst"):
             if str(j["header"]["resultCode"]) != "00":
                 continue
             items = j["body"]["items"]["item"]
-            if items and (any(mid_weather(v, None) for k, v in items[0].items() if k.startswith("wf")) or
+            if items and items[0].get("regId") == region and (any(mid_weather(v, None) for k, v in items[0].items() if k.startswith("wf")) or
                           any(number(v) is not None for k, v in items[0].items() if k.startswith("taMin"))):
                 return items[0]
         except (requests.RequestException, ValueError, KeyError, TypeError):
@@ -57,6 +58,8 @@ def collect(days=2, budget=160):
             if issued > now - dt.timedelta(minutes=15):
                 continue
             issue = issued.strftime("%Y%m%d%H")
+            if not scheduled_issue(issue):
+                continue
             path = Path(VERIF_DIR) / "midland" / (issue + ".json")
             raw = read(path)
             known_temps = read(Path(VERIF_DIR) / "midfcst" / (issue + ".json"))
@@ -67,10 +70,10 @@ def collect(days=2, budget=160):
                     return
                 item = fetch(region, issue, key, "getMidTa")
                 if item:
-                    days = temperature_days(item, issued)
-                    if days:
+                    day_values = temperature_days(item, issued)
+                    if day_values:
                         old = raw.setdefault("_temperatures", {}).get(city)
-                        raw["_temperatures"][city] = merge(old, days)
+                        raw["_temperatures"][city] = merge(old, day_values)
                         raw.setdefault("_temperature_ranges_checked", []).append(city)
                         write(path, raw)
             for region in regions:
@@ -87,8 +90,54 @@ def collect(days=2, budget=160):
                     print(f"[중기 개황] {issue} {region} 자료 미수신")
 
 
+def evening_product(product, issue, check_only=False):
+    """Fetch missing cities or regions for one actual evening issue."""
+    issued = dt.datetime.strptime(issue, "%Y%m%d%H")
+    if issue < FIRST_ISSUE or issued.hour != 18:
+        raise ValueError("Expected an operational 18 KST issue")
+    targets = [(issued + dt.timedelta(days=n)).strftime("%Y%m%d") for n in range(5, 11)]
+    is_temp = product == "temperature"
+    folder = "midfcst" if is_temp else "midland"
+    path = Path(VERIF_DIR) / folder / (issue + ".json")
+    raw = read(path)
+    regions = dict(REGS) if is_temp else {r: r for r in CITY_REGIONS.values()}
+    def complete(key):
+        record = raw.get(key, {})
+        if is_temp:
+            return all(number(record.get(d, {}).get(k)) is not None for d in targets for k in ("min", "max"))
+        fields = ["wf" + str(n) + part for n in range(5, 11)
+                  for part in (("Am", "Pm") if n <= 7 else ("",))]
+        return all(mid_weather(record.get(k), None) is not None for k in fields)
+
+    missing = [key for key in regions if not complete(key)]
+    if check_only:
+        print("yes" if missing else "no")
+        return
+    if missing:
+        from concurrent.futures import ThreadPoolExecutor
+        auth = auth_key()
+        def receive(key):
+            item = fetch(regions[key], issue, auth, "getMidTa" if is_temp else "getMidLandFcst")
+            return key, temperature_days(item, issued) if is_temp and item else item
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for key, values in pool.map(receive, missing):
+                if values:
+                    raw[key] = merge(values, raw.get(key))
+                    write(path, raw)
+    remaining = sum(not complete(key) for key in regions)
+    print(f"중기 기준발표 {issue} · {len(regions) - remaining}/{len(regions)} · 미완료 {remaining}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--days", type=int, default=2)
+    parser.add_argument("--product", choices=["temperature", "weather"])
+    parser.add_argument("--issue")
+    parser.add_argument("--check-only", action="store_true")
     args = parser.parse_args()
-    collect(args.days)
+    if args.product:
+        issue = args.issue or latest_issue(dt.datetime.now(dt.timezone(dt.timedelta(hours=9))) -
+                                          dt.timedelta(minutes=15)).strftime("%Y%m%d%H")
+        evening_product(args.product, issue, args.check_only)
+    else:
+        collect(args.days)

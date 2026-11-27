@@ -25,6 +25,16 @@ class Slots(unittest.TestCase):
         self.assertNotIn('2026-11-11T04:00+09:00',j['expected']['kma_short'])
         self.assertEqual(len(j['hours']),72)
         self.assertEqual(len(j['latest']),12)
+    def test_evening_receipt_and_no_next_morning_issue(self):
+        events = [dict(source='kma_midland', issue=issue, status='success',
+                       started_kst=at, ended_kst=at) for issue, at in [
+                       ('2026112618','2026-11-26T18:34:00+09:00'),
+                       ('2026112706','2026-11-27T07:32:00+09:00')]]
+        out = self.run_export(events, at='2026-11-27T09:30:00+09:00')
+        self.assertEqual(out['matrix']['kma_midland']['2026-11-26T18:00+09:00'], 'success')
+        self.assertNotIn('2026-11-27T07:00+09:00', out['expected']['kma_midland'])
+        self.assertEqual(next(r for r in out['latest'] if r['source']=='kma_midland')['issue'], '2026112618')
+
     def test_grace_and_future(self):
         j=self.run_export([self.event('05:25','05:40')],at='2026-11-11T18:00:00+09:00')
         self.assertNotIn('2026-11-11T17:00+09:00',j['matrix']['kma_short'])

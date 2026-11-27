@@ -20,6 +20,7 @@ import re
 import numpy as np
 import pandas as pd
 
+from energy_runtime.mid_cycle import scheduled_issue
 from config import CITIES, CITY_OBS_STN, VERIF_DIR
 
 REP6 = ["서울", "대전", "대구", "부산", "광주", "강릉"]     # 상세를 싣는 도시
@@ -163,6 +164,7 @@ def build(now: dt.datetime | None = None, site_dir: str | None = None) -> dict:
         if kma_prev:
             out["runs"]["직전 발표"] = f"{kma_prev[4:6]}-{kma_prev[6:8]} {kma_prev[8:]}시"
     mid, mf = {}, sorted(glob.glob(os.path.join(VERIF_DIR, "midfcst", "??????????.json")))
+    mf = [f for f in mf if scheduled_issue(os.path.basename(f)[:-5]) and os.path.basename(f)[:-5] <= now.strftime("%Y%m%d%H")]
     if mf:
         mid_issue = os.path.basename(mf[-1])[:-5]
         mid = json.load(open(mf[-1], encoding="utf-8"))
@@ -205,12 +207,16 @@ def build(now: dt.datetime | None = None, site_dir: str | None = None) -> dict:
             return None
         pre = d.strftime("%Y%m%d")
         ks = {k: v for k, v in issues[b][c].items() if k[:8] == pre}
-        if len(ks) < 12:
+        official_min = issues[b].get(c + "#TMN", {}).get(pre + "06")
+        official_max = issues[b].get(c + "#TMX", {}).get(pre + "15")
+        if len(ks) < 12 and official_min is None and official_max is None:
             return None
         sky = [v for k, v in issues[b].get(f"{c}#SKY", {}).items() if k[:8] == pre and 9 <= int(k[8:]) <= 18]
         pty = [v for k, v in issues[b].get(f"{c}#PTY", {}).items() if k[:8] == pre]
         pop = [v for k, v in issues[b].get(f"{c}#POP", {}).items() if k[:8] == pre]
-        r = {"tmax": _r(max(ks.values())), "tmin": _r(min(ks.values())), "n_h": len(ks)}
+        r = {"tmax": _r(official_max if official_max is not None else max(ks.values()) if len(ks) >= 12 else None),
+             "tmin": _r(official_min if official_min is not None else min(ks.values()) if len(ks) >= 12 else None),
+             "n_h": len(ks)}
         if sky:
             r["sky"] = SKY_KMA.get(int(max(set(sky), key=sky.count)), "?")
         if pop:
@@ -244,7 +250,7 @@ def build(now: dt.datetime | None = None, site_dir: str | None = None) -> dict:
             if stn and (stn, d.strftime("%m%d")) in nrm:
                 tx, tn = nrm[(stn, d.strftime("%m%d"))]
                 row["normal"] = {"tmax": _r(tx), "tmin": _r(tn)}
-            for m in MODELS:
+            for m in (MODELS if not sub.empty else ()):
                 g = sub[(sub["model"] == m) & (sub["valid"].dt.date == d)]
                 if len(g) < 4:
                     continue

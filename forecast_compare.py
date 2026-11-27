@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 
 from config import VERIF_DIR, DISPLAY_CITIES
+from energy_runtime.mid_cycle import FIRST_ISSUE, scheduled_issue
 
 # KMA API허브 2026-03-24 지점목록 확인 (https://apihub.kma.go.kr/apiList.do?seqApi=10).
 CITY_REGIONS = {"서울": "11B00000", "인천": "11B00000", "수원": "11B00000", "원주": "11D10000",
@@ -160,6 +161,18 @@ def normalize_short(issue, raw):
     return {"schema": VERSION, "issue": issue, "kind": "short", "cities": cities}
 
 
+def mid_bounds(issue, record, metric):
+    center = number(record.get(metric))
+    if center is None:
+        return None, None
+    if issue >= FIRST_ISSUE:
+        low, high = (number(record.get(metric + side)) for side in ("_l", "_h"))
+        return (low if low is not None and low <= center else None,
+                high if high is not None and center <= high else None)
+    low, high = (number(record.get(metric + side), 0, 50) for side in ("_l", "_h"))
+    return center - low if low is not None else None, center + high if high is not None else None
+
+
 def normalize_mid(issue, temps, land):
     temps = merge(temps, land.get("_temperatures", {}))
     cities = {}
@@ -180,9 +193,10 @@ def normalize_mid(issue, temps, land):
                 v = number(t.get(metric))
                 rec["t" + metric] = {"value": v, "basis": "MID"} if v is not None else None
                 if v is not None:
-                    low, high = number(t.get(metric + "_l"), 0, 50), number(t.get(metric + "_h"), 0, 50)
-                    rec["t" + metric].update(lower=v-low if low is not None else None,
-                                            upper=v+high if high is not None else None)
+                    low, high = mid_bounds(issue, t, metric)
+                    rec["t" + metric].update(lower=low, upper=high)
+                    if issue >= FIRST_ISSUE:
+                        rec["t" + metric]["range_basis"] = "absolute"
             for suffix, field in (("Am", "wx_am"), ("Pm", "wx_pm"), ("", "wx_day")):
                 rec[field] = mid_weather(raw.get(f"wf{n}{suffix}"), raw.get(f"rnSt{n}{suffix}"))
             if any(v is not None for v in rec.values()):
@@ -205,6 +219,8 @@ def merge(old, new):
         if "value" in old and "basis" in old:
             if old["basis"] == "TMP24" and new.get("basis") in ("TMN", "TMX"):
                 return new
+            if new.get("range_basis") == "absolute" and old.get("range_basis") != "absolute" and old["value"] == new["value"]:
+                return new
             # 기존 중심값은 유지하고, 같은 값에 새로 수신된 범위 정보만 보강한다.
             if old["value"] != new.get("value") or old["basis"] != new.get("basis"):
                 return old
@@ -215,6 +231,8 @@ def merge(old, new):
 def snapshots(verif):
     out = {}
     def add(doc):
+        if doc["kind"] == "mid" and not scheduled_issue(doc["issue"]):
+            return
         key = doc["issue"] + "-" + doc["kind"]
         out[key] = complete_short_weather(merge(out.get(key), doc))
     for path in sorted((verif / "forecast_compare").glob("*.json")):
@@ -247,7 +265,7 @@ def export(site_dir, verif_dir=VERIF_DIR, archive=False):
     entries = []
     for path in sorted((dest / "issues").glob("*.json")):
         doc = read(path)
-        if doc.get("schema") != VERSION:
+        if doc.get("schema") != VERSION or (doc["kind"] == "mid" and not scheduled_issue(doc["issue"])):
             continue
         # Published history may outlive its raw cache or repository archive.
         # Repair it too, preserving all nonmissing values and issue timestamps.

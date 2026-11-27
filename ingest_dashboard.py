@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
+from energy_runtime.mid_cycle import FIRST_ISSUE, scheduled_issue
 
 KST = dt.timezone(dt.timedelta(hours=9))
 ROOT = Path(__file__).resolve().parent
@@ -27,12 +28,19 @@ EXPECTED = {
     "kim_upper":   {"hours": [7, 12], "grace_h": 2, "label": "일일 NWP 2차"},
     "kma_short":   {"hours": [5, 11, 17], "grace_h": 2, "label": "단기예보 주요 발표"},
     "kma_fcstdiff":{"hours": [7], "grace_h": 2, "label": "예보변화 산출"},
-    "kma_mid":     {"hours": [12], "grace_h": 2, "label": "중기예보 수집"},
-    "kma_midland": {"hours": [7, 19], "grace_h": 2, "label": "중기 개황 확인"},
+    "kma_mid":     {"hours": [18], "grace_h": 2, "label": "중기예보 수집"},
+    "kma_midland": {"hours": [18], "grace_h": 2, "label": "중기 개황 확인"},
     "asos":        {"every_hour": True, "grace_h": 1, "label": "매시 관측"},
     "gk2a_solar":  {"hours": [7, 12], "grace_h": 2, "label": "일일 위성일사"},
     "nowcast":     {"every_hour": True, "grace_h": 1, "label": "매시 초단기"},
 }
+
+
+def due_slot(src, h):
+    if src in {"kma_mid", "kma_midland"} and h.strftime("%Y%m%d%H") < FIRST_ISSUE:
+        return h.hour in ([12] if src == "kma_mid" else [7, 19])
+    cfg = EXPECTED.get(src, {})
+    return cfg.get("every_hour", False) or h.hour in cfg.get("hours", [])
 
 
 def _parse(s):
@@ -57,6 +65,9 @@ def export(site_dir: str, days: int = 3, *, now=None) -> dict:
             if end:
                 recording_start = min(recording_start, end) if recording_start else end
             if not end or end < cut or end > now:
+                continue
+            if (e.get("source") in {"kma_mid", "kma_midland"} and e.get("issue")
+                    and not scheduled_issue(e["issue"])):
                 continue
             # Public summary: no raw error detail, workflow/run IDs, command, keys, or URLs.
             events.append({
@@ -117,7 +128,7 @@ def export(site_dir: str, days: int = 3, *, now=None) -> dict:
         schedule_meta[src] = {"label": cfg.get("label"), "grace_h": cfg.get("grace_h", 1), "hours": cfg.get("hours"), "every_hour": cfg.get("every_hour", False)}
         slots = {}
         for h in hour_objs:
-            due = bool(cfg.get("every_hour")) or h.hour in cfg.get("hours", [])
+            due = due_slot(src, h)
             if due:
                 slots[h.isoformat(timespec="minutes")] = True
         expected[src] = slots
@@ -133,11 +144,26 @@ def export(site_dir: str, days: int = 3, *, now=None) -> dict:
         src = e["source"]
         cfg = EXPECTED.get(src, {})
         started = _parse(e.get("started_kst")) or end
+        issue = e.get("issue") or ""
+        if src in {"kma_mid", "kma_midland"} and issue >= FIRST_ISSUE and scheduled_issue(issue):
+            slot = dt.datetime.strptime(issue, "%Y%m%d%H").replace(tzinfo=KST)
+            key = slot.isoformat(timespec="minutes")
+            if key not in expected[src]:
+                continue
+            row = matrix.setdefault(src, {})
+            if row.get(key) in {"success", "delayed"}:
+                continue
+            status = e["status"]
+            if status == "success" and end > slot + dt.timedelta(hours=cfg["grace_h"]):
+                status = "delayed"
+            row[key] = status
+            detail.setdefault(src, {})[key] = dict(e, status=status)
+            continue
         candidates = []
         for h in hour_objs:
             if h > end:
                 continue
-            due = bool(cfg.get("every_hour")) or h.hour in cfg.get("hours", [])
+            due = due_slot(src, h)
             if due and h <= started and (started - h) <= dt.timedelta(hours=cfg.get("grace_h", 1)):
                 candidates.append(h)
         if candidates:
