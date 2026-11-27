@@ -38,6 +38,10 @@ def sanitize(text: str) -> str:
 
 
 def infer_issue(source: str, output: str, started: dt.datetime) -> str | None:
+    if source in {"kma_mid", "kma_midland"}:
+        match = re.search(r"중기 기준발표 (20\d{8})", output)
+        if match:
+            return match[1]
     pats = {
         "ecmwf": [r"ecmwf_ifs025_(\d{10})", r"최신 가용 런:\s*([0-9-]{10}\s+[0-9:]{5})"],
         "gfs": [r"수신 대상 런:\s*(\d{8})\s+(\d{2})Z", r"gfs_0p25_(\d{10})"],
@@ -148,12 +152,12 @@ def run(args: argparse.Namespace) -> int:
     sys.stdout.write(output)
     ended = now_kst()
     status, summary = classify(returncode, output)
-    issue = infer_issue(args.source, output, started)
+    issue = args.issue or infer_issue(args.source, output, started)
     lines = [x.strip() for x in sanitize(output).splitlines() if x.strip()]
     detail = "\n".join(lines[-8:]) if status != "success" else None
     event = {
         "schema": 1,
-        "classification_version": 2,
+        "classification_version": 3,
         "source": args.source,
         "label": args.label or args.source,
         "kind": args.kind,
@@ -177,14 +181,26 @@ def run(args: argparse.Namespace) -> int:
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="action", required=True)
+    received = sub.add_parser("received")
+    received.add_argument("source", choices=["kma_mid", "kma_midland"])
+    received.add_argument("issue")
     rp = sub.add_parser("run")
     rp.add_argument("--source", required=True)
     rp.add_argument("--label", default="")
+    rp.add_argument("--issue", help="Single requested issue in KST")
     rp.add_argument("--kind", required=True,
                     choices=["model", "forecast", "observation", "satellite", "system"])
     rp.add_argument("--timeout", type=int, default=0, help="명령 실행 상한(초). 시간초과도 이벤트로 기록")
     rp.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args()
+    if args.action == "received":
+        for event_path in EVENT_DIR.glob(f"*_{args.source}_*.json"):
+            if event_path.name[:8] < args.issue[:8]:
+                continue
+            event = json.loads(event_path.read_text(encoding="utf-8"))
+            if event.get("issue") == args.issue and event.get("status") == "success" and event.get("classification_version", 0) >= 3:
+                return
+        raise SystemExit(1)
     if args.action == "run":
         if args.command and args.command[0] == "--":
             args.command = args.command[1:]

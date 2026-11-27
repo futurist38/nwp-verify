@@ -171,12 +171,10 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           python tools/persist_verification.py --message "forecast-change cache: $(date '+%Y-%m-%d %H:%M KST') [skip ci]" verification/fcstdiff
 
-      - name: 2단계 후속 — 오차지도·중기예보·위성일사
+      - name: 2단계 후속 — 오차지도·위성일사
         run: |
           /usr/bin/time -f "[timing] verification_map: %e s" timeout 300 python plot_verifmap.py  || echo "::warning::오차지도 실패/시간초과 — 계속"
-          # 2026-09-06 추가 — 중기예보 기온(하루 2회 발표, 10도시 10호출) · GK2A 위성 일사 일적산
           # (ECMWF 앙상블 fetch_ens.py 는 사용자 결정으로 보류 — 필요 시 여기에 한 줄 추가)
-          /usr/bin/time -f "[timing] midrange_fetch: %e s" python tools/ingest_status.py run --source kma_mid --label '기상청 중기예보' --kind forecast --timeout 300 -- python kma_midfcst.py --days 3 || echo "::warning::중기예보 실패/시간초과 — 계속"
           /usr/bin/time -f "[timing] satellite_solar: %e s" python tools/ingest_status.py run --source gk2a_solar --label 'GK2A 위성일사' --kind satellite --timeout 600 -- python gk2a_swrad_daily.py || echo "::warning::위성 일사 실패/시간초과 — 계속"
           # 일일 요약 메일 발송 중단 (2026-08-28, 사용자 요청) — 되살리려면 아래 주석만 풀면 된다.
           # python send_summary.py   || echo "::warning::메일 실패 — 계속"

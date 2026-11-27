@@ -22,6 +22,9 @@
   }
   function defaultPair(entries) {
     const short=[...new Set(entries.filter(e=>e.kind==="short").map(e=>e.issue))].sort();
+    const evening=entries.filter(e=>e.kind==="mid" && e.issue>="2026112618" && e.issue.endsWith("18"))
+      .map(e=>e.issue).sort().at(-1);
+    if (evening && short.length && evening>short.at(-1)) return {latest:evening,previous:short.at(-1)};
     const refs=short.length?short:[...new Set(entries.map(e=>e.issue))].sort();
     return {latest:refs.at(-1)||null,previous:refs.at(-2)||null};
   }
@@ -296,7 +299,7 @@
     try {
       if(priorMissing) {
         available=[];$("start").disabled=$("end").disabled=true;
-        $("status").textContent="직전 저장된 단기 발표가 없어 기본 변화 비교를 할 수 없습니다. 과거 비교는 A·B 날짜와 시각을 직접 선택하세요.";return;
+        $("status").textContent="직전 저장된 발표가 없어 기본 변화 비교를 할 수 없습니다. 과거 비교는 A·B 날짜와 시각을 직접 선택하세요.";return;
       }
       const a=refValue("a"),b=refValue("b"),city=$("city").value;
       const entriesA=selectEntries(index.issues,a,city),entriesB=selectEntries(index.issues,b,city);
@@ -309,7 +312,9 @@
       $("start").disabled=$("end").disabled=!available.length;
       if(!available.length) {$("status").textContent="두 시점에 공통으로 저장된 예보 대상일이 없습니다. A·B 날짜나 도시를 바꿔 주세요.";return;}
       const stale=[...entriesA.map(e=>[a,e]),...entriesB.map(e=>[b,e])].some(([r,e])=>(asDate(r.slice(0,8))-asDate(e.issue.slice(0,8)))>86400000);
-      $("status").textContent=`A ${stamp(a)} ↔ B ${stamp(b)} · KST${stale?" · 일부 자료는 기준일보다 2일 이상 이전 발표입니다. 상세의 실제 발표 시각을 확인하세요.":""}`;
+      const midA=entriesA.find(e=>e.kind==="mid"),midB=entriesB.find(e=>e.kind==="mid");
+      const sharedMid=midA && midA.issue===midB?.issue ? ` · 중기 ${stamp(midA.issue)} 발표분 공통` : "";
+      $("status").textContent=`A ${stamp(a)} ↔ B ${stamp(b)} · KST${sharedMid}${stale?" · 일부 자료는 기준일보다 2일 이상 이전 발표입니다. 상세의 실제 발표 시각을 확인하세요.":""}`;
       render();
     } catch(e) {
       if(ticket!==serial) return;
