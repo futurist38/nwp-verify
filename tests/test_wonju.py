@@ -235,7 +235,7 @@ class TwelveCityPipelineTests(unittest.TestCase):
 
     def test_medium_export_and_manifest_advertise_twelve_cities_even_when_values_missing(self):
         import build_site
-        today = dt.date.today(); issue = f'{today:%Y%m%d}06'; day = f'{today + dt.timedelta(days=4):%Y%m%d}'
+        today = dt.date.today(); issue = f'{today - dt.timedelta(days=1):%Y%m%d}18'; day = f'{today + dt.timedelta(days=4):%Y%m%d}'
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); (root / 'midfcst').mkdir(); site = root / 'site'; site.mkdir()
             (root / 'midfcst' / (issue + '.json')).write_text(json.dumps({'서울': {day: {'min': 0, 'max': 10}}}), encoding='utf-8')
