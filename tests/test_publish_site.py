@@ -19,6 +19,8 @@ class PublishSiteIntegrationTest(unittest.TestCase):
             subprocess.run(['git','init','--bare',str(remote)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             git('init','-b','main');git('config','user.name','test');git('config','user.email','test@example.com')
             for p in SOURCE.glob('*.py'):shutil.copy2(p,repo/p.name)
+            (repo/'energy_runtime').mkdir()
+            shutil.copy2(SOURCE/'energy_runtime/mid_cycle.py', repo/'energy_runtime/mid_cycle.py')
             shutil.copytree(SOURCE/'site',repo/'site');shutil.copytree(SOURCE/'tools',repo/'tools',ignore=shutil.ignore_patterns('__pycache__'))
             (repo/'verification/obs').mkdir(parents=True)
             shutil.copy2(SOURCE/'verification/obs/stations.csv',repo/'verification/obs/stations.csv')
