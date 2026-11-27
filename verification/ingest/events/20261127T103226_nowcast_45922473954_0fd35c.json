@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 3,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": "202611270110",
+  "started_kst": "2026-11-27T10:27:24+09:00",
+  "ended_kst": "2026-11-27T10:32:26+09:00",
+  "duration_s": 302.5,
+  "status": "success",
+  "summary": null,
+  "detail": null,
+  "returncode": 0,
+  "workflow": "obs-hourly",
+  "run_id": "45922473954",
+  "run_attempt": "1"
+}
