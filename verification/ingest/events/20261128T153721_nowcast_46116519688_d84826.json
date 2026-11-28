@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "classification_version": 3,
+  "source": "nowcast",
+  "label": "GK2A 운량 나우캐스트",
+  "kind": "satellite",
+  "issue": "202611280550",
+  "started_kst": "2026-11-28T15:27:20+09:00",
+  "ended_kst": "2026-11-28T15:37:21+09:00",
+  "duration_s": 600.2,
+  "status": "failed",
+  "summary": "시간초과",
+  "detail": "/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/cartopy/io/__init__.py:263: DownloadWarning: Downloading: https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_1_states_provinces_lakes.zip\nwarnings.warn(f'Downloading: {url}', DownloadWarning)\n[GK2A] 202611280330 실패(1/3): NetCDF 아님: b\"<html><body><h1>504 Gateway Time-out</h1>\\nThe server didn't \"\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\nfindfont: Failed to find font weight bold for NanumGothic, now using 600.\n[nowcast] 표출 → /home/runner/work/nwp-verify/nwp-verify/output/nowcast/latest\n[GK2A] 202611280100 실패(1/3): NetCDF 아님: b\"<html><body><h1>504 Gateway Time-out</h1>\\nThe server didn't \"\n[ingest-status] 시간초과: 600초",
+  "returncode": 124,
+  "workflow": "obs-hourly",
+  "run_id": "46116519688",
+  "run_attempt": "1"
+}
